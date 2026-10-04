@@ -18,6 +18,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     List<OrderModel> filteredOrders = mockOrders;
     if (_selectedTab == 1) {
       filteredOrders = mockOrders.where((o) => o.status == OrderStatus.processing).toList();
@@ -121,3 +122,4 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 }
+

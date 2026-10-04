@@ -11,6 +11,7 @@ class MembershipScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final user = context.watch<AuthProvider>().currentUser;
     if (user == null) return const Scaffold();
 
@@ -36,7 +37,7 @@ class MembershipScreen extends StatelessWidget {
                   height: 200,
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
+                    gradient: LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
@@ -44,21 +45,21 @@ class MembershipScreen extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text('DOCTOR COMPUTER', style: AppTextStyles.label.copyWith(color: Colors.white)),
+                          Text('DOCTOR COMPUTER', style: AppTextStyles.label.copyWith(color: Colors.black87)),
                           const Spacer(),
-                          const Icon(Icons.diamond, color: Colors.white),
+                          const Icon(Icons.diamond, color: Colors.black87),
                         ],
                       ),
                       const Spacer(),
-                      Text(user.fullName, style: AppTextStyles.heading3.copyWith(color: Colors.white)),
+                      Text(user.fullName, style: AppTextStyles.heading3.copyWith(color: Colors.black87)),
                       const SizedBox(height: 4),
-                      Text('Member sejak 2023 / Member since', style: AppTextStyles.bodySmall.copyWith(color: Colors.white70)),
+                      Text('Member sejak 2023 / Member since', style: AppTextStyles.bodySmall.copyWith(color: Colors.black54)),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Text(user.membershipTier.name.toUpperCase(), style: AppTextStyles.titleLarge.copyWith(color: Colors.white)),
+                          Text(user.membershipTier.name.toUpperCase(), style: AppTextStyles.titleLarge.copyWith(color: Colors.black87)),
                           const Spacer(),
-                          Text('${user.points} Points', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+                          Text('${user.points} Points', style: AppTextStyles.bodyMedium.copyWith(color: Colors.black87)),
                         ],
                       ),
                     ],
@@ -138,7 +139,7 @@ class MembershipScreen extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 8.0),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+            Icon(Icons.check_circle, color: AppColors.success, size: 20),
             const SizedBox(width: 8),
             Text(b),
           ],
@@ -166,3 +167,4 @@ class MembershipScreen extends StatelessWidget {
     );
   }
 }
+

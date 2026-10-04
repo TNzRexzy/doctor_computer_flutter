@@ -15,6 +15,7 @@ class CategoryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -54,3 +55,4 @@ class CategoryGrid extends StatelessWidget {
     );
   }
 }
+

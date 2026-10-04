@@ -47,6 +47,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -57,7 +58,7 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                     onPressed: () => Navigator.pop(context),
                   ),
                   Expanded(
@@ -68,10 +69,10 @@ class _SearchScreenState extends State<SearchScreen> {
                       decoration: InputDecoration(
                         hintText: 'Cari produk... / Search products...',
                         hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                        prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear, color: AppColors.textSecondary),
+                                icon: Icon(Icons.clear, color: AppColors.textSecondary),
                                 onPressed: () {
                                   _searchController.clear();
                                 },
@@ -159,7 +160,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.computer, color: AppColors.primary),
+                          child: Icon(Icons.computer, color: AppColors.primary),
                         ),
                         title: Text(product.name, style: AppTextStyles.bodyMedium),
                         subtitle: Text(

@@ -1,50 +1,59 @@
 import 'package:flutter/material.dart';
 
-/// Defines all the colors used in the app.
 class AppColors {
   AppColors._();
 
-  static const Color primary = Color(0xFF0066FF);
-  static const Color primaryLight = Color(0xFF3D8BFF);
-  static const Color primaryDark = Color(0xFF0044CC);
-  
-  static const Color accent = Color(0xFF00D4FF);
-  static const Color accentGreen = Color(0xFF00E676);
-  
-  static const Color background = Color(0xFF0D1117);
-  static const Color backgroundLight = Color(0xFF161B22);
-  
-  static const Color surface = Color(0xFF1C2333);
-  static const Color surfaceLight = Color(0xFF242D3D);
-  static const Color cardBorder = Color(0xFF2D3748);
-  
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0B8C8);
-  static const Color textTertiary = Color(0xFF6B7B8D);
-  
-  static const Color error = Color(0xFFFF4757);
-  static const Color warning = Color(0xFFFFBE21);
-  static const Color success = Color(0xFF00E676);
-  static const Color discount = Color(0xFFFF4757);
-  
-  static const Color gold = Color(0xFFFFD700);
-  static const Color silver = Color(0xFFC0C0C0);
-  static const Color bronze = Color(0xFFCD7F32);
-  static const Color platinum = Color(0xFFE5E4E2);
+  static bool isDark = false; // Default light mode
 
-  static const LinearGradient primaryGradient = LinearGradient(
+  // Logo colors:
+  // Primary: Amber/Gold #FCA311
+  // Secondary: Teal/Cyan #48CAE4
+  // Dark bg: #1A1A1A
+  // Light bg: #F8F9FA
+
+  static Color get primary => const Color(0xFFFCA311);
+  static Color get primaryLight => const Color(0xFFFFD166);
+  static Color get primaryDark => const Color(0xFFE88700);
+  
+  static Color get accent => const Color(0xFF48CAE4);
+  static Color get accentGreen => const Color(0xFF00E676);
+  
+  static Color get background => isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA);
+  static Color get backgroundLight => isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFFFFFF);
+  
+  static Color get surface => isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFFFFFF);
+  static Color get surfaceLight => isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF1F3F5);
+  static Color get cardBorder => isDark ? const Color(0xFF333333) : const Color(0xFFE9ECEF);
+  
+  static Color get textPrimary => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF212529);
+  static Color get textSecondary => isDark ? const Color(0xFFB0B8C8) : const Color(0xFF6C757D);
+  static Color get textTertiary => isDark ? const Color(0xFF6B7B8D) : const Color(0xFFADB5BD);
+  static Color get buttonText => const Color(0xFF121212); // Always dark on Gold button
+
+  
+  static Color get error => const Color(0xFFFF4757);
+  static Color get warning => const Color(0xFFFFBE21);
+  static Color get success => const Color(0xFF00E676);
+  static Color get discount => const Color(0xFFFF4757);
+  
+  static Color get gold => const Color(0xFFFFD700);
+  static Color get silver => const Color(0xFFC0C0C0);
+  static Color get bronze => const Color(0xFFCD7F32);
+  static Color get platinum => const Color(0xFFE5E4E2);
+
+  static LinearGradient get primaryGradient => LinearGradient(
     colors: [primary, primaryLight],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient accentGradient = LinearGradient(
+  static LinearGradient get accentGradient => LinearGradient(
     colors: [primary, accent],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient cardGradient = LinearGradient(
+  static LinearGradient get cardGradient => LinearGradient(
     colors: [surface, backgroundLight],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,

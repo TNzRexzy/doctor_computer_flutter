@@ -15,10 +15,11 @@ import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 class ProductDetailScreen extends StatelessWidget {
   final ProductModel product;
 
-  const ProductDetailScreen({super.key, required this.product});
+  ProductDetailScreen({super.key, required this.product});
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final reviews = mockReviews.where((r) => r.productId == product.id).toList();
 
     return Scaffold(
@@ -32,51 +33,51 @@ class ProductDetailScreen extends StatelessWidget {
                 Container(
                   height: 300,
                   width: double.infinity,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [AppColors.surfaceLight, AppColors.surface],
                     ),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Icon(Icons.computer, size: 100, color: AppColors.primary),
                   ),
                 ),
                 Transform.translate(
-                  offset: const Offset(0, -20),
+                  offset: Offset(0, -20),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         GlassCard(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: AppColors.primary.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(product.brand, style: AppTextStyles.label.copyWith(color: AppColors.primary)),
                               ),
-                              const SizedBox(height: 8),
+                              SizedBox(height: 8),
                               Text(product.name, style: AppTextStyles.heading3),
-                              const SizedBox(height: 8),
+                              SizedBox(height: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.star, color: Colors.amber, size: 16),
-                                  const SizedBox(width: 4),
+                                  Icon(Icons.star, color: Colors.amber, size: 16),
+                                  SizedBox(width: 4),
                                   Text(
                                     '${product.rating} (${product.reviewCount} reviews)',
                                     style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
+                              SizedBox(height: 16),
                               Row(
                                 children: [
                                   Column(
@@ -90,9 +91,9 @@ class ProductDetailScreen extends StatelessWidget {
                                               formatRupiah(product.originalPrice ?? 0),
                                               style: AppTextStyles.priceOriginal,
                                             ),
-                                            const SizedBox(width: 8),
+                                            SizedBox(width: 8),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: AppColors.error.withValues(alpha: 0.1),
                                                 borderRadius: BorderRadius.circular(4),
@@ -106,7 +107,7 @@ class ProductDetailScreen extends StatelessWidget {
                                         ),
                                     ],
                                   ),
-                                  const Spacer(),
+                                  Spacer(),
                                   if (product.stock < 10)
                                     Text('Stok tersisa: ${product.stock}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                                 ],
@@ -114,18 +115,18 @@ class ProductDetailScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                         Text('Spesifikasi / Specifications', style: AppTextStyles.titleMedium),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         GlassCard(
                           padding: EdgeInsets.zero,
                           child: Column(
                             children: product.specs.entries.map((e) {
                               return Container(
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   border: Border(bottom: BorderSide(color: AppColors.surfaceLight)),
                                 ),
-                                padding: const EdgeInsets.all(12),
+                                padding: EdgeInsets.all(12),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -143,24 +144,24 @@ class ProductDetailScreen extends StatelessWidget {
                             }).toList(),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                         Text('Deskripsi / Description', style: AppTextStyles.titleMedium),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         Text(product.descriptionId, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                         Text('Ulasan / Reviews', style: AppTextStyles.titleMedium),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         ...reviews.take(3).map((r) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
+                          padding: EdgeInsets.only(bottom: 8.0),
                           child: GlassCard(
-                            padding: const EdgeInsets.all(12),
+                            padding: EdgeInsets.all(12),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
                                     Text(r.userName, style: AppTextStyles.titleSmall),
-                                    const Spacer(),
+                                    Spacer(),
                                     Row(
                                       children: List.generate(
                                         5,
@@ -173,18 +174,18 @@ class ProductDetailScreen extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 4),
+                                SizedBox(height: 4),
                                 Text(
                                   r.date.toString().substring(0, 10),
                                   style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
                                 ),
-                                const SizedBox(height: 8),
+                                SizedBox(height: 8),
                                 Text(r.comment, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
                               ],
                             ),
                           ),
                         )),
-                        const SizedBox(height: 100),
+                        SizedBox(height: 100),
                       ],
                     ),
                   ),
@@ -198,7 +199,7 @@ class ProductDetailScreen extends StatelessWidget {
             child: CircleAvatar(
               backgroundColor: AppColors.surface.withValues(alpha: 0.5),
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -209,7 +210,7 @@ class ProductDetailScreen extends StatelessWidget {
             child: CircleAvatar(
               backgroundColor: AppColors.surface.withValues(alpha: 0.5),
               child: IconButton(
-                icon: const Icon(Icons.share, color: Colors.white),
+                icon: Icon(Icons.share, color: AppColors.textPrimary),
                 onPressed: () {},
               ),
             ),
@@ -225,7 +226,7 @@ class ProductDetailScreen extends StatelessWidget {
                   return IconButton(
                     icon: Icon(
                       isWishlisted ? Icons.favorite : Icons.favorite_border,
-                      color: isWishlisted ? AppColors.error : Colors.white,
+                      color: isWishlisted ? AppColors.error : AppColors.textPrimary,
                     ),
                     onPressed: () {
                       provider.toggleWishlist(product);
@@ -254,7 +255,7 @@ class ProductDetailScreen extends StatelessWidget {
                 onPressed: () {
                   context.read<CartProvider>().addToCart(product);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Ditambahkan ke keranjang / Added to cart')),
+                    SnackBar(content: Text('Ditambahkan ke keranjang / Added to cart')),
                   );
                 },
               ),
@@ -265,3 +266,6 @@ class ProductDetailScreen extends StatelessWidget {
     );
   }
 }
+
+
+

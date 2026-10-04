@@ -11,6 +11,7 @@ class WishlistScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -83,3 +84,4 @@ class WishlistScreen extends StatelessWidget {
     );
   }
 }
+

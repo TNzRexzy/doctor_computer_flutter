@@ -22,6 +22,7 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -143,7 +144,7 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(formatRupiah(part.price), style: AppTextStyles.priceSmall),
-                                      if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary),
+                                      if (isSelected) Icon(Icons.check_circle, color: AppColors.primary),
                                     ],
                                   ),
                                 ],

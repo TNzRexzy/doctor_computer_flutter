@@ -27,6 +27,7 @@ class GradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final bool canPress = isEnabled && !isLoading;
 
     return Container(
@@ -55,11 +56,11 @@ class GradientButton extends StatelessWidget {
           onTap: canPress ? onPressed : null,
           child: Center(
             child: isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: AppColors.buttonText,
                       strokeWidth: 2,
                     ),
                   )
@@ -68,7 +69,7 @@ class GradientButton extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (icon != null) ...[
-                          Icon(icon, color: Colors.white, size: 20),
+                          Icon(icon, color: AppColors.buttonText, size: 20),
                           const SizedBox(width: 8),
                         ],
                         if (label != null)
@@ -76,7 +77,7 @@ class GradientButton extends StatelessWidget {
                             label!,
                             style: AppTextStyles.label.copyWith(
                               color: canPress
-                                  ? Colors.white
+                                  ? AppColors.buttonText
                                   : AppColors.textTertiary,
                             ),
                           ),
@@ -88,3 +89,5 @@ class GradientButton extends StatelessWidget {
     );
   }
 }
+
+

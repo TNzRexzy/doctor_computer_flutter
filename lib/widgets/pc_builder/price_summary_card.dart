@@ -26,6 +26,7 @@ class PriceSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final activeParts = selectedParts.values.where((part) => part != null).cast<PcPartModel>().toList();
 
     return GlassCard(
@@ -44,7 +45,7 @@ class PriceSummaryCard extends StatelessWidget {
                 final part = activeParts[index];
                 return Row(
                   children: [
-                    const Icon(Icons.memory, size: 16, color: AppColors.textTertiary),
+                    Icon(Icons.memory, size: 16, color: AppColors.textTertiary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -62,7 +63,7 @@ class PriceSummaryCard extends StatelessWidget {
                 );
               },
             ),
-            const Divider(color: AppColors.cardBorder, height: 24),
+            Divider(color: AppColors.cardBorder, height: 24),
           ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -87,7 +88,7 @@ class PriceSummaryCard extends StatelessWidget {
                   },
                   style: SegmentedButton.styleFrom(
                     backgroundColor: AppColors.surface,
-                    selectedForegroundColor: Colors.white,
+                    selectedForegroundColor: AppColors.textPrimary,
                     selectedBackgroundColor: AppColors.primary,
                   ),
                 ),
@@ -96,7 +97,7 @@ class PriceSummaryCard extends StatelessWidget {
               Text(formatRupiah(buildFee), style: AppTextStyles.titleSmall),
             ],
           ),
-          const Divider(color: AppColors.cardBorder, height: 24),
+          Divider(color: AppColors.cardBorder, height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -112,3 +113,4 @@ class PriceSummaryCard extends StatelessWidget {
     );
   }
 }
+

@@ -19,19 +19,20 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return AppBar(
       backgroundColor: transparent ? Colors.transparent : AppColors.background,
       elevation: 0,
       leading: showBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              icon: Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
               onPressed: () => Navigator.of(context).pop(),
             )
           : null,
       title: title != null
           ? Text(
               title!,
-              style: AppTextStyles.titleLarge.copyWith(color: Colors.white),
+              style: AppTextStyles.titleLarge.copyWith(color: AppColors.textPrimary),
             )
           : null,
       actions: actions,
@@ -55,3 +56,4 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
+

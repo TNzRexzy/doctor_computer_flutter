@@ -7,24 +7,25 @@ import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 
 class FilterBottomSheet extends StatefulWidget {
-  const FilterBottomSheet({super.key});
+  FilterBottomSheet({super.key});
 
   @override
   State<FilterBottomSheet> createState() => _FilterBottomSheetState();
 }
 
 class _FilterBottomSheetState extends State<FilterBottomSheet> {
-  RangeValues _priceRange = const RangeValues(0, 50000000);
+  RangeValues _priceRange = RangeValues(0, 50000000);
   int _selectedRating = 0;
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final provider = context.read<ProductProvider>();
     final brands = provider.availableBrands;
 
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -37,13 +38,13 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             children: [
               Text('Filter', style: AppTextStyles.heading3),
               IconButton(
-                icon: const Icon(Icons.close),
+                icon: Icon(Icons.close),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
-          const Divider(color: AppColors.cardBorder),
-          const SizedBox(height: 16),
+          Divider(color: AppColors.cardBorder),
+          SizedBox(height: 16),
           Text('Rentang Harga / Price Range', style: AppTextStyles.titleMedium),
           RangeSlider(
             values: _priceRange,
@@ -62,9 +63,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               });
             },
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Text('Merek / Brand', style: AppTextStyles.titleMedium),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -81,9 +82,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Text('Rating Minimum', style: AppTextStyles.titleMedium),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Row(
             children: List.generate(5, (index) {
               return IconButton(
@@ -99,7 +100,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               );
             }),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           Row(
             children: [
               Expanded(
@@ -109,15 +110,15 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     Navigator.pop(context);
                   },
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: AppColors.cardBorder),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    foregroundColor: AppColors.textPrimary,
+                    side: BorderSide(color: AppColors.cardBorder),
+                    padding: EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   ),
-                  child: const Text('Reset'),
+                  child: Text('Reset'),
                 ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: 16),
               Expanded(
                 child: GradientButton(
                   label: 'Terapkan / Apply',
@@ -134,3 +135,5 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     );
   }
 }
+
+

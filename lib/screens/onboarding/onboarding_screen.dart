@@ -33,6 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -145,7 +146,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 40),
           Text(
             title,
-            style: AppTextStyles.heading2.copyWith(color: Colors.white),
+            style: AppTextStyles.heading2.copyWith(color: AppColors.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -159,3 +160,5 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 }
+
+

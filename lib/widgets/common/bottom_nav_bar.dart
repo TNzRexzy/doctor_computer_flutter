@@ -18,6 +18,7 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Container(
       margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -94,6 +95,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final color = isActive ? AppColors.primary : AppColors.textTertiary;
 
     return GestureDetector(
@@ -124,3 +126,4 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
+

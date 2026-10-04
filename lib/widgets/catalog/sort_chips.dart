@@ -9,6 +9,7 @@ class SortChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final provider = context.watch<ProductProvider>();
     final currentSort = provider.sortBy;
 
@@ -33,7 +34,7 @@ class SortChips extends StatelessWidget {
               selectedColor: AppColors.primary,
               backgroundColor: AppColors.surface,
               labelStyle: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textSecondary,
+                color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
               ),
               onSelected: (selected) {
                 if (selected) {
@@ -47,3 +48,5 @@ class SortChips extends StatelessWidget {
     );
   }
 }
+
+

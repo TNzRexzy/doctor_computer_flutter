@@ -53,6 +53,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -75,10 +76,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.computer_rounded,
-                    size: 80,
-                    color: AppColors.primary,
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 140,
+                    height: 140,
                   ),
                 ),
               ),
@@ -88,7 +89,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 children: [
                   Text(
                     'DOCTOR ',
-                    style: AppTextStyles.heading2.copyWith(color: Colors.white),
+                    style: AppTextStyles.heading2.copyWith(color: AppColors.textPrimary),
                   ),
                   Text(
                     'COMPUTER',
@@ -108,3 +109,4 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
   }
 }
+

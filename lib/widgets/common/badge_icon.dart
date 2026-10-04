@@ -9,7 +9,7 @@ class BadgeIcon extends StatelessWidget {
   final double size;
   final Color? color;
 
-  const BadgeIcon({
+  BadgeIcon({
     super.key,
     required this.icon,
     this.count = 0,
@@ -19,21 +19,22 @@ class BadgeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Icon(
           icon,
           size: size,
-          color: color ?? Colors.white,
+          color: color ?? AppColors.textPrimary,
         ),
         if (count > 0)
           Positioned(
             right: -4,
             top: -4,
             child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
+              padding: EdgeInsets.all(4),
+              decoration: BoxDecoration(
                 color: AppColors.error,
                 shape: BoxShape.circle,
               ),
@@ -41,7 +42,7 @@ class BadgeIcon extends StatelessWidget {
                 child: Text(
                   count > 99 ? '99+' : count.toString(),
                   style: AppTextStyles.caption.copyWith(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -53,3 +54,5 @@ class BadgeIcon extends StatelessWidget {
     );
   }
 }
+
+

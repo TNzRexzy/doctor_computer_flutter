@@ -22,6 +22,7 @@ class GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -45,3 +46,4 @@ class GlassCard extends StatelessWidget {
     );
   }
 }
+

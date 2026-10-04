@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:doctor_computer/providers/theme_provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
@@ -14,6 +15,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -115,7 +117,17 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   _buildMenuItem(context, Icons.card_membership, 'Membership', () => Navigator.pushNamed(context, AppRouter.membership)),
                   _buildMenuItem(context, Icons.edit, 'Edit Profil / Edit Profile', () => Navigator.pushNamed(context, AppRouter.editProfile)),
-                  _buildMenuItem(context, Icons.dark_mode, 'Tema / Theme', () {}, trailing: Switch(value: true, onChanged: (v) {})),
+                  _buildMenuItem(
+                    context, 
+                    Icons.dark_mode, 
+                    'Tema / Theme', 
+                    () { context.read<ThemeProvider>().toggleTheme(); }, 
+                    trailing: Switch(
+                      value: context.watch<ThemeProvider>().themeMode == ThemeMode.dark, 
+                      onChanged: (v) { context.read<ThemeProvider>().toggleTheme(); },
+                      activeColor: AppColors.primary,
+                    ),
+                  ),
                   _buildMenuItem(context, Icons.info_outline, 'Tentang / About', () {
                     showAboutDialog(context: context, applicationName: 'Doctor Computer', applicationVersion: '1.0.0');
                   }),
@@ -133,7 +145,7 @@ class ProfileScreen extends StatelessWidget {
                               Navigator.pop(ctx);
                               Navigator.pushReplacementNamed(context, AppRouter.login);
                             },
-                            child: const Text('Keluar', style: TextStyle(color: AppColors.error)),
+                            child: Text('Keluar', style: TextStyle(color: AppColors.error)),
                           ),
                         ],
                       ),

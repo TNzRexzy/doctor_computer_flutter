@@ -57,6 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
@@ -64,15 +65,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            const Icon(Icons.computer_rounded, size: 64, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('DOCTOR COMPUTER', style: AppTextStyles.heading2.copyWith(color: Colors.white)),
+            Image.asset('assets/images/logo.png', height: 140),
             const SizedBox(height: 40),
             GlassCard(
               padding: const EdgeInsets.all(24),
@@ -86,7 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.person, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.person, color: AppColors.textSecondary),
                         hintText: 'Full Name',
                         filled: true,
                         fillColor: AppColors.surface,
@@ -102,7 +101,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     TextFormField(
                       controller: _emailController,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.mail, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.mail, color: AppColors.textSecondary),
                         hintText: 'Email',
                         filled: true,
                         fillColor: AppColors.surface,
@@ -119,7 +118,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     TextFormField(
                       controller: _phoneController,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.phone, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.phone, color: AppColors.textSecondary),
                         hintText: '+62',
                         filled: true,
                         fillColor: AppColors.surface,
@@ -137,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.lock, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility : Icons.visibility_off,
@@ -165,7 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _confirmPasswordController,
                       obscureText: _obscureConfirm,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.lock, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscureConfirm ? Icons.visibility : Icons.visibility_off,

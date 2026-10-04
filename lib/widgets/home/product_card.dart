@@ -21,6 +21,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return GlassCard(
       padding: EdgeInsets.zero,
       onTap: onTap,
@@ -60,7 +61,7 @@ class ProductCard extends StatelessWidget {
                     child: Text(
                       '-${product.discountPercentage.toStringAsFixed(0)}%',
                       style: AppTextStyles.caption.copyWith(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -137,3 +138,5 @@ class ProductCard extends StatelessWidget {
     );
   }
 }
+
+

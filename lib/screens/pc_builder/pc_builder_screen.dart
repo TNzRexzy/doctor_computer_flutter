@@ -14,6 +14,7 @@ class PcBuilderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -153,3 +154,5 @@ class PcBuilderScreen extends StatelessWidget {
     );
   }
 }
+
+

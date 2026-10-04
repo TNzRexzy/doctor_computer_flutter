@@ -52,6 +52,7 @@ class _FlashDealTimerState extends State<FlashDealTimer> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -80,3 +81,5 @@ class _FlashDealTimerState extends State<FlashDealTimer> {
     );
   }
 }
+
+

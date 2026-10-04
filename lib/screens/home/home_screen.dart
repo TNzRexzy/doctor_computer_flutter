@@ -19,6 +19,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final user = context.watch<AuthProvider>().currentUser;
     
     return Scaffold(
@@ -48,11 +49,11 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      icon: const BadgeIcon(icon: Icons.notifications_none, count: 2),
+                      icon: BadgeIcon(icon: Icons.notifications_none, count: 2),
                       onPressed: () {},
                     ),
                     IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white),
+                      icon: Icon(Icons.search, color: AppColors.textPrimary),
                       onPressed: () {
                         Navigator.pushNamed(context, AppRouter.search);
                       },
@@ -73,7 +74,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.search, color: AppColors.textSecondary),
+                        Icon(Icons.search, color: AppColors.textSecondary),
                         const SizedBox(width: 8),
                         Text(
                           'Cari produk... / Search products...',
@@ -85,8 +86,8 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: PromoBannerCarousel(),
               ),
               const SizedBox(height: 24),
@@ -259,7 +260,7 @@ class HomeScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            const Icon(Icons.build_circle, size: 48, color: AppColors.accent),
+                            Icon(Icons.build_circle, size: 48, color: AppColors.accent),
                           ],
                         ),
                       ),
@@ -275,3 +276,4 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+

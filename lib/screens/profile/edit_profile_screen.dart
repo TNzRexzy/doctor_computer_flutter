@@ -31,6 +31,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final user = context.read<AuthProvider>().currentUser;
     if (user == null) return const Scaffold();
 
@@ -67,7 +68,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         child: CircleAvatar(
                           radius: 16,
                           backgroundColor: AppColors.primary,
-                          child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                          child: Icon(Icons.camera_alt, size: 16, color: AppColors.textPrimary),
                         ),
                       ),
                     ],
@@ -84,7 +85,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       TextFormField(
                         initialValue: user.email,
                         readOnly: true,
-                        style: const TextStyle(color: Colors.grey),
+                        style: TextStyle(color: AppColors.textSecondary),
                         decoration: const InputDecoration(labelText: 'Email'),
                       ),
                       TextFormField(
@@ -134,3 +135,5 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 }
+
+

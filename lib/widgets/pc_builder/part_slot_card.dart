@@ -25,6 +25,7 @@ class PartSlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     if (selectedPart != null) {
       return GlassCard(
         onTap: onTap,
@@ -38,7 +39,7 @@ class PartSlotCard extends StatelessWidget {
                 color: AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.check_circle_rounded, color: AppColors.success),
+              child: Icon(Icons.check_circle_rounded, color: AppColors.success),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -66,7 +67,7 @@ class PartSlotCard extends StatelessWidget {
             ),
             if (onRemove != null)
               IconButton(
-                icon: const Icon(Icons.close, color: AppColors.textTertiary),
+                icon: Icon(Icons.close, color: AppColors.textTertiary),
                 onPressed: onRemove,
               ),
           ],
@@ -97,7 +98,7 @@ class PartSlotCard extends StatelessWidget {
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.add, color: AppColors.primary),
+              child: Icon(Icons.add, color: AppColors.primary),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -116,7 +117,7 @@ class PartSlotCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+            Icon(Icons.chevron_right, color: AppColors.textTertiary),
           ],
         ),
       ),

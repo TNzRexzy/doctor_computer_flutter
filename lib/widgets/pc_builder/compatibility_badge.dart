@@ -16,6 +16,7 @@ class CompatibilityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     Color color;
     IconData icon;
 
@@ -57,3 +58,4 @@ class CompatibilityBadge extends StatelessWidget {
     );
   }
 }
+

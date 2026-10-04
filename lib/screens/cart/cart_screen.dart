@@ -13,6 +13,7 @@ class CartScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -55,7 +56,7 @@ class CartScreen extends StatelessWidget {
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           color: AppColors.error,
-                          child: const Icon(Icons.delete, color: Colors.white),
+                          child: Icon(Icons.delete, color: AppColors.textPrimary),
                         ),
                         onDismissed: (_) {
                           provider.removeFromCart(item.product.id);
@@ -195,3 +196,4 @@ class CartScreen extends StatelessWidget {
     );
   }
 }
+

@@ -8,6 +8,7 @@ class ShimmerProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Shimmer.fromColors(
       baseColor: AppColors.surface,
       highlightColor: AppColors.surfaceLight,
@@ -22,9 +23,9 @@ class ShimmerProductCard extends StatelessWidget {
           children: [
             Container(
               height: 140,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: AppColors.textPrimary,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               ),
             ),
             Padding(
@@ -32,11 +33,11 @@ class ShimmerProductCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(width: 120, height: 14, color: Colors.white),
+                  Container(width: 120, height: 14, color: AppColors.textPrimary),
                   const SizedBox(height: 4),
-                  Container(width: 80, height: 14, color: Colors.white),
+                  Container(width: 80, height: 14, color: AppColors.textPrimary),
                   const SizedBox(height: 12),
-                  Container(width: 100, height: 16, color: Colors.white),
+                  Container(width: 100, height: 16, color: AppColors.textPrimary),
                 ],
               ),
             ),
@@ -53,6 +54,7 @@ class ShimmerProductList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return SizedBox(
       height: 260,
       child: ListView.separated(
@@ -72,6 +74,7 @@ class ShimmerBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Shimmer.fromColors(
       baseColor: AppColors.surface,
       highlightColor: AppColors.surfaceLight,
@@ -79,10 +82,11 @@ class ShimmerBanner extends StatelessWidget {
         height: 180,
         margin: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.textPrimary,
           borderRadius: BorderRadius.circular(16),
         ),
       ),
     );
   }
 }
+

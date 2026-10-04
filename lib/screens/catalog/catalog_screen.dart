@@ -43,6 +43,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -54,7 +55,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 children: [
                   if (widget.categoryId != null)
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                       onPressed: () => Navigator.pop(context),
                     ),
                   Expanded(
@@ -65,13 +66,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.filter_list, color: Colors.white),
+                    icon: Icon(Icons.filter_list, color: AppColors.textPrimary),
                     onPressed: () {
                       showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (context) => const FilterBottomSheet(),
+                        builder: (context) => FilterBottomSheet(),
                       );
                     },
                   ),
@@ -136,3 +137,4 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 }
+

@@ -61,6 +61,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -221,3 +222,4 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 }
+

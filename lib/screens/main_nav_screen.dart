@@ -19,6 +19,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       extendBody: true,
       body: IndexedStack(
@@ -42,3 +43,4 @@ class _MainNavScreenState extends State<MainNavScreen> {
     );
   }
 }
+

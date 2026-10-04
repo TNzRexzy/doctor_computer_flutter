@@ -6,83 +6,85 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 class AppTextStyles {
   AppTextStyles._();
 
-  static TextStyle heading1 = GoogleFonts.poppins(
+  static TextStyle get heading1 => GoogleFonts.poppins(
     fontSize: 28,
     fontWeight: FontWeight.bold,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle heading2 = GoogleFonts.poppins(
+  static TextStyle get heading2 => GoogleFonts.poppins(
     fontSize: 24,
     fontWeight: FontWeight.bold,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle heading3 = GoogleFonts.poppins(
+  static TextStyle get heading3 => GoogleFonts.poppins(
     fontSize: 20,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle titleLarge = GoogleFonts.poppins(
+  static TextStyle get titleLarge => GoogleFonts.poppins(
     fontSize: 18,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle titleMedium = GoogleFonts.poppins(
+  static TextStyle get titleMedium => GoogleFonts.poppins(
     fontSize: 16,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle titleSmall = GoogleFonts.poppins(
+  static TextStyle get titleSmall => GoogleFonts.poppins(
     fontSize: 14,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle bodyLarge = GoogleFonts.inter(
+  static TextStyle get bodyLarge => GoogleFonts.inter(
     fontSize: 16,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle bodyMedium = GoogleFonts.inter(
+  static TextStyle get bodyMedium => GoogleFonts.inter(
     fontSize: 14,
     color: AppColors.textSecondary,
   );
 
-  static TextStyle bodySmall = GoogleFonts.inter(
+  static TextStyle get bodySmall => GoogleFonts.inter(
     fontSize: 12,
     color: AppColors.textSecondary,
   );
 
-  static TextStyle label = GoogleFonts.inter(
+  static TextStyle get label => GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
   );
 
-  static TextStyle caption = GoogleFonts.inter(
+  static TextStyle get caption => GoogleFonts.inter(
     fontSize: 11,
     color: AppColors.textTertiary,
   );
 
-  static TextStyle price = GoogleFonts.poppins(
+  static TextStyle get price => GoogleFonts.poppins(
     fontSize: 20,
     fontWeight: FontWeight.bold,
     color: AppColors.accent,
   );
 
-  static TextStyle priceSmall = GoogleFonts.poppins(
+  static TextStyle get priceSmall => GoogleFonts.poppins(
     fontSize: 14,
     fontWeight: FontWeight.bold,
     color: AppColors.accent,
   );
 
-  static TextStyle priceOriginal = GoogleFonts.inter(
+  static TextStyle get priceOriginal => GoogleFonts.inter(
     fontSize: 14,
     decoration: TextDecoration.lineThrough,
     color: AppColors.textTertiary,
   );
 }
+
+

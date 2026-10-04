@@ -47,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
@@ -56,9 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           children: [
             const SizedBox(height: 60),
-            const Icon(Icons.computer_rounded, size: 64, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('DOCTOR COMPUTER', style: AppTextStyles.heading2.copyWith(color: Colors.white)),
+            Image.asset('assets/images/logo.png', height: 140),
             const SizedBox(height: 40),
             GlassCard(
               padding: const EdgeInsets.all(24),
@@ -72,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextFormField(
                       controller: _emailController,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.mail, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.mail, color: AppColors.textSecondary),
                         hintText: 'Email',
                         filled: true,
                         fillColor: AppColors.surface,
@@ -90,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.lock, color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility : Icons.visibility_off,
@@ -137,12 +136,12 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 24),
             Row(
               children: [
-                const Expanded(child: Divider(color: AppColors.surfaceLight)),
+                Expanded(child: Divider(color: AppColors.surfaceLight)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text('atau / or', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                 ),
-                const Expanded(child: Divider(color: AppColors.surfaceLight)),
+                Expanded(child: Divider(color: AppColors.surfaceLight)),
               ],
             ),
             const SizedBox(height: 24),
@@ -151,9 +150,9 @@ class _LoginScreenState extends State<LoginScreen> {
               icon: const Icon(Icons.g_mobiledata, size: 28),
               label: const Text('Masuk dengan Google'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
                 minimumSize: const Size(double.infinity, 50),
-                side: const BorderSide(color: AppColors.surfaceLight),
+                side: BorderSide(color: AppColors.surfaceLight),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -163,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
               icon: const Icon(Icons.apple, size: 28),
               label: const Text('Masuk dengan Apple'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
                 minimumSize: const Size(double.infinity, 50),
-                side: const BorderSide(color: AppColors.surfaceLight),
+                side: BorderSide(color: AppColors.surfaceLight),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -188,3 +187,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
