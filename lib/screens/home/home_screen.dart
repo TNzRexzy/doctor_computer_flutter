@@ -12,6 +12,11 @@ import 'package:doctor_computer/widgets/home/flash_deal_timer.dart';
 import 'package:doctor_computer/widgets/home/product_card.dart';
 import 'package:doctor_computer/widgets/common/badge_icon.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/providers/notification_provider.dart';
+import 'package:doctor_computer/screens/notifications/notifications_screen.dart';
+import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
+import 'package:doctor_computer/screens/member/member_screen.dart';
+import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 
 /// Home Screen
 class HomeScreen extends StatelessWidget {
@@ -48,9 +53,21 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: BadgeIcon(icon: Icons.notifications_none, count: 2),
-                      onPressed: () {},
+                    Consumer<NotificationProvider>(
+                      builder: (context, notifProvider, child) {
+                        return IconButton(
+                          icon: BadgeIcon(
+                            icon: Icons.notifications_none,
+                            count: notifProvider.unreadCount,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                            );
+                          },
+                        );
+                      },
                     ),
                     IconButton(
                       icon: Icon(Icons.search, color: AppColors.textPrimary),
@@ -89,6 +106,65 @@ class HomeScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: PromoBannerCarousel(),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberScreen()));
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.sports_esports, color: AppColors.primary, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text('🎮 Minigames & EXP', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const WarrantyCheckScreen()));
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.verified, color: AppColors.accent, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text('🛡️ Cek Garansi', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               Padding(
@@ -135,7 +211,7 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       scrollDirection: Axis.horizontal,
                       itemCount: deals.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
                       itemBuilder: (context, index) {
                         final product = deals[index];
                         return SizedBox(
@@ -175,7 +251,7 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       scrollDirection: Axis.horizontal,
                       itemCount: bestSellers.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
                       itemBuilder: (context, index) {
                         final product = bestSellers[index];
                         return SizedBox(
@@ -271,6 +347,20 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 100),
             ],
           ),
+        ),
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 60.0),
+        child: FloatingActionButton.extended(
+          backgroundColor: AppColors.primary,
+          icon: const Icon(Icons.smart_toy, color: Colors.white),
+          label: const Text('Tanya Dokter AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen()),
+            );
+          },
         ),
       ),
     );

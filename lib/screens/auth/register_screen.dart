@@ -23,7 +23,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
@@ -45,11 +45,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _phoneController.text.trim(),
         _passwordController.text,
       );
-      if (success && mounted) {
-        Navigator.pushReplacementNamed(context, AppRouter.mainNav);
-      } else if (mounted) {
+      if (!mounted) return;
+      final errorMessage = context.read<AuthProvider>().errorMessage;
+      if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration failed. Please try again.')),
+          const SnackBar(content: Text('✅ Registrasi berhasil!')),
+        );
+        // Redirect to Welcome Page
+        Navigator.pushReplacementNamed(context, AppRouter.welcome);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage ?? 'Registration failed. Please try again.')),
         );
       }
     }
@@ -57,7 +63,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context); // Force rebuild on theme change
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(

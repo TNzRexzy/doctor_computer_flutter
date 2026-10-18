@@ -7,7 +7,7 @@ import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 
 class FilterBottomSheet extends StatefulWidget {
-  FilterBottomSheet({super.key});
+  const FilterBottomSheet({super.key});
 
   @override
   State<FilterBottomSheet> createState() => _FilterBottomSheetState();

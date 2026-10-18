@@ -4,7 +4,6 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
-import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:doctor_computer/providers/wishlist_provider.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
@@ -15,7 +14,7 @@ import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 class ProductDetailScreen extends StatelessWidget {
   final ProductModel product;
 
-  ProductDetailScreen({super.key, required this.product});
+  const ProductDetailScreen({super.key, required this.product});
 
   @override
   Widget build(BuildContext context) {
@@ -40,9 +39,17 @@ class ProductDetailScreen extends StatelessWidget {
                       colors: [AppColors.surfaceLight, AppColors.surface],
                     ),
                   ),
-                  child: Center(
-                    child: Icon(Icons.computer, size: 100, color: AppColors.primary),
-                  ),
+                  child: product.images.isNotEmpty
+                      ? Image.network(
+                          product.images.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(Icons.computer, size: 100, color: AppColors.primary),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(Icons.computer, size: 100, color: AppColors.primary),
+                        ),
                 ),
                 Transform.translate(
                   offset: Offset(0, -20),

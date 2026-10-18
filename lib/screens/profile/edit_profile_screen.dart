@@ -5,7 +5,6 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
-import 'package:doctor_computer/data/models/user_model.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -108,19 +107,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 GradientButton(
                   label: 'Simpan / Save',
                   onPressed: () {
-                    final updatedUser = UserModel(
-                      id: user.id,
-                      email: user.email,
-                      fullName: _nameController.text,
-                      phone: user.phone,
-                      avatarUrl: user.avatarUrl,
-                      address: user.address,
-                      city: _cityController.text,
-                      membershipTier: user.membershipTier,
-                      points: user.points,
-                      joinDate: user.joinDate,
+                    context.read<AuthProvider>().updateProfile(
+                      _nameController.text,
+                      user.phone,
+                      user.address,
+                      _cityController.text,
                     );
-                    context.read<AuthProvider>().updateProfile(updatedUser);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Profil diperbarui / Profile updated')),
                     );

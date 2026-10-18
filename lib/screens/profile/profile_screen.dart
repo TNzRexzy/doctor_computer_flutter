@@ -9,6 +9,9 @@ import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
+import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
+import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
+import 'package:doctor_computer/screens/member/member_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -115,6 +118,15 @@ class ProfileScreen extends StatelessWidget {
                       trailing: CircleAvatar(radius: 12, backgroundColor: AppColors.primary, child: Text('${wishlist.itemCount}', style: AppTextStyles.caption)),
                     ),
                   ),
+                  _buildMenuItem(context, Icons.smart_toy, '🤖 Tanya Dokter AI (Customer Service)', () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen()));
+                  }),
+                  _buildMenuItem(context, Icons.verified_user, '🛡️ Cek Masa Garansi Aktif', () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const WarrantyCheckScreen()));
+                  }),
+                  _buildMenuItem(context, Icons.sports_esports, '🎮 Minigames & Blockchain Member', () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberScreen()));
+                  }),
                   _buildMenuItem(context, Icons.card_membership, 'Membership', () => Navigator.pushNamed(context, AppRouter.membership)),
                   _buildMenuItem(context, Icons.edit, 'Edit Profil / Edit Profile', () => Navigator.pushNamed(context, AppRouter.editProfile)),
                   _buildMenuItem(

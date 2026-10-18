@@ -30,22 +30,37 @@ class ProductCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              Container(
-                height: 140,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.surface, AppColors.surfaceLight],
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Container(
+                  height: 140,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.surface, AppColors.surfaceLight],
+                    ),
                   ),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.computer_rounded, // fallback icon
-                    size: 48,
-                    color: AppColors.textTertiary,
-                  ),
+                  child: product.images.isNotEmpty
+                      ? Image.network(
+                          product.images.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(
+                              Icons.computer_rounded,
+                              size: 48,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            Icons.computer_rounded,
+                            size: 48,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
                 ),
               ),
               if (product.hasDiscount)
