@@ -53,7 +53,43 @@ class ProductCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (product.hasDiscount)
+              if (product.isOnSale)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.error.withValues(alpha: 0.4),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.bolt, color: Colors.white, size: 12),
+                        const SizedBox(width: 2),
+                        Text(
+                          product.hasDiscount
+                              ? 'FLASH SALE -${product.discountPercentage.toStringAsFixed(0)}%'
+                              : 'FLASH SALE',
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (product.hasDiscount)
                 Positioned(
                   top: 8,
                   left: 8,

@@ -50,6 +50,7 @@ class OrderModel {
   double? rating;
   String? reviewComment;
   DateTime? ratedAt;
+  List<String> reviewMediaUrls;
 
   OrderModel({
     required this.id,
@@ -66,7 +67,8 @@ class OrderModel {
     this.rating,
     this.reviewComment,
     this.ratedAt,
-  });
+    List<String>? reviewMediaUrls,
+  }) : reviewMediaUrls = reviewMediaUrls ?? [];
 
   DateTime get warrantyExpiryDate =>
       orderDate.add(Duration(days: warrantyDurationMonths * 30));
@@ -102,6 +104,7 @@ class OrderModel {
       'rating': rating,
       'review_comment': reviewComment,
       'rated_at': ratedAt?.toIso8601String(),
+      'review_media_urls': reviewMediaUrls,
     };
   }
 
@@ -117,6 +120,11 @@ class OrderModel {
       } catch (e) {
         debugPrint('Error decoding order items: $e');
       }
+    }
+
+    List<String> mediaUrls = [];
+    if (map['review_media_urls'] is List) {
+      mediaUrls = (map['review_media_urls'] as List).map((e) => e.toString()).toList();
     }
 
     OrderStatus parseStatus(dynamic s) {
@@ -146,6 +154,7 @@ class OrderModel {
       rating: (map['rating'] as num?)?.toDouble(),
       reviewComment: map['review_comment']?.toString(),
       ratedAt: map['rated_at'] != null ? DateTime.tryParse(map['rated_at'].toString()) : null,
+      reviewMediaUrls: mediaUrls,
     );
   }
 }

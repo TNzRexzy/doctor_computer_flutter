@@ -12,6 +12,7 @@ import 'package:doctor_computer/widgets/catalog/sort_chips.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/home/category_grid.dart';
 import 'package:doctor_computer/widgets/home/product_card.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 
 /// Catalog Screen
 class CatalogScreen extends StatefulWidget {
@@ -178,20 +179,50 @@ class _CatalogScreenState extends State<CatalogScreen> {
       onTap: () => Navigator.pushNamed(context, AppRouter.productDetail, arguments: product),
       child: Row(
         children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: product.images.isNotEmpty
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(product.images.first, fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Icon(Icons.computer, color: AppColors.primary)),
-                  )
-                : Icon(Icons.computer, color: AppColors.primary, size: 40),
+          Stack(
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: AppImageView(
+                  imageUrl: product.images.isNotEmpty ? product.images.first : product.id,
+                  fit: BoxFit.cover,
+                  width: 100,
+                  height: 100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              if (product.isOnSale)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.bolt, color: Colors.white, size: 10),
+                        Text(
+                          'FLASH SALE',
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(

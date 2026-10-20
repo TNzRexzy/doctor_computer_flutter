@@ -10,6 +10,7 @@ class ReviewModel {
   final String? reply;
   final String? replyRole;
   final DateTime? replyDate;
+  final List<String> mediaUrls;
 
   const ReviewModel({
     required this.id,
@@ -22,6 +23,7 @@ class ReviewModel {
     this.reply,
     this.replyRole,
     this.replyDate,
+    this.mediaUrls = const [],
   });
 
   ReviewModel copyWith({
@@ -35,6 +37,7 @@ class ReviewModel {
     String? reply,
     String? replyRole,
     DateTime? replyDate,
+    List<String>? mediaUrls,
   }) {
     return ReviewModel(
       id: id ?? this.id,
@@ -47,6 +50,7 @@ class ReviewModel {
       reply: reply ?? this.reply,
       replyRole: replyRole ?? this.replyRole,
       replyDate: replyDate ?? this.replyDate,
+      mediaUrls: mediaUrls ?? this.mediaUrls,
     );
   }
 
@@ -62,10 +66,15 @@ class ReviewModel {
       'reply': reply,
       'reply_role': replyRole,
       'reply_date': replyDate?.toIso8601String(),
+      'media_urls': mediaUrls,
     };
   }
 
   factory ReviewModel.fromMap(Map<String, dynamic> map) {
+    List<String> parsedMedia = [];
+    if (map['media_urls'] is List) {
+      parsedMedia = (map['media_urls'] as List).map((e) => e.toString()).toList();
+    }
     return ReviewModel(
       id: map['id']?.toString() ?? '',
       userId: map['user_id']?.toString() ?? '',
@@ -83,6 +92,7 @@ class ReviewModel {
       replyDate: map['reply_date'] != null
           ? DateTime.tryParse(map['reply_date'].toString())
           : null,
+      mediaUrls: parsedMedia,
     );
   }
 }

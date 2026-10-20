@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/mock/mock_products.dart';
@@ -14,9 +16,11 @@ class CartProvider extends ChangeNotifier {
 
   String? get userId => _userId;
   set userId(String? id) {
+    if (_userId == id) return;
     _userId = id;
-    _syncCartFromDb();
+    _items.clear();
     notifyListeners();
+    _loadCartFromCache().then((_) => _syncCartFromDb());
   }
 
   final supabase = Supabase.instance.client;
@@ -26,9 +30,11 @@ class CartProvider extends ChangeNotifier {
   }
 
   void setUserId(String? id) {
+    if (_userId == id) return;
     _userId = id;
-    _syncCartFromDb();
+    _items.clear();
     notifyListeners();
+    _loadCartFromCache().then((_) => _syncCartFromDb());
   }
 
   Future<void> _syncCartFromDb() async {
@@ -116,6 +122,7 @@ class CartProvider extends ChangeNotifier {
       _items.add(CartItemModel(product: product, quantity: quantity));
     }
     notifyListeners();
+    _saveCartToCache();
 
     if (_userId != null) {
       try {
@@ -133,6 +140,7 @@ class CartProvider extends ChangeNotifier {
   Future<void> removeFromCart(String productId) async {
     _items.removeWhere((item) => item.product.id == productId);
     notifyListeners();
+    _saveCartToCache();
 
     if (_userId != null) {
       try {
@@ -157,6 +165,7 @@ class CartProvider extends ChangeNotifier {
     if (index >= 0) {
       _items[index].quantity = quantity;
       notifyListeners();
+      _saveCartToCache();
     }
 
     if (_userId != null) {
@@ -175,6 +184,7 @@ class CartProvider extends ChangeNotifier {
   Future<void> clearCart() async {
     _items.clear();
     notifyListeners();
+    _saveCartToCache();
 
     if (_userId != null) {
       try {
@@ -190,5 +200,42 @@ class CartProvider extends ChangeNotifier {
 
   bool isInCart(String productId) {
     return _items.any((item) => item.product.id == productId);
+  }
+
+  Future<void> _loadCartFromCache() async {
+    if (_userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'user_cart_$_userId';
+      final cached = prefs.getString(key);
+      if (cached != null && cached.isNotEmpty) {
+        final List list = jsonDecode(cached);
+        for (final item in list) {
+          final map = item as Map<String, dynamic>;
+          final product = await _fetchProductAsync(map['product_id'] ?? '');
+          if (product != null) {
+            _items.add(CartItemModel(product: product, quantity: (map['quantity'] as num? ?? 1).toInt()));
+          }
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading cart from cache: $e');
+    }
+  }
+
+  Future<void> _saveCartToCache() async {
+    if (_userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'user_cart_$_userId';
+      final data = _items.map((i) => {
+        'product_id': i.product.id,
+        'quantity': i.quantity,
+      }).toList();
+      await prefs.setString(key, jsonEncode(data));
+    } catch (e) {
+      debugPrint('Error saving cart to cache: $e');
+    }
   }
 }

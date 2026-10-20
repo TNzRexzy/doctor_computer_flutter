@@ -7,6 +7,9 @@ import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
+import 'package:doctor_computer/providers/review_provider.dart';
+import 'package:doctor_computer/data/models/review_model.dart';
 import 'package:doctor_computer/screens/order/order_tracking_screen.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 
@@ -34,6 +37,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   void _showRatingDialog(BuildContext context, OrderModel order, {bool isEditing = false}) {
     double selectedRating = order.rating ?? 5.0;
     final commentController = TextEditingController(text: order.reviewComment ?? '');
+    final List<String> mediaList = List<String>.from(order.reviewMediaUrls);
 
     showDialog(
       context: context,
@@ -107,6 +111,188 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  Text('Lampiran Gambar atau Video:', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  if (mediaList.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: mediaList.map((media) {
+                        final isVideo = media.contains('.mp4') ||
+                            media.contains('.mov') ||
+                            media.contains('.webm') ||
+                            media.contains('video') ||
+                            media.contains('youtu');
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    AppImageView(
+                                      imageUrl: media,
+                                      fit: BoxFit.cover,
+                                      width: 60,
+                                      height: 60,
+                                    ),
+                                    if (isVideo)
+                                      Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.6),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: -4,
+                              right: -4,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setDialogState(() {
+                                    mediaList.remove(media);
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, color: Colors.white, size: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.add_photo_alternate, size: 16),
+                        label: const Text('Foto (JPG/PNG)', style: TextStyle(fontSize: 11)),
+                        onPressed: () {
+                          final inputC = TextEditingController();
+                          showDialog(
+                            context: context,
+                            builder: (addCtx) => AlertDialog(
+                              title: const Text('Tambah Lampiran Foto'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Masukkan URL foto atau path file (JPG, PNG, WEBP):', style: TextStyle(fontSize: 12)),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: inputC,
+                                    decoration: const InputDecoration(
+                                      hintText: 'https://.../foto.jpg',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 6,
+                                    children: [
+                                      ActionChip(
+                                        label: const Text('Foto Produk 1', style: TextStyle(fontSize: 10)),
+                                        onPressed: () => inputC.text = 'assets/images/products/tuf_f15.png',
+                                      ),
+                                      ActionChip(
+                                        label: const Text('Foto Unboxing', style: TextStyle(fontSize: 10)),
+                                        onPressed: () => inputC.text = 'assets/images/products/rog_strix_g16.png',
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(addCtx), child: const Text('Batal')),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    final val = inputC.text.trim();
+                                    if (val.isNotEmpty) {
+                                      setDialogState(() {
+                                        mediaList.add(val);
+                                      });
+                                    }
+                                    Navigator.pop(addCtx);
+                                  },
+                                  child: const Text('Tambah'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.videocam, size: 16),
+                        label: const Text('Video', style: TextStyle(fontSize: 11)),
+                        onPressed: () {
+                          final inputC = TextEditingController();
+                          showDialog(
+                            context: context,
+                            builder: (addCtx) => AlertDialog(
+                              title: const Text('Tambah Lampiran Video'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Masukkan tautan video review (MP4, WebM, YouTube):', style: TextStyle(fontSize: 12)),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: inputC,
+                                    decoration: const InputDecoration(
+                                      hintText: 'https://.../review.mp4',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(addCtx), child: const Text('Batal')),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    final val = inputC.text.trim();
+                                    if (val.isNotEmpty) {
+                                      setDialogState(() {
+                                        mediaList.add(val);
+                                      });
+                                    }
+                                    Navigator.pop(addCtx);
+                                  },
+                                  child: const Text('Tambah'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -122,20 +308,42 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     order.id,
                     selectedRating,
                     commentController.text.trim(),
+                    mediaUrls: mediaList,
                   );
+
+                  // Also propagate review to ReviewProvider for all products in this order
+                  final reviewProvider = context.read<ReviewProvider>();
+                  final authUser = context.read<AuthProvider>().currentUser;
+                  final authorName = authUser?.fullName ?? 'Pelanggan Doctor Computer';
+                  final authorId = authUser?.id ?? 'user';
+
+                  for (final item in order.items) {
+                    final rModel = ReviewModel(
+                      id: 'rev-${order.id}-${item.product.id}',
+                      userId: authorId,
+                      userName: authorName,
+                      productId: item.product.id,
+                      rating: selectedRating,
+                      comment: commentController.text.trim(),
+                      date: DateTime.now(),
+                      mediaUrls: mediaList,
+                    );
+                    reviewProvider.addReview(rModel);
+                  }
+
                   Navigator.pop(ctx);
                   if (success) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         backgroundColor: AppColors.success,
-                        content: Text(isEditing ? 'Rating berhasil diperbarui!' : 'Terima kasih atas rating Anda!'),
+                        content: Text(isEditing ? 'Rating berhasil diperbarui!' : 'Terima kasih atas ulasan & rating Anda!'),
                       ),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         backgroundColor: AppColors.error,
-                        content: Text('Batas waktu pengubahan rating (7 hari) telah berakhir.'),
+                        content: const Text('Batas waktu pengubahan rating (7 hari) telah berakhir.'),
                       ),
                     );
                   }
@@ -331,6 +539,26 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                                           if (order.reviewComment != null && order.reviewComment!.isNotEmpty) ...[
                                             const SizedBox(height: 4),
                                             Text('"${order.reviewComment}"', style: AppTextStyles.caption.copyWith(fontStyle: FontStyle.italic)),
+                                          ],
+                                          if (order.reviewMediaUrls.isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            Wrap(
+                                              spacing: 6,
+                                              children: order.reviewMediaUrls.map((m) {
+                                                return Container(
+                                                  width: 44,
+                                                  height: 44,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: AppColors.border),
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    child: AppImageView(imageUrl: m, fit: BoxFit.cover, width: 44, height: 44),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
                                           ],
                                         ] else ...[
                                           Row(

@@ -5,6 +5,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/core/constants/app_constants.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
+import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'dart:math';
@@ -81,7 +82,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('✅ Alamat dari peta berhasil dipilih dan tersimpan ke database!'),
+            content: const Text('Alamat dari peta berhasil dipilih dan tersimpan ke database!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -122,6 +123,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       warrantyDurationMonths: 24,
     );
     context.read<OrderProvider>().addOrder(newOrder);
+
+    // Decrement stock for each purchased item
+    final productProvider = context.read<ProductProvider>();
+    for (final item in cart.items) {
+      productProvider.decrementStock(item.product.id, item.quantity);
+    }
 
     // 2. Mine Block 2: Belanja Komponen (+500 EXP)
     final itemName = cart.items.isNotEmpty ? cart.items.first.product.name : 'Komponen PC / RAM';

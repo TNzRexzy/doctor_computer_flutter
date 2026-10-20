@@ -414,6 +414,43 @@ class ProductProvider extends ChangeNotifier {
     return true;
   }
 
+  /// Decrements stock for a product after purchase
+  Future<void> decrementStock(String productId, int quantity) async {
+    final index = _allProducts.indexWhere((p) => p.id == productId);
+    if (index == -1) return;
+
+    final product = _allProducts[index];
+    final newStock = (product.stock - quantity).clamp(0, 999999);
+    final updated = product.copyWith(stock: newStock);
+    _allProducts[index] = updated;
+    notifyListeners();
+
+    // 1. Update SharedPreferences overrides
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> overrides = {};
+      final existingJson = prefs.getString(_prefProductOverridesKey);
+      if (existingJson != null && existingJson.isNotEmpty) {
+        overrides = Map<String, dynamic>.from(jsonDecode(existingJson));
+      }
+      final currentMap = overrides[productId] != null
+          ? Map<String, dynamic>.from(overrides[productId] as Map)
+          : updated.toMap();
+      currentMap['stock'] = newStock;
+      overrides[productId] = currentMap;
+      await prefs.setString(_prefProductOverridesKey, jsonEncode(overrides));
+    } catch (e) {
+      debugPrint('Error caching stock decrement: $e');
+    }
+
+    // 2. Sync to Supabase
+    try {
+      await supabase.from('products').update({'stock': newStock}).eq('id', productId);
+    } catch (e) {
+      debugPrint('Supabase stock decrement notice: $e');
+    }
+  }
+
   /// Updates Flash Sale end time in real-time and persists it across sessions.
   Future<void> updateFlashSaleTime(DateTime newEndTime) async {
     _flashSaleEndTime = newEndTime;

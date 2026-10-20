@@ -8,6 +8,10 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
+import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/models/blockchain/blockchain.dart';
+import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/review_model.dart';
@@ -98,13 +102,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final user = context.read<AuthProvider>().currentUser;
       final isAdmin = user?.role == UserRole.admin;
 
-      // Products - both admin and cashier
+      // Products - merge Supabase + ProductProvider (includes locally cached & newly added products)
       final productsRes = await supabase.from('products').select();
-      _products = List<Map<String, dynamic>>.from(productsRes);
+      final Map<String, Map<String, dynamic>> productMap = {};
+      for (final p in productsRes) {
+        final id = p['id']?.toString() ?? '';
+        if (id.isNotEmpty) productMap[id] = Map<String, dynamic>.from(p);
+      }
+      if (mounted) {
+        final providerProducts = context.read<ProductProvider>().allProducts;
+        for (final p in providerProducts) {
+          if (!productMap.containsKey(p.id)) {
+            productMap[p.id] = p.toMap();
+          }
+        }
+      }
+      _products = productMap.values.toList();
 
-      // Orders - both admin and cashier
+      // Orders - merge Supabase + OrderProvider
       final ordersRes = await supabase.from('orders').select().order('order_date', ascending: false);
-      _orders = List<Map<String, dynamic>>.from(ordersRes);
+      final Map<String, Map<String, dynamic>> orderMap = {};
+      for (final o in ordersRes) {
+        final id = o['id']?.toString() ?? '';
+        if (id.isNotEmpty) orderMap[id] = Map<String, dynamic>.from(o);
+      }
+      if (mounted) {
+        final providerOrders = context.read<OrderProvider>().orders;
+        for (final o in providerOrders) {
+          if (!orderMap.containsKey(o.id)) {
+            orderMap[o.id] = o.toMap();
+          }
+        }
+      }
+      _orders = orderMap.values.toList();
+
+      // Apply locally cached order status overrides
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final overridesJson = prefs.getString('admin_order_status_overrides');
+        if (overridesJson != null && overridesJson.isNotEmpty) {
+          final Map<String, dynamic> overrides = jsonDecode(overridesJson);
+          for (int i = 0; i < _orders.length; i++) {
+            final oid = _orders[i]['id']?.toString() ?? '';
+            if (overrides.containsKey(oid)) {
+              _orders[i] = Map<String, dynamic>.from(_orders[i]);
+              _orders[i]['status'] = overrides[oid].toString();
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error applying order overrides: $e');
+      }
 
       // Users - admin only
       if (isAdmin) {
@@ -965,20 +1013,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               onPressed: () async {
                 final nav = Navigator.of(ctx);
                 final messenger = ScaffoldMessenger.of(context);
-                try {
-                  await supabase.from('orders').update({
-                    'status': selectedStatus,
-                  }).eq('id', order['id']);
-                  nav.pop();
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Status pesanan diperbarui')),
-                  );
-                  if (mounted) _loadData();
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Gagal: $e')),
-                  );
+                final orderId = order['id']?.toString() ?? '';
+
+                OrderStatus newStatus = OrderStatus.processing;
+                for (final s in OrderStatus.values) {
+                  if (s.name.toLowerCase() == selectedStatus.toLowerCase()) {
+                    newStatus = s;
+                    break;
+                  }
                 }
+
+                // Update via OrderProvider (saves to memory, local cache, and Supabase)
+                await context.read<OrderProvider>().updateOrderStatus(orderId, newStatus);
+
+                // Update local list
+                final idx = _orders.indexWhere((o) => o['id']?.toString() == orderId);
+                if (idx != -1) {
+                  _orders[idx] = Map<String, dynamic>.from(_orders[idx]);
+                  _orders[idx]['status'] = selectedStatus;
+                }
+
+                nav.pop();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Status pesanan berhasil diperbarui')),
+                );
+                if (mounted) setState(() {});
               },
               child: const Text('Update'),
             ),
@@ -1457,7 +1516,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   debugPrint('Error caching user role override: $e');
                 }
 
-                // 3. Attempt Supabase update
+                // 3. Update blockchain wallet points & tier
+                try {
+                  MemberTier targetTier = MemberTier.bronze;
+                  for (final t in MemberTier.values) {
+                    if (t.name.toLowerCase() == selectedTier.toLowerCase()) {
+                      targetTier = t;
+                      break;
+                    }
+                  }
+                  final newExp = int.tryParse(pointsController.text) ?? 0;
+                  final targetName = nameController.text.trim().isNotEmpty
+                      ? nameController.text.trim()
+                      : (userData['full_name']?.toString() ?? 'Pengguna');
+                  await context.read<BlockchainProvider>().adminSetUserPoints(
+                    userId: userId,
+                    userName: targetName,
+                    newExp: newExp,
+                    newTier: targetTier,
+                    adminNote: 'Penyesuaian oleh Admin (${user?.fullName ?? "Admin"})',
+                  );
+                } catch (e) {
+                  debugPrint('Error syncing blockchain points in admin dialog: $e');
+                }
+
+                // 4. Attempt Supabase update
                 bool supabaseSuccess = false;
                 try {
                   await supabase.from('users').update(updatePayload).eq('id', userId);

@@ -50,49 +50,91 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final urlController = TextEditingController(
       text: context.read<AuthProvider>().currentUser?.profileImageUrl ?? '',
     );
+    final sampleAvatars = [
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&fit=crop',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop',
+      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&fit=crop',
+      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&fit=crop',
+    ];
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Ubah Foto Profil'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Masukkan URL gambar profil Anda:', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: urlController,
-              decoration: const InputDecoration(
-                hintText: 'https://example.com/photo.jpg',
-                border: OutlineInputBorder(),
-              ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Ubah Foto Profil'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Masukkan URL foto atau pilih avatar cepat:', style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'URL Gambar (JPG/PNG)',
+                    hintText: 'https://example.com/photo.jpg',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text('Pilihan Avatar Instan:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: sampleAvatars.map((url) {
+                    final isSelected = urlController.text == url;
+                    return GestureDetector(
+                      onTap: () {
+                        setDialogState(() {
+                          urlController.text = url;
+                        });
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundImage: NetworkImage(url),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final url = urlController.text.trim();
+                if (url.isNotEmpty) {
+                  final auth = context.read<AuthProvider>();
+                  final nav = Navigator.of(ctx);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final success = await auth.updateProfileImage(url);
+                  if (mounted) {
+                    nav.pop();
+                    messenger.showSnackBar(
+                      SnackBar(content: Text(success ? 'Foto profil diperbarui' : 'Gagal memperbarui foto')),
+                    );
+                    setState(() {}); // Refresh UI
+                  }
+                }
+              },
+              child: const Text('Simpan'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final url = urlController.text.trim();
-              if (url.isNotEmpty) {
-                final auth = context.read<AuthProvider>();
-                final nav = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-                final success = await auth.updateProfileImage(url);
-                if (mounted) {
-                  nav.pop();
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(success ? 'Foto profil diperbarui' : 'Gagal memperbarui foto')),
-                  );
-                  setState(() {}); // Refresh UI
-                }
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
       ),
     );
   }
@@ -118,7 +160,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('✅ Alamat peta berhasil diterapkan dan disimpan ke database!'),
+            content: const Text('Alamat peta berhasil diterapkan dan disimpan ke database!'),
             backgroundColor: AppColors.success,
           ),
         );

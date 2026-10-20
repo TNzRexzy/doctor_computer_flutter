@@ -255,6 +255,55 @@ class UserWallet {
     return block;
   }
 
+  /// Admin adjustment block - safely adjusts EXP and tier via blockchain
+  Block mineAdminAdjustmentBlock({
+    required int newTotalExp,
+    required MemberTier newTier,
+    required String adminNote,
+  }) {
+    final previousHash = blockchain.isNotEmpty ? blockchain.last.hash : 'A1B2';
+    final newIndex = blockchain.length;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final blockPayload = {
+      'User': userName.isNotEmpty ? userName : userId,
+      'Penyesuaian': adminNote,
+      'EXP Sebelum': totalExp,
+      'EXP Sesudah': newTotalExp,
+      'Tier Sebelum': currentTier.name,
+      'Tier Sesudah': newTier.name,
+      'Previous Hash': previousHash,
+      'Timestamp': DateTime.fromMillisecondsSinceEpoch(now).toIso8601String(),
+    };
+
+    final newHash = Block.calculateHash(
+      index: newIndex,
+      timestamp: now,
+      data: blockPayload,
+      previousHash: previousHash,
+    );
+
+    blockPayload['New Hash'] = newHash;
+
+    final block = Block(
+      index: newIndex,
+      blockType: 'admin_adjustment',
+      title: 'Blok $newIndex: Penyesuaian Admin',
+      data: blockPayload,
+      previousHash: previousHash,
+      initialHash: newHash,
+      expEarned: newTotalExp - totalExp,
+      upgradeTier: newTier != currentTier ? newTier.name : null,
+      customTimestamp: now,
+    );
+
+    blockchain.add(block);
+    totalExp = newTotalExp;
+    currentTier = newTier;
+
+    return block;
+  }
+
   Map<String, dynamic> toMap() => {
         'userId': userId,
         'userName': userName,

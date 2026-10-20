@@ -133,4 +133,44 @@ class BlockchainProvider extends ChangeNotifier {
     }
     return true;
   }
+
+  /// Admin sets user's EXP and tier directly (creates proper blockchain block)
+  Future<bool> adminSetUserPoints({
+    required String userId,
+    required String userName,
+    required int newExp,
+    required MemberTier newTier,
+    String adminNote = 'Penyesuaian poin oleh admin',
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'blockchain_wallet_$userId';
+      final jsonString = prefs.getString(key);
+
+      UserWallet targetWallet;
+      if (jsonString != null) {
+        targetWallet = UserWallet.fromMap(jsonDecode(jsonString) as Map<String, dynamic>);
+      } else {
+        targetWallet = UserWallet(userId: userId, userName: userName);
+      }
+
+      targetWallet.mineAdminAdjustmentBlock(
+        newTotalExp: newExp,
+        newTier: newTier,
+        adminNote: adminNote,
+      );
+
+      await prefs.setString(key, jsonEncode(targetWallet.toMap()));
+
+      if (_wallet.userId == userId) {
+        _wallet = targetWallet;
+        notifyListeners();
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error in adminSetUserPoints: $e');
+      return false;
+    }
+  }
 }

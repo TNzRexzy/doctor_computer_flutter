@@ -83,6 +83,31 @@ class ProductDetailScreen extends StatelessWidget {
                                 ],
                               ),
                               SizedBox(height: 16),
+                              if (product.isOnSale) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.error),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.bolt, color: AppColors.error, size: 16),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'PROMO FLASH SALE SEDANG BERLANGSUNG',
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: AppColors.error,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
                               Row(
                                 children: [
                                   Column(
@@ -195,6 +220,52 @@ class ProductDetailScreen extends StatelessWidget {
                                 ),
                                 SizedBox(height: 8),
                                 Text(r.comment, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                                if (r.mediaUrls.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: r.mediaUrls.map((media) {
+                                      final isVideo = media.contains('.mp4') ||
+                                          media.contains('.mov') ||
+                                          media.contains('.webm') ||
+                                          media.contains('video') ||
+                                          media.contains('youtu');
+                                      return Container(
+                                        width: 70,
+                                        height: 70,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surface,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: AppColors.border),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              AppImageView(
+                                                imageUrl: media,
+                                                fit: BoxFit.cover,
+                                                width: 70,
+                                                height: 70,
+                                              ),
+                                              if (isVideo)
+                                                Container(
+                                                  padding: const EdgeInsets.all(4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black.withValues(alpha: 0.6),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
                                 // Seller reply
                                 if (r.reply != null && r.reply!.isNotEmpty) ...[
                                   SizedBox(height: 10),

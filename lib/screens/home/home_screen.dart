@@ -278,14 +278,15 @@ class HomeScreen extends StatelessWidget {
               Consumer2<ProductProvider, WishlistProvider>(
                 builder: (context, productProvider, wishlistProvider, child) {
                   final newArrivals = productProvider.newArrivals.take(6).toList();
+                  final screenWidth = MediaQuery.of(context).size.width;
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: GridView.builder(
                       physics: const NeverScrollableScrollPhysics(),
                       shrinkWrap: true,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.55,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: screenWidth > 900 ? 4 : (screenWidth > 600 ? 3 : 2),
+                        childAspectRatio: screenWidth > 600 ? 0.65 : (screenWidth < 360 ? 0.52 : 0.56),
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
                       ),

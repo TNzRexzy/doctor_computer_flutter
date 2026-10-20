@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/badge_icon.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 
 /// A custom bottom navigation bar widget.
 class BottomNavBar extends StatelessWidget {
@@ -71,11 +73,53 @@ class BottomNavBar extends StatelessWidget {
               );
             },
           ),
-          _NavItem(
-            icon: Icons.person_rounded,
-            label: 'Profil',
-            isActive: currentIndex == 4,
-            onTap: () => onTap(4),
+          Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              final user = auth.currentUser;
+              Widget? customAvatar;
+              if (user != null) {
+                final hasImage = user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty;
+                customAvatar = Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: currentIndex == 4 ? AppColors.primary : Colors.transparent,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: hasImage
+                        ? AppImageView(
+                            imageUrl: user.profileImageUrl!,
+                            fit: BoxFit.cover,
+                            width: 24,
+                            height: 24,
+                          )
+                        : Container(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            alignment: Alignment.center,
+                            child: Text(
+                              user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'U',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: currentIndex == 4 ? AppColors.primary : AppColors.textTertiary,
+                              ),
+                            ),
+                          ),
+                  ),
+                );
+              }
+              return _NavItem(
+                icon: Icons.person_rounded,
+                customIcon: customAvatar,
+                label: 'Profil',
+                isActive: currentIndex == 4,
+                onTap: () => onTap(4),
+              );
+            },
           ),
         ],
       ),
@@ -85,6 +129,7 @@ class BottomNavBar extends StatelessWidget {
 
 class _NavItem extends StatelessWidget {
   final IconData icon;
+  final Widget? customIcon;
   final String label;
   final bool isActive;
   final VoidCallback onTap;
@@ -92,6 +137,7 @@ class _NavItem extends StatelessWidget {
 
   const _NavItem({
     required this.icon,
+    this.customIcon,
     required this.label,
     required this.isActive,
     required this.onTap,
@@ -109,9 +155,12 @@ class _NavItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          badgeCount > 0
-              ? BadgeIcon(icon: icon, count: badgeCount, color: color)
-              : Icon(icon, color: color),
+          if (customIcon != null)
+            customIcon!
+          else if (badgeCount > 0)
+            BadgeIcon(icon: icon, count: badgeCount, color: color)
+          else
+            Icon(icon, color: color),
           const SizedBox(height: 4),
           Text(
             label,

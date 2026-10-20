@@ -12,6 +12,7 @@ import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/core/config/env_config.dart';
+import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/app.dart';
 
 Future<void> main() async {
@@ -42,12 +43,49 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
-        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, CartProvider>(
+          create: (_) {
+            final cp = CartProvider();
+            if (authProvider.currentUser?.id != null) {
+              cp.setUserId(authProvider.currentUser!.id);
+            }
+            return cp;
+          },
+          update: (_, auth, cartProvider) {
+            final cp = cartProvider ?? CartProvider();
+            final newId = auth.currentUser?.id;
+            if (newId != cp.userId) {
+              cp.setUserId(newId);
+            }
+            return cp;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => PcBuilderProvider()),
         ChangeNotifierProvider(create: (_) => WishlistProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => BlockchainProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, BlockchainProvider>(
+          create: (_) {
+            final bp = BlockchainProvider();
+            if (authProvider.currentUser != null) {
+              final u = authProvider.currentUser!;
+              bp.initWallet(u.id, u.fullName, isAdmin: u.role == UserRole.admin);
+            }
+            return bp;
+          },
+          update: (_, auth, blockchainProvider) {
+            final bp = blockchainProvider ?? BlockchainProvider();
+            if (auth.currentUser != null) {
+              final u = auth.currentUser!;
+              if (bp.wallet.userId != u.id) {
+                bp.initWallet(u.id, u.fullName, isAdmin: u.role == UserRole.admin);
+              }
+            } else if (bp.wallet.userId != 'guest') {
+              bp.initWallet('guest', 'Pengguna Baru');
+            }
+            return bp;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProxyProvider<AuthProvider, OrderProvider>(

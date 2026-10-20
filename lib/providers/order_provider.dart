@@ -177,6 +177,50 @@ class OrderProvider extends ChangeNotifier {
           debugPrint('Supabase orders fetch notice: $e');
         }
       }
+
+      // Apply admin status overrides
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final overridesJson = prefs.getString('admin_order_status_overrides');
+        if (overridesJson != null && overridesJson.isNotEmpty) {
+          final Map<String, dynamic> overrides = jsonDecode(overridesJson);
+          for (int i = 0; i < _orders.length; i++) {
+            final oid = _orders[i].id;
+            if (overrides.containsKey(oid)) {
+              final statusStr = overrides[oid].toString();
+              OrderStatus? newStatus;
+              for (final s in OrderStatus.values) {
+                if (s.name == statusStr) {
+                  newStatus = s;
+                  break;
+                }
+              }
+              if (newStatus != null && _orders[i].status != newStatus) {
+                final o = _orders[i];
+                _orders[i] = OrderModel(
+                  id: o.id,
+                  items: o.items,
+                  totalPrice: o.totalPrice,
+                  status: newStatus,
+                  orderDate: o.orderDate,
+                  shippingAddress: o.shippingAddress,
+                  paymentMethod: o.paymentMethod,
+                  trackingNumber: o.trackingNumber,
+                  courier: o.courier,
+                  serialNumber: o.serialNumber,
+                  warrantyDurationMonths: o.warrantyDurationMonths,
+                  rating: o.rating,
+                  reviewComment: o.reviewComment,
+                  ratedAt: o.ratedAt,
+                  reviewMediaUrls: o.reviewMediaUrls,
+                );
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error applying order status overrides: $e');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -200,7 +244,7 @@ class OrderProvider extends ChangeNotifier {
   }
 
   /// Give or update rating (validates 7-day policy)
-  bool updateOrderRating(String orderId, double newRating, String comment) {
+  bool updateOrderRating(String orderId, double newRating, String comment, {List<String>? mediaUrls}) {
     final index = _orders.indexWhere((o) => o.id == orderId);
     if (index < 0) return false;
 
@@ -212,17 +256,24 @@ class OrderProvider extends ChangeNotifier {
     order.rating = newRating;
     order.reviewComment = comment;
     order.ratedAt ??= DateTime.now();
+    if (mediaUrls != null) {
+      order.reviewMediaUrls = mediaUrls;
+    }
 
     _saveOrdersToCache();
     notifyListeners();
 
     if (_userId != null) {
       try {
-        supabase.from('orders').update({
+        final updateData = <String, dynamic>{
           'rating': newRating,
           'review_comment': comment,
           'rated_at': DateTime.now().toIso8601String(),
-        }).eq('id', orderId).then((_) {}).catchError((e) {
+        };
+        if (mediaUrls != null) {
+          updateData['review_media_urls'] = mediaUrls;
+        }
+        supabase.from('orders').update(updateData).eq('id', orderId).then((_) {}).catchError((e) {
           debugPrint('Error updating order rating in DB: $e');
         });
       } catch (e) {
@@ -230,6 +281,57 @@ class OrderProvider extends ChangeNotifier {
       }
     }
 
+    return true;
+  }
+
+  /// Admin/Cashier can update order status
+  Future<bool> updateOrderStatus(String orderId, OrderStatus newStatus) async {
+    // Update in-memory
+    final index = _orders.indexWhere((o) => o.id == orderId);
+    if (index >= 0) {
+      final order = _orders[index];
+      _orders[index] = OrderModel(
+        id: order.id,
+        items: order.items,
+        totalPrice: order.totalPrice,
+        status: newStatus,
+        orderDate: order.orderDate,
+        shippingAddress: order.shippingAddress,
+        paymentMethod: order.paymentMethod,
+        trackingNumber: order.trackingNumber,
+        courier: order.courier,
+        serialNumber: order.serialNumber,
+        warrantyDurationMonths: order.warrantyDurationMonths,
+        rating: order.rating,
+        reviewComment: order.reviewComment,
+        ratedAt: order.ratedAt,
+        reviewMediaUrls: order.reviewMediaUrls,
+      );
+      notifyListeners();
+    }
+
+    // Persist override in SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> overrides = {};
+      final existingJson = prefs.getString('admin_order_status_overrides');
+      if (existingJson != null && existingJson.isNotEmpty) {
+        overrides = Map<String, dynamic>.from(jsonDecode(existingJson));
+      }
+      overrides[orderId] = newStatus.name;
+      await prefs.setString('admin_order_status_overrides', jsonEncode(overrides));
+    } catch (e) {
+      debugPrint('Error saving order status override: $e');
+    }
+
+    // Try Supabase update
+    try {
+      await supabase.from('orders').update({'status': newStatus.name}).eq('id', orderId);
+    } catch (e) {
+      debugPrint('Supabase order status update notice: $e');
+    }
+
+    await _saveOrdersToCache();
     return true;
   }
 
