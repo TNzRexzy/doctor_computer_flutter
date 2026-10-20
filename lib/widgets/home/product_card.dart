@@ -4,6 +4,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 
 class ProductCard extends StatelessWidget {
   final ProductModel product;
@@ -42,25 +43,14 @@ class ProductCard extends StatelessWidget {
                       colors: [AppColors.surface, AppColors.surfaceLight],
                     ),
                   ),
-                  child: product.images.isNotEmpty
-                      ? Image.network(
-                          product.images.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Icon(
-                              Icons.computer_rounded,
-                              size: 48,
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                        )
-                      : Center(
-                          child: Icon(
-                            Icons.computer_rounded,
-                            size: 48,
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
+                  child: AppImageView(
+                    imageUrl: product.images.isNotEmpty
+                        ? product.images.first
+                        : product.id,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: 140,
+                  ),
                 ),
               ),
               if (product.hasDiscount)

@@ -4,6 +4,7 @@ import 'package:doctor_computer/data/models/category_model.dart';
 import 'package:doctor_computer/data/mock/mock_categories.dart';
 import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doctor_computer/core/constants/app_images.dart';
 
 class ProductProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
@@ -133,16 +134,13 @@ class ProductProvider extends ChangeNotifier {
       if (prodsRes.isNotEmpty) {
         _allProducts = prodsRes.map((p) {
           final rawImages = p['image_url'];
-          List<String> images = [];
-          if (rawImages is List) {
-            images = rawImages.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
-          } else if (rawImages is String && rawImages.isNotEmpty) {
-            images = [rawImages];
-          }
-
-          if (images.isEmpty) {
-            images = [_getPlaceholderImage(p['name']?.toString() ?? '', p['brand']?.toString() ?? '')];
-          }
+          final List<String> images = AppImages.resolveProductImages(
+            rawImages,
+            p['id']?.toString() ?? '',
+            productName: p['name']?.toString() ?? '',
+            categoryId: p['category_id']?.toString(),
+            brand: p['brand']?.toString(),
+          );
 
           Map<String, String> specsMap = {};
           if (p['specs'] is Map) {
@@ -183,25 +181,7 @@ class ProductProvider extends ChangeNotifier {
     }
   }
 
-  String _getPlaceholderImage(String name, String brand) {
-    final lower = name.toLowerCase();
-    if (lower.contains('rtx') || lower.contains('gpu') || lower.contains('radeon')) {
-      return 'https://images.unsplash.com/photo-1591488320449-011701bb6704?w=500&q=80';
-    } else if (lower.contains('core') || lower.contains('ryzen') || lower.contains('cpu')) {
-      return 'https://images.unsplash.com/photo-1555680202-c86f0e12f086?w=500&q=80';
-    } else if (lower.contains('ram') || lower.contains('ddr')) {
-      return 'https://images.unsplash.com/photo-1562976540-1502c2145186?w=500&q=80';
-    } else if (lower.contains('laptop') || lower.contains('vivobook') || lower.contains('tuf')) {
-      return 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=500&q=80';
-    } else if (lower.contains('motherboard') || lower.contains('b660') || lower.contains('z790')) {
-      return 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&q=80';
-    } else if (lower.contains('ssd') || lower.contains('storage') || lower.contains('samsung')) {
-      return 'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=500&q=80';
-    } else if (lower.contains('mouse') || lower.contains('g502')) {
-      return 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=500&q=80';
-    }
-    return 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=500&q=80';
-  }
+
 
   IconData _mapIcon(String iconName) {
     final lower = iconName.toLowerCase();

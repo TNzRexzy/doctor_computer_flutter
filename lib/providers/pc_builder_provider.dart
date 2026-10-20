@@ -4,6 +4,7 @@ import 'package:doctor_computer/data/models/pc_build_model.dart';
 import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/constants/app_constants.dart';
+import 'package:doctor_computer/core/constants/app_images.dart';
 
 class PcBuilderProvider extends ChangeNotifier {
   final Map<PcPartCategory, PcPartModel?> _selectedParts = {
@@ -151,6 +152,14 @@ class PcBuilderProvider extends ChangeNotifier {
       tags = rawTags.map((e) => e.toString()).toList();
     }
 
+    String? imageUrl = p['image_url']?.toString();
+    if (imageUrl == null || imageUrl.isEmpty) {
+      final matched = AppImages.matchUploadedImage(p['name']?.toString() ?? '', p['brand']?.toString());
+      if (matched != null) {
+        imageUrl = AppImages.getBucketUrl(matched);
+      }
+    }
+
     return PcPartModel(
       id: p['id']?.toString() ?? '',
       name: p['name']?.toString() ?? '',
@@ -158,7 +167,7 @@ class PcBuilderProvider extends ChangeNotifier {
       brand: p['brand']?.toString() ?? 'Generic',
       price: (p['price'] as num?)?.toDouble() ?? 0.0,
       specs: specsMap,
-      imageUrl: p['image_url']?.toString(),
+      imageUrl: imageUrl,
       compatibilityTags: tags,
     );
   }

@@ -10,14 +10,18 @@ import 'package:doctor_computer/providers/theme_provider.dart';
 import 'package:doctor_computer/providers/blockchain_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/core/config/env_config.dart';
 import 'package:doctor_computer/app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load environment variables from .env
+  await EnvConfig.init();
+
   await Supabase.initialize(
-    url: 'https://nvipwcrydrnogrbsnhud.supabase.co',
-    anonKey: 'sb_publishable_2yyCD_Biu4JmoMiZqPcWag_ASc0KRXl',
+    url: EnvConfig.supabaseUrl,
+    anonKey: EnvConfig.supabaseAnonKey,
   );
 
   // Ensure admin account exists (runs in background, won't block startup)
