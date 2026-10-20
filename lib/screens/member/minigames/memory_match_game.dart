@@ -125,14 +125,14 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
     // Send notification
     if (mounted) {
       context.read<NotificationProvider>().addNotification(
-        title: '🎮 Minigame Selesai: +${widget.expReward} EXP!',
+        title: 'Minigame Selesai: +${widget.expReward} EXP!',
         message: 'Selamat! Blok baru (#${block.index}) telah dicatat di Blockchain dengan Hash: ${block.hash.substring(0, 10)}...',
         type: 'minigame',
       );
 
       if (newTier != oldTier) {
         context.read<NotificationProvider>().addNotification(
-          title: '🏆 Upgrade Member Tier: ${newTier.name}!',
+          title: 'Upgrade Member Tier: ${newTier.name}!',
           message: 'Luar biasa! Akumulasi EXP Anda sekarang ${blockchainProvider.totalExp} EXP dan Tier Anda naik ke ${newTier.name}!',
           type: 'tier_upgrade',
         );
@@ -187,7 +187,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                   Text('New Hash: ${block.hash.substring(0, 16)}...', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                   if (newTier != oldTier) ...[
                     const Divider(),
-                    Text('🎉 TIER UPGRADE: ${newTier.name.toUpperCase()}!', style: AppTextStyles.titleSmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
+                    Text('TIER UPGRADE: ${newTier.name.toUpperCase()}!', style: AppTextStyles.titleSmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
                   ],
                 ],
               ),

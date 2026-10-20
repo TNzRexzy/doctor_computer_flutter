@@ -82,14 +82,14 @@ class _PcQuizGameState extends State<PcQuizGame> {
 
       if (mounted) {
         context.read<NotificationProvider>().addNotification(
-          title: '🎮 Kuis PC Selesai: +${widget.expReward} EXP!',
+          title: 'Kuis PC Selesai: +${widget.expReward} EXP!',
           message: 'Skor Anda $_score/${_questions.length}. Blok #${block.index} berhasil ditambang di Blockchain!',
           type: 'minigame',
         );
 
         if (newTier != oldTier) {
           context.read<NotificationProvider>().addNotification(
-            title: '🏆 Upgrade Member Tier: ${newTier.name}!',
+            title: 'Upgrade Member Tier: ${newTier.name}!',
             message: 'Tier Anda naik ke ${newTier.name} berkat EXP kuis PC!',
             type: 'tier_upgrade',
           );
@@ -102,7 +102,7 @@ class _PcQuizGameState extends State<PcQuizGame> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
-          title: const Text('🎉 Selamat! Kuis Lulus!'),
+          title: const Text('Selamat! Kuis Lulus!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -261,7 +261,7 @@ class _PcQuizGameState extends State<PcQuizGame> {
                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
                   ),
                   child: Text(
-                    '💡 Info: ${q['explanation']}',
+                    'Info: ${q['explanation']}',
                     style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                   ),
                 ),

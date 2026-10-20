@@ -71,14 +71,14 @@ class _SpeedRepairGameState extends State<SpeedRepairGame> {
 
       if (mounted) {
         context.read<NotificationProvider>().addNotification(
-          title: '🔧 PC Repair Selesai: +${widget.expReward} EXP!',
+          title: 'PC Repair Selesai: +${widget.expReward} EXP!',
           message: 'Komputer bersih dan dingin kembali! Blok #${block.index} berhasil ditambang di Blockchain.',
           type: 'minigame',
         );
 
         if (newTier != oldTier) {
           context.read<NotificationProvider>().addNotification(
-            title: '🏆 Upgrade Member Tier: ${newTier.name}!',
+            title: 'Upgrade Member Tier: ${newTier.name}!',
             message: 'Tier Anda naik ke ${newTier.name}!',
             type: 'tier_upgrade',
           );
@@ -91,7 +91,7 @@ class _SpeedRepairGameState extends State<SpeedRepairGame> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
-          title: const Text('🎉 PC Berhasil Di-Service!'),
+          title: const Text('PC Berhasil Di-Service!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

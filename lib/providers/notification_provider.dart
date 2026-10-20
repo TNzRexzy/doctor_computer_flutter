@@ -6,7 +6,7 @@ class NotificationProvider extends ChangeNotifier {
   final List<AppNotificationModel> _notifications = [
     AppNotificationModel(
       id: 'notif-1',
-      title: '⚠️ Peringatan Bottleneck PC Terdeteksi',
+      title: 'Peringatan Bottleneck PC Terdeteksi',
       message: 'Kombinasi CPU dan GPU Anda berpotensi mengalami bottleneck 26%! Disarankan upgrade CPU ke seri i7 atau Ryzen 7 untuk menyeimbangkan performa.',
       type: NotificationType.bottleneck,
       timestamp: DateTime.now().subtract(const Duration(minutes: 25)),
@@ -16,7 +16,7 @@ class NotificationProvider extends ChangeNotifier {
     ),
     AppNotificationModel(
       id: 'notif-2',
-      title: '🎮 Minigames Reminder: Bonus EXP Menanti!',
+      title: 'Minigames Reminder: Bonus EXP Menanti!',
       message: 'Waktunya menyelesaikan Memory Match & Kuis PC hari ini! Klaim hingga +250 EXP untuk mempercepat kenaikan Tier Member Anda.',
       type: NotificationType.minigame,
       timestamp: DateTime.now().subtract(const Duration(hours: 2)),
@@ -26,7 +26,7 @@ class NotificationProvider extends ChangeNotifier {
     ),
     AppNotificationModel(
       id: 'notif-3',
-      title: '⏰ Batas Waktu Pembayaran Pesanan',
+      title: 'Batas Waktu Pembayaran Pesanan',
       message: 'Batas waktu pembayaran pesanan #DC-98412 tinggal 2 jam lagi! Segera selesaikan sebelum pesanan otomatis dibatalkan.',
       type: NotificationType.paymentDeadline,
       timestamp: DateTime.now().subtract(const Duration(hours: 4)),
@@ -36,7 +36,7 @@ class NotificationProvider extends ChangeNotifier {
     ),
     AppNotificationModel(
       id: 'notif-4',
-      title: '🎟️ Batas Waktu Voucher Diskon Hangus!',
+      title: 'Batas Waktu Voucher Diskon Hangus!',
       message: 'Voucher "UPGRADEPC15" Diskon 15% Member Anda akan hangus besok pukul 23:59 WIB. Jangan lewatkan potongan harga hingga Rp500.000!',
       type: NotificationType.voucherExpiry,
       timestamp: DateTime.now().subtract(const Duration(hours: 6)),

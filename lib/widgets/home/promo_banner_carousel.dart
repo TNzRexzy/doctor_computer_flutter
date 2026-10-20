@@ -21,7 +21,7 @@ class _PromoBannerCarouselState extends State<PromoBannerCarousel> {
     {
       'title': 'Flash Sale! Up to 40% Off',
       'subtitle': 'Diskon besar komponen GPU & CPU pilihan',
-      'badge': '🔥 FLASH SALE',
+      'badge': 'FLASH SALE',
       'imageUrl': AppImages.promoFlashSale,
       'gradient': const LinearGradient(
         begin: Alignment.topLeft,
@@ -33,7 +33,7 @@ class _PromoBannerCarouselState extends State<PromoBannerCarousel> {
     {
       'title': 'Build Your Dream PC',
       'subtitle': 'Rakit PC dengan AI Bottleneck Calculator',
-      'badge': '🤖 AI POWERED',
+      'badge': 'AI POWERED',
       'imageUrl': AppImages.promoPcBuilder,
       'gradient': const LinearGradient(
         begin: Alignment.topLeft,
@@ -45,7 +45,7 @@ class _PromoBannerCarouselState extends State<PromoBannerCarousel> {
     {
       'title': 'Member Loyalty Blockchain',
       'subtitle': 'Main Minigames & Belanja, Raih Status Gold',
-      'badge': '⛓️ BLOCKCHAIN',
+      'badge': 'BLOCKCHAIN',
       'imageUrl': AppImages.promoMember,
       'gradient': const LinearGradient(
         begin: Alignment.topLeft,
@@ -57,7 +57,7 @@ class _PromoBannerCarouselState extends State<PromoBannerCarousel> {
     {
       'title': 'Free Shipping & Warranty',
       'subtitle': 'Garansi Resmi Toko & Gratis Ongkir Se-Indonesia',
-      'badge': '🛡️ GARANSI RESMI',
+      'badge': 'GARANSI RESMI',
       'imageUrl': AppImages.promoShipping,
       'gradient': const LinearGradient(
         begin: Alignment.topLeft,

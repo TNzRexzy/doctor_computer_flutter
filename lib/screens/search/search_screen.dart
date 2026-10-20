@@ -305,7 +305,7 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Text('💡 Inspirasi Pertanyaan ke AI:', style: AppTextStyles.titleSmall),
+            Text('Inspirasi Pertanyaan ke AI:', style: AppTextStyles.titleSmall),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,

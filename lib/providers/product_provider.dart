@@ -13,6 +13,8 @@ class ProductProvider extends ChangeNotifier {
   static const String _prefCustomProductsKey = 'admin_custom_products';
   static const String _prefProductOverridesKey = 'admin_product_overrides';
   static const String _prefDeletedProductsKey = 'admin_deleted_products';
+  static const String _prefFlashSaleEndTimeKey = 'flash_sale_end_time';
+  static const String _prefFlashSaleActiveKey = 'flash_sale_is_active';
 
   String? _selectedCategoryId;
   String _searchQuery = '';
@@ -22,6 +24,9 @@ class ProductProvider extends ChangeNotifier {
 
   List<CategoryModel> _categories = [];
   List<ProductModel> _allProducts = [];
+
+  DateTime _flashSaleEndTime = DateTime.now().add(const Duration(hours: 8));
+  bool _isFlashSaleActive = true;
 
   bool _isLoading = false;
 
@@ -34,6 +39,16 @@ class ProductProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   String get sortBy => _sortBy;
   bool get isLoading => _isLoading;
+  DateTime get flashSaleEndTime => _flashSaleEndTime;
+  bool get isFlashSaleActive => _isFlashSaleActive;
+
+  Duration get flashSaleRemainingTime {
+    final now = DateTime.now();
+    if (_flashSaleEndTime.isAfter(now) && _isFlashSaleActive) {
+      return _flashSaleEndTime.difference(now);
+    }
+    return Duration.zero;
+  }
 
   List<ProductModel> get filteredProducts {
     List<ProductModel> result = List<ProductModel>.from(allProducts);
@@ -228,6 +243,16 @@ class ProductProvider extends ChangeNotifier {
             productMap.remove(id.toString());
           }
         }
+
+        // 5. Load flash sale timer config
+        final endTimeStr = prefs.getString(_prefFlashSaleEndTimeKey);
+        if (endTimeStr != null && endTimeStr.isNotEmpty) {
+          final parsed = DateTime.tryParse(endTimeStr);
+          if (parsed != null) {
+            _flashSaleEndTime = parsed;
+          }
+        }
+        _isFlashSaleActive = prefs.getBool(_prefFlashSaleActiveKey) ?? true;
       } catch (e) {
         debugPrint('Error applying product cache in ProductProvider: $e');
       }
@@ -389,22 +414,50 @@ class ProductProvider extends ChangeNotifier {
     return true;
   }
 
+  /// Updates Flash Sale end time in real-time and persists it across sessions.
+  Future<void> updateFlashSaleTime(DateTime newEndTime) async {
+    _flashSaleEndTime = newEndTime;
+    _isFlashSaleActive = newEndTime.isAfter(DateTime.now());
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefFlashSaleEndTimeKey, newEndTime.toIso8601String());
+      await prefs.setBool(_prefFlashSaleActiveKey, _isFlashSaleActive);
+    } catch (e) {
+      debugPrint('Error saving flash sale timer settings: $e');
+    }
+  }
+
+  /// Sets whether Flash Sale is active or paused.
+  Future<void> setFlashSaleActive(bool active) async {
+    _isFlashSaleActive = active;
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefFlashSaleActiveKey, active);
+    } catch (e) {
+      debugPrint('Error saving flash sale active flag: $e');
+    }
+  }
+
   IconData _mapIcon(String iconName) {
     final lower = iconName.toLowerCase();
-    if (lower.contains('laptop') || lower.contains('💻')) return Icons.laptop_mac;
-    if (lower.contains('desktop') || lower.contains('🖥️') || lower.contains('periph')) return Icons.desktop_windows;
+    if (lower.contains('laptop')) return Icons.laptop_mac;
+    if (lower.contains('desktop') || lower.contains('periph')) return Icons.desktop_windows;
     if (lower.contains('monitor')) return Icons.monitor;
     if (lower.contains('keyboard')) return Icons.keyboard;
     if (lower.contains('mouse')) return Icons.mouse;
     if (lower.contains('headset') || lower.contains('audio')) return Icons.headset;
-    if (lower.contains('storage') || lower.contains('ssd') || lower.contains('💿')) return Icons.storage;
+    if (lower.contains('storage') || lower.contains('ssd')) return Icons.storage;
     if (lower.contains('router') || lower.contains('network')) return Icons.router;
-    if (lower.contains('cpu') || lower.contains('⚡')) return Icons.memory;
-    if (lower.contains('gpu') || lower.contains('🎮')) return Icons.videogame_asset;
-    if (lower.contains('motherboard') || lower.contains('🧩')) return Icons.developer_board;
-    if (lower.contains('ram') || lower.contains('💾')) return Icons.sd_card;
-    if (lower.contains('case') || lower.contains('📦')) return Icons.inventory_2;
-    if (lower.contains('cooler') || lower.contains('❄️')) return Icons.ac_unit;
+    if (lower.contains('cpu')) return Icons.memory;
+    if (lower.contains('gpu')) return Icons.videogame_asset;
+    if (lower.contains('motherboard')) return Icons.developer_board;
+    if (lower.contains('ram')) return Icons.sd_card;
+    if (lower.contains('case')) return Icons.inventory_2;
+    if (lower.contains('cooler')) return Icons.ac_unit;
     return Icons.category;
   }
 

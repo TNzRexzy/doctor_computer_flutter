@@ -44,7 +44,7 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Halo! 👋 ${user?.fullName ?? ""}',
+                            'Halo, ${user?.fullName ?? ""}',
                             style: AppTextStyles.titleMedium,
                           ),
                           Text(
@@ -131,7 +131,7 @@ class HomeScreen extends StatelessWidget {
                               Icon(Icons.sports_esports, color: AppColors.primary, size: 20),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text('🎮 Minigames & EXP', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                child: Text('Minigames & EXP', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
@@ -157,7 +157,7 @@ class HomeScreen extends StatelessWidget {
                               Icon(Icons.verified, color: AppColors.accent, size: 20),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text('🛡️ Cek Garansi', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                child: Text('Cek Garansi', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
@@ -196,7 +196,7 @@ class HomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    Text('Flash Deal 🔥', style: AppTextStyles.titleMedium),
+                    Text('Flash Sale', style: AppTextStyles.titleMedium),
                     const SizedBox(width: 8),
                     const FlashDealTimer(),
                   ],

@@ -248,7 +248,7 @@ class MemberScreen extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         backgroundColor: AppColors.success,
-                        content: Text('🎉 Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
+                        content: Text('Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
                       ),
                     );
                   }

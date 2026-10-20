@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -29,16 +30,66 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   bool _isLoading = true;
   final supabase = Supabase.instance.client;
 
+  String _productSearchQuery = '';
+  final String _productCategoryFilter = 'all';
+  String _orderSearchQuery = '';
+  String _userSearchQuery = '';
+
+  Timer? _flashSaleTicker;
+
   @override
   void initState() {
     super.initState();
     final user = context.read<AuthProvider>().currentUser;
     final isAdmin = user?.role == UserRole.admin;
     _tabController = TabController(
-      length: isAdmin ? 5 : 3,
+      length: isAdmin ? 6 : 4,
       vsync: this,
     );
     _loadData();
+
+    _flashSaleTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _flashSaleTicker?.cancel();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  double _parseDouble(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? 0.0;
+  }
+
+  int _parseInt(dynamic val) {
+    if (val == null) return 0;
+    if (val is num) return val.toInt();
+    return int.tryParse(val.toString()) ?? 0;
+  }
+
+  String _formatNumber(dynamic number) {
+    if (number == null) return '0';
+    final n = number is num ? number : num.tryParse(number.toString()) ?? 0;
+    return n.toStringAsFixed(0).replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+          (match) => '${match[1]}.',
+        );
+  }
+
+  String _formatDuration(Duration d) {
+    if (d == Duration.zero) return 'Berakhir';
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final days = d.inDays;
+    final hours = twoDigits(d.inHours.remainder(24));
+    final minutes = twoDigits(d.inMinutes.remainder(60));
+    final seconds = twoDigits(d.inSeconds.remainder(60));
+    if (days > 0) return '$days hari $hours:$minutes:$seconds';
+    return '$hours:$minutes:$seconds';
   }
 
   Future<void> _loadData() async {
@@ -47,11 +98,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final user = context.read<AuthProvider>().currentUser;
       final isAdmin = user?.role == UserRole.admin;
 
-      // Products - both admin and cashier can see
+      // Products - both admin and cashier
       final productsRes = await supabase.from('products').select();
       _products = List<Map<String, dynamic>>.from(productsRes);
 
-      // Orders - both can see
+      // Orders - both admin and cashier
       final ordersRes = await supabase.from('orders').select().order('order_date', ascending: false);
       _orders = List<Map<String, dynamic>>.from(ordersRes);
 
@@ -86,12 +137,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     Theme.of(context);
     final user = context.read<AuthProvider>().currentUser;
@@ -109,7 +154,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           unselectedLabelColor: Colors.white70,
           isScrollable: true,
           tabs: [
-            const Tab(icon: Icon(Icons.inventory), text: 'Produk'),
+            const Tab(icon: Icon(Icons.inventory_2), text: 'Produk'),
+            const Tab(icon: Icon(Icons.local_fire_department), text: 'Flash Sale'),
             const Tab(icon: Icon(Icons.receipt_long), text: 'Pesanan'),
             const Tab(icon: Icon(Icons.star_rate), text: 'Ulasan'),
             if (isAdmin) const Tab(icon: Icon(Icons.people), text: 'Pengguna'),
@@ -123,6 +169,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               controller: _tabController,
               children: [
                 _buildProductsTab(),
+                _buildFlashSaleTab(),
                 _buildOrdersTab(),
                 _buildReviewsTab(),
                 if (isAdmin) _buildUsersTab(),
@@ -132,131 +179,192 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ======================== PRODUCTS TAB ========================
+  // ============================================================
+  // TAB 1: PRODUCTS TAB
+  // ============================================================
   Widget _buildProductsTab() {
+    final filtered = _products.where((p) {
+      final name = p['name']?.toString().toLowerCase() ?? '';
+      final brand = p['brand']?.toString().toLowerCase() ?? '';
+      final cat = p['category_id']?.toString().toLowerCase() ?? '';
+      final matchesQuery = _productSearchQuery.isEmpty ||
+          name.contains(_productSearchQuery.toLowerCase()) ||
+          brand.contains(_productSearchQuery.toLowerCase());
+      final matchesCat = _productCategoryFilter == 'all' || cat == _productCategoryFilter;
+      return matchesQuery && matchesCat;
+    }).toList();
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _loadData,
-        child: _products.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textTertiary),
-                    const SizedBox(height: 16),
-                    Text('Belum ada produk', style: AppTextStyles.bodyMedium),
-                  ],
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Cari produk berdasarkan nama atau brand...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _productSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => setState(() => _productSearchQuery = ''),
+                        )
+                      : null,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _products.length,
-                itemBuilder: (context, index) {
-                  final product = _products[index];
-                  final isOnSale = product['is_on_sale'] == true;
-                  return GlassCard(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: isOnSale
-                              ? AppColors.error.withValues(alpha: 0.1)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          isOnSale ? Icons.local_fire_department : Icons.inventory_2,
-                          color: isOnSale ? AppColors.error : AppColors.textSecondary,
-                        ),
-                      ),
-                      title: Text(
-                        product['name']?.toString() ?? '-',
-                        style: AppTextStyles.titleSmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                onChanged: (val) => setState(() => _productSearchQuery = val),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Text('Total: ${filtered.length} produk', style: AppTextStyles.caption),
+                  const Spacer(),
+                  if (_products.any((p) => p['is_on_sale'] == true))
+                    TextButton.icon(
+                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      icon: Icon(Icons.local_fire_department, size: 16, color: AppColors.error),
+                      label: Text('Ke Tab Flash Sale', style: TextStyle(color: AppColors.error, fontSize: 12)),
+                      onPressed: () => _tabController.animateTo(1),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('Brand: ${product['brand'] ?? '-'}'),
-                          Row(
-                            children: [
-                              Text('Stok: ${product['stock'] ?? 0}',
-                                  style: TextStyle(
-                                      color: (product['stock'] ?? 0) < 5
-                                          ? AppColors.error
-                                          : AppColors.success,
-                                      fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                    'Harga: Rp ${_formatNumber(product['price'])}',
-                                    overflow: TextOverflow.ellipsis),
+                          Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textTertiary),
+                          const SizedBox(height: 12),
+                          Text('Tidak ada produk yang cocok', style: AppTextStyles.bodyMedium),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final product = filtered[index];
+                        final isOnSale = product['is_on_sale'] == true;
+                        final price = _parseDouble(product['price']);
+                        final origPrice = _parseDouble(product['original_price']);
+                        final stock = _parseInt(product['stock']);
+
+                        return GlassCard(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: isOnSale
+                                    ? AppColors.error.withValues(alpha: 0.12)
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ],
-                          ),
-                          if (isOnSale)
-                            Row(
+                              child: Icon(
+                                isOnSale ? Icons.local_fire_department : Icons.inventory_2,
+                                color: isOnSale ? AppColors.error : AppColors.textSecondary,
+                              ),
+                            ),
+                            title: Text(
+                              product['name']?.toString() ?? '-',
+                              style: AppTextStyles.titleSmall,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.error.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    'FLASH SALE',
-                                    style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                if (product['original_price'] != null) ...[
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Rp ${_formatNumber(product['original_price'])}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textTertiary,
-                                      decoration: TextDecoration.lineThrough,
+                                Text('Brand: ${product['brand'] ?? '-'}', style: AppTextStyles.caption),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Text('Stok: $stock',
+                                        style: TextStyle(
+                                            color: stock < 5 ? AppColors.error : AppColors.success,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12)),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Harga: Rp ${_formatNumber(price)}',
+                                        style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
+                                  ],
+                                ),
+                                if (isOnSale) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.error.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'FLASH SALE',
+                                          style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      if (origPrice > price) ...[
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Rp ${_formatNumber(origPrice)}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textTertiary,
+                                            decoration: TextDecoration.lineThrough,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ],
                             ),
-                        ],
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        icon: Icon(Icons.more_vert, color: AppColors.primary),
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'edit':
-                              _showEditProductDialog(product);
-                              break;
-                            case 'flash_sale':
-                              _showFlashSaleDialog(product);
-                              break;
-                            case 'delete':
-                              _confirmDeleteProduct(product);
-                              break;
-                          }
-                        },
-                        itemBuilder: (ctx) => [
-                          const PopupMenuItem(value: 'edit', child: Text('Edit Produk')),
-                          PopupMenuItem(
-                            value: 'flash_sale',
-                            child: Text(isOnSale ? 'Hapus Flash Sale' : 'Atur Flash Sale'),
+                            trailing: PopupMenuButton<String>(
+                              icon: Icon(Icons.more_vert, color: AppColors.primary),
+                              onSelected: (value) {
+                                switch (value) {
+                                  case 'edit':
+                                    _showEditProductDialog(product);
+                                    break;
+                                  case 'flash_sale':
+                                    _openFlashSaleConfigSheet(product);
+                                    break;
+                                  case 'delete':
+                                    _confirmDeleteProduct(product);
+                                    break;
+                                }
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(value: 'edit', child: Text('Edit Produk')),
+                                PopupMenuItem(
+                                  value: 'flash_sale',
+                                  child: Text(isOnSale ? 'Atur / Hapus Flash Sale' : 'Aktifkan Flash Sale'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Hapus Produk', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            ),
                           ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Hapus Produk', style: TextStyle(color: Colors.red)),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddProductDialog,
@@ -268,186 +376,391 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  void _showAddProductDialog() {
-    final nameC = TextEditingController();
-    final brandC = TextEditingController();
-    final priceC = TextEditingController();
-    final origPriceC = TextEditingController();
-    final stockC = TextEditingController(text: '10');
-    final descC = TextEditingController();
-    final imageUrlC = TextEditingController();
-    String selectedCategory = 'laptop';
-    bool isFlashSale = false;
+  // ============================================================
+  // TAB 2: FLASH SALE REAL-TIME MENU (DEDICATED)
+  // ============================================================
+  Widget _buildFlashSaleTab() {
+    final productProvider = context.watch<ProductProvider>();
+    final flashSaleEndTime = productProvider.flashSaleEndTime;
+    final isFlashSaleActive = productProvider.isFlashSaleActive;
+    final remaining = productProvider.flashSaleRemainingTime;
+    final flashProducts = productProvider.allProducts.where((p) => p.isOnSale).toList();
 
-    final categoryOptions = [
-      'laptop', 'desktop', 'monitor', 'keyboard', 'mouse',
-      'headset', 'storage', 'networking', 'cpu', 'gpu',
-      'motherboard', 'ram', 'case', 'cooler', 'psu',
-    ];
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await productProvider.reloadData();
+          await _loadData();
+        },
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Real-time Countdown Controller Card
+              GlassCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.local_fire_department, color: AppColors.error, size: 24),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Kontrol Waktu Flash Sale Realtime',
+                            style: AppTextStyles.titleMedium,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isFlashSaleActive && remaining > Duration.zero
+                                ? AppColors.success.withValues(alpha: 0.15)
+                                : AppColors.surfaceLight,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isFlashSaleActive && remaining > Duration.zero
+                                  ? AppColors.success
+                                  : AppColors.textTertiary,
+                            ),
+                          ),
+                          child: Text(
+                            isFlashSaleActive && remaining > Duration.zero ? 'AKTIF' : 'NONAKTIF',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isFlashSaleActive && remaining > Duration.zero
+                                  ? AppColors.success
+                                  : AppColors.textTertiary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    SwitchListTile(
+                      title: const Text('Status Flash Sale Global'),
+                      subtitle: const Text('Mengaktifkan banner promo dan harga coret di Beranda & Katalog'),
+                      value: isFlashSaleActive,
+                      activeColor: AppColors.error,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (val) async {
+                        await productProvider.setFlashSaleActive(val);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Flash Sale ${val ? "diaktifkan" : "dinonaktifkan"}')),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('Tambah Produk Baru', style: AppTextStyles.titleMedium),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameC,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama Produk',
-                    hintText: 'Contoh: ASUS ROG Strix G16',
-                    border: OutlineInputBorder(),
-                  ),
+                    // Countdown Display
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+                      ),
+                      child: Column(
+                        children: [
+                          Text('SISA WAKTU FLASH SALE:', style: AppTextStyles.caption.copyWith(letterSpacing: 1)),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDuration(remaining),
+                            style: AppTextStyles.heading2.copyWith(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Target Berakhir: ${flashSaleEndTime.day}/${flashSaleEndTime.month}/${flashSaleEndTime.year} - ${flashSaleEndTime.hour.toString().padLeft(2, '0')}:${flashSaleEndTime.minute.toString().padLeft(2, '0')} WIB',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Quick duration presets
+                    Text('Perpanjang Waktu Cepat:', style: AppTextStyles.bodySmall),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildQuickTimeChip(context, '+2 Jam', const Duration(hours: 2)),
+                        _buildQuickTimeChip(context, '+6 Jam', const Duration(hours: 6)),
+                        _buildQuickTimeChip(context, '+12 Jam', const Duration(hours: 12)),
+                        _buildQuickTimeChip(context, '+24 Jam', const Duration(hours: 24)),
+                        _buildQuickTimeChip(context, '+3 Hari', const Duration(days: 3)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Custom Date Time Picker button
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: BorderSide(color: AppColors.primary),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.edit_calendar),
+                        label: const Text('Atur Tanggal & Jam Selesai Kustom'),
+                        onPressed: _pickCustomFlashSaleDateTime,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: brandC,
-                  decoration: const InputDecoration(
-                    labelText: 'Brand',
-                    hintText: 'Contoh: ASUS',
-                    border: OutlineInputBorder(),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Active Flash Sale Products Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Produk Flash Sale (${flashProducts.length})', style: AppTextStyles.titleMedium),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Tambah Produk'),
+                    onPressed: () => _openFlashSaleConfigSheet(null),
                   ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Kategori',
-                    border: OutlineInputBorder(),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              if (flashProducts.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 36),
+                    child: Column(
+                      children: [
+                        Icon(Icons.local_fire_department_outlined, size: 56, color: AppColors.textTertiary),
+                        const SizedBox(height: 12),
+                        Text('Belum ada produk dalam Flash Sale', style: AppTextStyles.bodyMedium),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Klik "Tambah Produk" untuk memasukkan barang promosi',
+                          style: AppTextStyles.caption,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
-                  items: categoryOptions.map((c) => DropdownMenuItem(
-                    value: c,
-                    child: Text(c.toUpperCase()),
-                  )).toList(),
-                  onChanged: (val) {
-                    if (val != null) setDialogState(() => selectedCategory = val);
+                )
+              else
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isTablet = constraints.maxWidth >= 650;
+                    if (isTablet) {
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 2.2,
+                        ),
+                        itemCount: flashProducts.length,
+                        itemBuilder: (context, index) {
+                          return _buildFlashProductCard(flashProducts[index]);
+                        },
+                      );
+                    }
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: flashProducts.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildFlashProductCard(flashProducts[index]),
+                        );
+                      },
+                    );
                   },
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: priceC,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Harga Jual (Rp)',
-                    hintText: 'Contoh: 15000000',
-                    border: OutlineInputBorder(),
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.error,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah Promo Flash Sale'),
+        onPressed: () => _openFlashSaleConfigSheet(null),
+      ),
+    );
+  }
+
+  Widget _buildQuickTimeChip(BuildContext context, String label, Duration duration) {
+    return ActionChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      avatar: const Icon(Icons.timer_outlined, size: 14),
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final productProvider = context.read<ProductProvider>();
+        final newEnd = DateTime.now().add(duration);
+        await productProvider.updateFlashSaleTime(newEnd);
+        messenger.showSnackBar(
+          SnackBar(content: Text('Waktu Flash Sale diperpanjang $label')),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickCustomFlashSaleDateTime() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final productProvider = context.read<ProductProvider>();
+    final now = DateTime.now();
+    final currentEnd = productProvider.flashSaleEndTime;
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: currentEnd.isAfter(now) ? currentEnd : now.add(const Duration(hours: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+      helpText: 'Pilih Tanggal Selesai Flash Sale',
+    );
+
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: currentEnd.hour, minute: currentEnd.minute),
+      helpText: 'Pilih Jam Selesai Flash Sale',
+    );
+
+    if (pickedTime == null || !mounted) return;
+
+    final finalDateTime = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    if (finalDateTime.isBefore(DateTime.now())) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Waktu selesai harus lebih besar dari waktu saat ini')),
+      );
+      return;
+    }
+
+    await productProvider.updateFlashSaleTime(finalDateTime);
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Waktu Flash Sale berhasil diperbarui secara realtime')),
+    );
+  }
+
+  Widget _buildFlashProductCard(ProductModel product) {
+    final discount = product.discountPercentage.round();
+
+    return GlassCard(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.error.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: product.images.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    product.images.first,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Icon(Icons.inventory_2, color: AppColors.error),
+                  ),
+                )
+              : Icon(Icons.inventory_2, color: AppColors.error),
+        ),
+        title: Text(
+          product.name,
+          style: AppTextStyles.titleSmall,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.error,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '-$discount%',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: stockC,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Stok',
-                    border: OutlineInputBorder(),
+                const SizedBox(width: 8),
+                Text(
+                  'Rp ${_formatNumber(product.price)}',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: descC,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Deskripsi',
-                    hintText: 'Deskripsi produk...',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: imageUrlC,
-                  decoration: const InputDecoration(
-                    labelText: 'URL Gambar (opsional)',
-                    hintText: 'https://...',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  title: const Text('Flash Sale'),
-                  subtitle: const Text('Aktifkan diskon promo'),
-                  value: isFlashSale,
-                  activeColor: AppColors.primary,
-                  onChanged: (val) => setDialogState(() => isFlashSale = val),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                if (isFlashSale) ...[
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: origPriceC,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Harga Asli (Rp) - sebelum diskon',
-                      hintText: 'Contoh: 20000000',
-                      border: OutlineInputBorder(),
+                if (product.originalPrice != null) ...[
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Rp ${_formatNumber(product.originalPrice)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textTertiary,
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
+            const SizedBox(height: 2),
+            Text('Stok: ${product.stock}', style: AppTextStyles.caption),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.edit, color: AppColors.primary, size: 20),
+              tooltip: 'Ubah Diskon',
+              onPressed: () => _openFlashSaleConfigSheet(product.toMap()),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () async {
-                final name = nameC.text.trim();
-                final brand = brandC.text.trim();
-                final price = double.tryParse(priceC.text.trim()) ?? 0;
-                final stock = int.tryParse(stockC.text.trim()) ?? 10;
-
-                if (name.isEmpty || brand.isEmpty || price <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Nama, Brand, dan Harga wajib diisi')),
-                  );
-                  return;
-                }
-
-                double? origPrice;
-                if (isFlashSale) {
-                  origPrice = double.tryParse(origPriceC.text.trim());
-                  if (origPrice == null || origPrice <= price) {
-                    origPrice = price * 1.25;
-                  }
-                }
-
-                final productId = 'admin-${DateTime.now().millisecondsSinceEpoch}';
-                final newProduct = ProductModel(
-                  id: productId,
-                  name: name,
-                  description: descC.text.trim().isEmpty ? name : descC.text.trim(),
-                  descriptionId: descC.text.trim().isEmpty ? name : descC.text.trim(),
-                  price: price,
-                  originalPrice: origPrice,
-                  categoryId: selectedCategory,
-                  brand: brand,
-                  images: imageUrlC.text.trim().isNotEmpty ? [imageUrlC.text.trim()] : [],
-                  specs: {},
-                  rating: 0,
-                  reviewCount: 0,
-                  stock: stock,
-                  isNew: true,
-                  isOnSale: isFlashSale,
-                );
-
-                final nav = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-
-                final productProvider = context.read<ProductProvider>();
-                await productProvider.addProduct(newProduct);
-
-                nav.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Produk berhasil ditambahkan')),
-                );
-                if (mounted) _loadData();
-              },
-              child: const Text('Simpan'),
+            IconButton(
+              icon: Icon(Icons.close, color: AppColors.error, size: 20),
+              tooltip: 'Hapus dari Flash Sale',
+              onPressed: () => _removeProductFromFlashSale(product),
             ),
           ],
         ),
@@ -455,421 +768,162 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  void _showEditProductDialog(Map<String, dynamic> product) {
-    final stockController =
-        TextEditingController(text: (product['stock'] ?? 0).toString());
-    final priceController =
-        TextEditingController(text: (product['price'] ?? 0).toString());
-    final nameController =
-        TextEditingController(text: product['name']?.toString() ?? '');
-    final brandController =
-        TextEditingController(text: product['brand']?.toString() ?? '');
-    final descController =
-        TextEditingController(text: product['description']?.toString() ?? '');
-
-    showDialog(
+  Future<void> _removeProductFromFlashSale(ProductModel product) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final productProvider = context.read<ProductProvider>();
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit Produk', style: AppTextStyles.titleMedium),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nama Produk',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: brandController,
-                decoration: const InputDecoration(
-                  labelText: 'Brand',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: priceController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Harga (Rp)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: stockController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Stok',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Deskripsi',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
+        title: const Text('Keluarkan dari Flash Sale'),
+        content: Text('Kembalikan "${product.name}" ke harga normal?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              final messenger = ScaffoldMessenger.of(context);
-              final productProvider = context.read<ProductProvider>();
-              try {
-                final updateData = {
-                  'name': nameController.text.trim(),
-                  'brand': brandController.text.trim(),
-                  'price': double.tryParse(priceController.text) ?? 0,
-                  'stock': int.tryParse(stockController.text) ?? 0,
-                  'description': descController.text.trim(),
-                };
-
-                await supabase.from('products').update(updateData).eq('id', product['id']);
-
-                // Also update via ProductProvider for local sync
-                try {
-                  final existing = productProvider.getProductById(product['id']?.toString() ?? '');
-                  if (existing != null) {
-                    await productProvider.updateProduct(existing.copyWith(
-                      name: updateData['name']?.toString(),
-                      brand: updateData['brand']?.toString(),
-                      price: (updateData['price'] as num?)?.toDouble(),
-                      stock: (updateData['stock'] as num?)?.toInt(),
-                      description: updateData['description']?.toString(),
-                      descriptionId: updateData['description']?.toString(),
-                    ));
-                  }
-                } catch (_) {}
-
-                nav.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Produk berhasil diupdate')),
-                );
-                if (mounted) _loadData();
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Gagal: $e')),
-                );
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showFlashSaleDialog(Map<String, dynamic> product) {
-    final isCurrentlyOnSale = product['is_on_sale'] == true;
-    final salePriceC = TextEditingController(
-      text: isCurrentlyOnSale ? '' : (product['price'] ?? 0).toString(),
-    );
-    final origPriceC = TextEditingController(
-      text: (product['original_price'] ?? product['price'] ?? 0).toString(),
-    );
-    int discountPct = 20;
-
-    if (isCurrentlyOnSale) {
-      // Turning off flash sale
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('Nonaktifkan Flash Sale', style: AppTextStyles.titleMedium),
-          content: Text(
-            'Hapus status Flash Sale untuk "${product['name']}"?\n'
-            'Harga akan dikembalikan ke harga asli.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-              onPressed: () async {
-                final nav = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-
-                try {
-                  final productProvider = context.read<ProductProvider>();
-                  await productProvider.toggleFlashSale(product['id']?.toString() ?? '', false);
-
-                  await supabase.from('products').update({
-                    'is_on_sale': false,
-                    'price': product['original_price'] ?? product['price'],
-                    'original_price': null,
-                  }).eq('id', product['id']);
-                } catch (e) {
-                  debugPrint('Flash sale toggle error: $e');
-                }
-
-                nav.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Flash Sale dinonaktifkan')),
-                );
-                if (mounted) _loadData();
-              },
-              child: const Text('Nonaktifkan'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // Turning on flash sale
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final currentPrice = (product['price'] as num?)?.toDouble() ?? 0;
-
-          void recalcSalePrice() {
-            final salePrice = currentPrice * (1 - discountPct / 100);
-            salePriceC.text = salePrice.toStringAsFixed(0);
-            origPriceC.text = currentPrice.toStringAsFixed(0);
-          }
-
-          return AlertDialog(
-            title: Text('Atur Flash Sale', style: AppTextStyles.titleMedium),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product['name']?.toString() ?? '-',
-                    style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text('Harga saat ini: Rp ${_formatNumber(currentPrice)}',
-                      style: AppTextStyles.caption),
-                  const SizedBox(height: 16),
-                  Text('Diskon (%)', style: AppTextStyles.bodySmall),
-                  Slider(
-                    value: discountPct.toDouble(),
-                    min: 5,
-                    max: 80,
-                    divisions: 15,
-                    label: '$discountPct%',
-                    activeColor: AppColors.primary,
-                    onChanged: (val) {
-                      setDialogState(() {
-                        discountPct = val.round();
-                        recalcSalePrice();
-                      });
-                    },
-                  ),
-                  Text('Diskon: $discountPct%',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: origPriceC,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Harga Asli (Rp)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: salePriceC,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Harga Sale (Rp)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () => setDialogState(() => recalcSalePrice()),
-                    icon: const Icon(Icons.calculate, size: 16),
-                    label: const Text('Hitung Otomatis'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                onPressed: () async {
-                  final nav = Navigator.of(ctx);
-                  final messenger = ScaffoldMessenger.of(context);
-                  final salePrice = double.tryParse(salePriceC.text.trim()) ?? 0;
-                  final originalPrice = double.tryParse(origPriceC.text.trim()) ?? currentPrice;
-
-                  if (salePrice <= 0 || salePrice >= originalPrice) {
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Harga sale harus lebih kecil dari harga asli')),
-                    );
-                    return;
-                  }
-
-                  try {
-                    final productProvider = context.read<ProductProvider>();
-                    await productProvider.toggleFlashSale(
-                      product['id']?.toString() ?? '',
-                      true,
-                      salePrice: salePrice,
-                      originalPrice: originalPrice,
-                    );
-
-                    await supabase.from('products').update({
-                      'is_on_sale': true,
-                      'price': salePrice,
-                      'original_price': originalPrice,
-                    }).eq('id', product['id']);
-                  } catch (e) {
-                    debugPrint('Flash sale set error: $e');
-                  }
-
-                  nav.pop();
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Flash Sale berhasil diaktifkan')),
-                  );
-                  if (mounted) _loadData();
-                },
-                child: const Text('Aktifkan Flash Sale'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _confirmDeleteProduct(Map<String, dynamic> product) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Hapus Produk', style: AppTextStyles.titleMedium),
-        content: Text('Apakah Anda yakin ingin menghapus "${product['name']}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              final messenger = ScaffoldMessenger.of(context);
-
-              try {
-                final productProvider = context.read<ProductProvider>();
-                await productProvider.deleteProduct(product['id']?.toString() ?? '');
-
-                try {
-                  await supabase.from('products').delete().eq('id', product['id']);
-                } catch (e) {
-                  debugPrint('Supabase delete notice: $e');
-                }
-              } catch (e) {
-                debugPrint('Delete product error: $e');
-              }
-
-              nav.pop();
-              messenger.showSnackBar(
-                const SnackBar(content: Text('Produk berhasil dihapus')),
-              );
-              if (mounted) _loadData();
-            },
-            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Keluarkan'),
           ),
         ],
       ),
     );
-  }
 
-  // ======================== ORDERS TAB ========================
-  Widget _buildOrdersTab() {
-    if (_orders.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            Text('Belum ada pesanan', style: AppTextStyles.bodyMedium),
-          ],
-        ),
-      );
+    if (confirm != true || !mounted) return;
+
+    await productProvider.toggleFlashSale(product.id, false);
+
+    try {
+      await supabase.from('products').update({
+        'is_on_sale': false,
+        'price': product.originalPrice ?? product.price,
+        'original_price': null,
+      }).eq('id', product.id);
+    } catch (e) {
+      debugPrint('Supabase revert flash sale notice: $e');
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _orders.length,
-        itemBuilder: (context, index) {
-          final order = _orders[index];
-          final status = order['status']?.toString() ?? 'processing';
-          final statusColor = status == 'delivered'
-              ? AppColors.success
-              : status == 'shipped'
-                  ? AppColors.accent
-                  : status == 'cancelled'
-                      ? AppColors.error
-                      : AppColors.warning;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Produk dikeluarkan dari Flash Sale')),
+    );
+    if (mounted) _loadData();
+  }
 
-          return GlassCard(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Icon(Icons.receipt, color: statusColor),
-              title: Text(
-                'Order: ${order['id'] ?? '-'}',
-                style: AppTextStyles.titleSmall,
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                      'Total: Rp ${_formatNumber(order['total_price'])}'),
-                  Row(
-                    children: [
-                      Chip(
-                        label: Text(status.toUpperCase(),
-                            style: const TextStyle(
-                                fontSize: 10, color: Colors.white)),
-                        backgroundColor: statusColor,
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: () => _showEditOrderStatusDialog(order),
-              ),
-            ),
-          );
+  // ============================================================
+  // FLASH SALE BOTTOM SHEET (BUG FIX: NO WHITE SCREEN, ROBUST CONSTRAINTS)
+  // ============================================================
+  void _openFlashSaleConfigSheet(Map<String, dynamic>? initialProduct) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _FlashSaleSheetWidget(
+        initialProduct: initialProduct,
+        onSaved: () {
+          if (mounted) _loadData();
         },
       ),
+    );
+  }
+
+  // ============================================================
+  // TAB 3: ORDERS TAB
+  // ============================================================
+  Widget _buildOrdersTab() {
+    final filtered = _orders.where((o) {
+      final id = o['id']?.toString().toLowerCase() ?? '';
+      final status = o['status']?.toString().toLowerCase() ?? '';
+      return _orderSearchQuery.isEmpty ||
+          id.contains(_orderSearchQuery.toLowerCase()) ||
+          status.contains(_orderSearchQuery.toLowerCase());
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Cari Order ID atau status...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _orderSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _orderSearchQuery = ''),
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+            onChanged: (val) => setState(() => _orderSearchQuery = val),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.receipt_long, size: 64, color: AppColors.textTertiary),
+                      const SizedBox(height: 16),
+                      Text('Belum ada pesanan yang sesuai', style: AppTextStyles.bodyMedium),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadData,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final order = filtered[index];
+                      final status = order['status']?.toString() ?? 'processing';
+                      final statusColor = status == 'delivered'
+                          ? AppColors.success
+                          : status == 'shipped'
+                              ? AppColors.accent
+                              : status == 'cancelled'
+                                  ? AppColors.error
+                                  : AppColors.warning;
+
+                      return GlassCard(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: Icon(Icons.receipt, color: statusColor),
+                          title: Text(
+                            'Order: ${order['id'] ?? '-'}',
+                            style: AppTextStyles.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Total: Rp ${_formatNumber(order['total_price'])}'),
+                              Row(
+                                children: [
+                                  Chip(
+                                    label: Text(
+                                      status.toUpperCase(),
+                                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                                    ),
+                                    backgroundColor: statusColor,
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () => _showEditOrderStatusDialog(order),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
     );
   }
 
@@ -880,25 +934,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Update Status Pesanan',
-              style: AppTextStyles.titleMedium),
+          title: Text('Update Status Pesanan', style: AppTextStyles.titleMedium),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('Order ID: ${order['id']}', style: AppTextStyles.bodySmall),
               const SizedBox(height: 16),
-              ...['processing', 'shipped', 'delivered', 'cancelled']
-                  .map((status) => RadioListTile<String>(
-                        value: status,
-                        groupValue: selectedStatus,
-                        title: Text(status.toUpperCase()),
-                        activeColor: AppColors.primary,
-                        onChanged: (val) {
-                          if (val != null) {
-                            setDialogState(() => selectedStatus = val);
-                          }
-                        },
-                      )),
+              ...['processing', 'shipped', 'delivered', 'cancelled'].map(
+                (status) => RadioListTile<String>(
+                  value: status,
+                  groupValue: selectedStatus,
+                  title: Text(status.toUpperCase()),
+                  activeColor: AppColors.primary,
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => selectedStatus = val);
+                    }
+                  },
+                ),
+              ),
             ],
           ),
           actions: [
@@ -907,8 +961,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () async {
                 final nav = Navigator.of(ctx);
                 final messenger = ScaffoldMessenger.of(context);
@@ -918,8 +971,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   }).eq('id', order['id']);
                   nav.pop();
                   messenger.showSnackBar(
-                    const SnackBar(
-                        content: Text('Status pesanan diperbarui')),
+                    const SnackBar(content: Text('Status pesanan diperbarui')),
                   );
                   if (mounted) _loadData();
                 } catch (e) {
@@ -936,7 +988,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ======================== REVIEWS TAB ========================
+  // ============================================================
+  // TAB 4: REVIEWS TAB
+  // ============================================================
   Widget _buildReviewsTab() {
     final reviewProvider = context.watch<ReviewProvider>();
     final reviews = reviewProvider.allReviews;
@@ -963,7 +1017,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         await reviewProvider.refresh();
       },
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
         itemCount: reviews.length,
         itemBuilder: (context, index) {
           final review = reviews[index];
@@ -973,7 +1027,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Review header
                 Row(
                   children: [
                     CircleAvatar(
@@ -991,7 +1044,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         children: [
                           Text(review.userName, style: AppTextStyles.titleSmall),
                           Text(
-                            'Produk: ${review.productId}',
+                            'Produk ID: ${review.productId}',
                             style: AppTextStyles.caption,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1019,7 +1072,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
                 ),
 
-                // Existing reply
                 if (review.reply != null && review.reply!.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -1060,7 +1112,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ),
                 ],
 
-                // Reply button
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
@@ -1099,7 +1150,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Show original review
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -1178,75 +1228,120 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ======================== USERS TAB (ADMIN ONLY) ========================
+  // ============================================================
+  // TAB 5: USERS TAB (ADMIN ONLY)
+  // ============================================================
   Widget _buildUsersTab() {
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _users.length,
-        itemBuilder: (context, index) {
-          final u = _users[index];
-          final tier = u['membership_tier']?.toString() ?? 'bronze';
-          final role = u['role']?.toString() ?? 'user';
-          final points = (u['points'] as num?)?.toInt() ?? 0;
+    final filtered = _users.where((u) {
+      final name = u['full_name']?.toString().toLowerCase() ?? '';
+      final email = u['email']?.toString().toLowerCase() ?? '';
+      return _userSearchQuery.isEmpty ||
+          name.contains(_userSearchQuery.toLowerCase()) ||
+          email.contains(_userSearchQuery.toLowerCase());
+    }).toList();
 
-          return GlassCard(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.primary,
-                child: Text(
-                  (u['full_name']?.toString() ?? '?')[0].toUpperCase(),
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-              title: Text(
-                u['full_name']?.toString() ?? '-',
-                style: AppTextStyles.titleSmall,
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(u['email']?.toString() ?? '-',
-                      style: AppTextStyles.caption),
-                  Row(
-                    children: [
-                      Chip(
-                        label: Text(tier.toUpperCase(),
-                            style: const TextStyle(fontSize: 9)),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      const SizedBox(width: 4),
-                      Chip(
-                        label: Text(role.toUpperCase(),
-                            style: const TextStyle(
-                                fontSize: 9, color: Colors.white)),
-                        backgroundColor: role == 'admin'
-                            ? AppColors.error
-                            : role == 'cashier'
-                                ? AppColors.warning
-                                : AppColors.accent,
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      const SizedBox(width: 4),
-                      Text('$points pts',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.accent)),
-                    ],
-                  ),
-                ],
-              ),
-              trailing: IconButton(
-                icon: Icon(Icons.edit, color: AppColors.primary),
-                onPressed: () => _showEditUserDialog(u),
-              ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Cari pengguna berdasarkan nama atau email...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _userSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _userSearchQuery = ''),
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
-          );
-        },
-      ),
+            onChanged: (val) => setState(() => _userSearchQuery = val),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            child: filtered.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline, size: 64, color: AppColors.textTertiary),
+                        const SizedBox(height: 16),
+                        Text('Tidak ada pengguna yang cocok', style: AppTextStyles.bodyMedium),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final u = filtered[index];
+                      final tier = u['membership_tier']?.toString() ?? 'bronze';
+                      final role = u['role']?.toString() ?? 'user';
+                      final points = (u['points'] as num?)?.toInt() ?? 0;
+
+                      return GlassCard(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppColors.primary,
+                            child: Text(
+                              (u['full_name']?.toString() ?? '?')[0].toUpperCase(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          title: Text(
+                            u['full_name']?.toString() ?? '-',
+                            style: AppTextStyles.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(u['email']?.toString() ?? '-', style: AppTextStyles.caption),
+                              Row(
+                                children: [
+                                  Chip(
+                                    label: Text(tier.toUpperCase(), style: const TextStyle(fontSize: 9)),
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Chip(
+                                    label: Text(
+                                      role.toUpperCase(),
+                                      style: const TextStyle(fontSize: 9, color: Colors.white),
+                                    ),
+                                    backgroundColor: role == 'admin'
+                                        ? AppColors.error
+                                        : role == 'cashier'
+                                            ? AppColors.warning
+                                            : AppColors.accent,
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('$points pts',
+                                      style: AppTextStyles.caption.copyWith(color: AppColors.accent)),
+                                ],
+                              ),
+                            ],
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(Icons.edit, color: AppColors.primary),
+                            onPressed: () => _showEditUserDialog(u),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1262,19 +1357,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Edit Pengguna', style: AppTextStyles.titleMedium),
+          title: Text('Edit Hak Akses Pengguna', style: AppTextStyles.titleMedium),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Email: ${userData['email']}',
-                    style: AppTextStyles.caption),
+                Text('Email: ${userData['email']}', style: AppTextStyles.caption),
                 const SizedBox(height: 12),
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Nama',
+                    labelText: 'Nama Lengkap',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -1283,12 +1377,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   controller: pointsController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Poin',
+                    labelText: 'Poin / EXP',
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('Role:', style: AppTextStyles.bodySmall),
+                Text('Role Akses:', style: AppTextStyles.bodySmall),
                 ...['user', 'cashier', 'admin'].map((r) => RadioListTile<String>(
                       value: r,
                       groupValue: selectedRole,
@@ -1303,19 +1397,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     )),
                 const SizedBox(height: 8),
                 Text('Tier Membership:', style: AppTextStyles.bodySmall),
-                ...['bronze', 'silver', 'gold', 'platinum']
-                    .map((t) => RadioListTile<String>(
-                          value: t,
-                          groupValue: selectedTier,
-                          title: Text(t.toUpperCase()),
-                          dense: true,
-                          activeColor: AppColors.primary,
-                          onChanged: (val) {
-                            if (val != null) {
-                              setDialogState(() => selectedTier = val);
-                            }
-                          },
-                        )),
+                ...['bronze', 'silver', 'gold', 'platinum'].map(
+                  (t) => RadioListTile<String>(
+                    value: t,
+                    groupValue: selectedTier,
+                    title: Text(t.toUpperCase()),
+                    dense: true,
+                    activeColor: AppColors.primary,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedTier = val);
+                      }
+                    },
+                  ),
+                ),
               ],
             ),
           ),
@@ -1325,8 +1420,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () async {
                 final nav = Navigator.of(ctx);
                 final messenger = ScaffoldMessenger.of(context);
@@ -1377,7 +1471,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   SnackBar(
                     content: Text(supabaseSuccess
                         ? 'Pengguna berhasil diupdate'
-                        : 'Perubahan disimpan secara lokal'),
+                        : 'Hak akses disimpan secara lokal'),
                   ),
                 );
                 if (mounted) setState(() {});
@@ -1390,106 +1484,525 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ======================== STATS TAB (ADMIN ONLY) ========================
+  // ============================================================
+  // TAB 6: STATS TAB (ADMIN ONLY)
+  // ============================================================
   Widget _buildStatsTab() {
     final totalProducts = _products.length;
     final totalOrders = _orders.length;
     final totalUsers = _users.length;
     final lowStockProducts =
-        _products.where((p) => (p['stock'] as num? ?? 0) < 5).length;
+        _products.where((p) => (_parseInt(p['stock'])) < 5).length;
     final flashSaleCount =
         _products.where((p) => p['is_on_sale'] == true).length;
     final totalRevenue = _orders.fold<double>(
-        0, (sum, o) => sum + ((o['total_price'] as num?)?.toDouble() ?? 0));
+        0, (sum, o) => sum + (_parseDouble(o['total_price'])));
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 700;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          child: Column(
+            children: [
+              if (isWide) ...[
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard('Total Produk', '$totalProducts', Icons.inventory, AppColors.primary)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Total Pesanan', '$totalOrders', Icons.receipt, AppColors.accent)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Total Pengguna', '$totalUsers', Icons.people, AppColors.success)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard('Stok Rendah', '$lowStockProducts', Icons.warning, AppColors.error)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Flash Sale', '$flashSaleCount', Icons.local_fire_department, AppColors.warning)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Ulasan', '${context.read<ReviewProvider>().allReviews.length}', Icons.star_rate, Colors.amber)),
+                  ],
+                ),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard('Total Produk', '$totalProducts', Icons.inventory, AppColors.primary)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Total Pesanan', '$totalOrders', Icons.receipt, AppColors.accent)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard('Total Pengguna', '$totalUsers', Icons.people, AppColors.success)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Stok Rendah', '$lowStockProducts', Icons.warning, AppColors.error)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard('Flash Sale', '$flashSaleCount', Icons.local_fire_department, AppColors.warning)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard('Ulasan', '${context.read<ReviewProvider>().allReviews.length}', Icons.star_rate, Colors.amber)),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 14),
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Total Pendapatan', style: AppTextStyles.titleSmall),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Rp ${_formatNumber(totalRevenue)}',
+                      style: AppTextStyles.heading2.copyWith(color: AppColors.accent),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Produk Stok Rendah (< 5)', style: AppTextStyles.titleSmall),
+                    const SizedBox(height: 8),
+                    ..._products
+                        .where((p) => (_parseInt(p['stock'])) < 5)
+                        .map((p) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.warning, size: 16, color: AppColors.error),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      p['name']?.toString() ?? '-',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Stok: ${p['stock'] ?? 0}',
+                                    style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            )),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return GlassCard(
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(child: _buildStatCard('Total Produk', '$totalProducts', Icons.inventory, AppColors.primary)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard('Total Pesanan', '$totalOrders', Icons.receipt, AppColors.accent)),
-            ],
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 6),
+          Text(value, style: AppTextStyles.heading3.copyWith(color: color)),
+          Text(title, style: AppTextStyles.caption, textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // PRODUCT ADD DIALOG
+  // ============================================================
+  void _showAddProductDialog() {
+    final nameC = TextEditingController();
+    final brandC = TextEditingController();
+    final priceC = TextEditingController();
+    final origPriceC = TextEditingController();
+    final stockC = TextEditingController(text: '10');
+    final descC = TextEditingController();
+    final imageUrlC = TextEditingController();
+    String selectedCategory = 'laptop';
+    bool isFlashSale = false;
+
+    final categoryOptions = [
+      'laptop', 'desktop', 'monitor', 'keyboard', 'mouse',
+      'headset', 'storage', 'networking', 'cpu', 'gpu',
+      'motherboard', 'ram', 'case', 'cooler', 'psu',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Tambah Produk Baru', style: AppTextStyles.titleMedium),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameC,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Produk',
+                      hintText: 'Contoh: ASUS ROG Strix G16',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: brandC,
+                    decoration: const InputDecoration(
+                      labelText: 'Brand',
+                      hintText: 'Contoh: ASUS',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: categoryOptions.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(c.toUpperCase()),
+                    )).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedCategory = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceC,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Harga Jual (Rp)',
+                      hintText: 'Contoh: 15000000',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: stockC,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Stok',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descC,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Deskripsi',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: imageUrlC,
+                    decoration: const InputDecoration(
+                      labelText: 'URL Gambar (opsional)',
+                      hintText: 'https://...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    title: const Text('Langsung Masukkan Flash Sale'),
+                    value: isFlashSale,
+                    activeColor: AppColors.error,
+                    onChanged: (val) => setDialogState(() => isFlashSale = val),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  if (isFlashSale) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: origPriceC,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Harga Asli Coret (Rp)',
+                        hintText: 'Contoh: 18000000',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildStatCard('Total Pengguna', '$totalUsers', Icons.people, AppColors.success)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard('Stok Rendah', '$lowStockProducts', Icons.warning, AppColors.error)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildStatCard('Flash Sale', '$flashSaleCount', Icons.local_fire_department, AppColors.warning)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard('Ulasan', '${context.read<ReviewProvider>().allReviews.length}', Icons.star_rate, Colors.amber)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          GlassCard(
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () async {
+                final name = nameC.text.trim();
+                final brand = brandC.text.trim();
+                final price = _parseDouble(priceC.text.trim());
+                final stock = _parseInt(stockC.text.trim());
+
+                if (name.isEmpty || brand.isEmpty || price <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Nama, Brand, dan Harga wajib diisi')),
+                  );
+                  return;
+                }
+
+                double? origPrice;
+                if (isFlashSale) {
+                  origPrice = _parseDouble(origPriceC.text.trim());
+                  if (origPrice <= price) {
+                    origPrice = price * 1.25;
+                  }
+                }
+
+                final productId = 'admin-${DateTime.now().millisecondsSinceEpoch}';
+                final newProduct = ProductModel(
+                  id: productId,
+                  name: name,
+                  description: descC.text.trim().isEmpty ? name : descC.text.trim(),
+                  descriptionId: descC.text.trim().isEmpty ? name : descC.text.trim(),
+                  price: price,
+                  originalPrice: origPrice,
+                  categoryId: selectedCategory,
+                  brand: brand,
+                  images: imageUrlC.text.trim().isNotEmpty ? [imageUrlC.text.trim()] : [],
+                  specs: {},
+                  rating: 0,
+                  reviewCount: 0,
+                  stock: stock,
+                  isNew: true,
+                  isOnSale: isFlashSale,
+                );
+
+                final nav = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+                final productProvider = context.read<ProductProvider>();
+
+                await productProvider.addProduct(newProduct);
+                nav.pop();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Produk berhasil ditambahkan')),
+                );
+                if (mounted) _loadData();
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProductDialog(Map<String, dynamic> product) {
+    final stockController =
+        TextEditingController(text: (product['stock'] ?? 0).toString());
+    final priceController =
+        TextEditingController(text: (product['price'] ?? 0).toString());
+    final nameController =
+        TextEditingController(text: product['name']?.toString() ?? '');
+    final brandController =
+        TextEditingController(text: product['brand']?.toString() ?? '');
+    final descController =
+        TextEditingController(text: product['description']?.toString() ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Produk', style: AppTextStyles.titleMedium),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Total Pendapatan', style: AppTextStyles.titleSmall),
-                const SizedBox(height: 8),
-                Text(
-                  'Rp ${_formatNumber(totalRevenue)}',
-                  style: AppTextStyles.heading2
-                      .copyWith(color: AppColors.accent),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Nama Produk', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: brandController,
+                  decoration: const InputDecoration(labelText: 'Brand', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Harga (Rp)', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: stockController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Stok', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Deskripsi', border: OutlineInputBorder()),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Produk Stok Rendah', style: AppTextStyles.titleSmall),
-                const SizedBox(height: 8),
-                ..._products
-                    .where((p) => (p['stock'] as num? ?? 0) < 5)
-                    .map((p) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              Icon(Icons.warning,
-                                  size: 16, color: AppColors.error),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                  child: Text(p['name']?.toString() ?? '-')),
-                              Text('Stok: ${p['stock'] ?? 0}',
-                                  style: TextStyle(
-                                      color: AppColors.error,
-                                      fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        )),
-              ],
-            ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final productProvider = context.read<ProductProvider>();
+
+              try {
+                final updateData = {
+                  'name': nameController.text.trim(),
+                  'brand': brandController.text.trim(),
+                  'price': _parseDouble(priceController.text.trim()),
+                  'stock': _parseInt(stockController.text.trim()),
+                  'description': descController.text.trim(),
+                };
+
+                await supabase.from('products').update(updateData).eq('id', product['id']);
+
+                try {
+                  final existing = productProvider.getProductById(product['id']?.toString() ?? '');
+                  if (existing != null) {
+                    await productProvider.updateProduct(existing.copyWith(
+                      name: updateData['name']?.toString(),
+                      brand: updateData['brand']?.toString(),
+                      price: (updateData['price'] as num?)?.toDouble(),
+                      stock: (updateData['stock'] as num?)?.toInt(),
+                      description: updateData['description']?.toString(),
+                      descriptionId: updateData['description']?.toString(),
+                    ));
+                  }
+                } catch (_) {}
+
+                nav.pop();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Produk berhasil diupdate')),
+                );
+                if (mounted) _loadData();
+              } catch (e) {
+                messenger.showSnackBar(SnackBar(content: Text('Gagal: $e')));
+              }
+            },
+            child: const Text('Simpan'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(
-      String title, String value, IconData icon, Color color) {
-    return GlassCard(
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 8),
-          Text(value,
-              style: AppTextStyles.heading3.copyWith(color: color)),
-          Text(title, style: AppTextStyles.caption, textAlign: TextAlign.center),
+  void _confirmDeleteProduct(Map<String, dynamic> product) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Hapus Produk', style: AppTextStyles.titleMedium),
+        content: Text('Apakah Anda yakin ingin menghapus "${product['name']}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+
+              try {
+                final productProvider = context.read<ProductProvider>();
+                await productProvider.deleteProduct(product['id']?.toString() ?? '');
+                try {
+                  await supabase.from('products').delete().eq('id', product['id']);
+                } catch (_) {}
+              } catch (e) {
+                debugPrint('Delete product error: $e');
+              }
+
+              nav.pop();
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Produk berhasil dihapus')),
+              );
+              if (mounted) _loadData();
+            },
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
         ],
       ),
     );
+  }
+}
+
+// ============================================================
+// FLASH SALE CONFIGURATION BOTTOM SHEET (ROBUST & RESPONSIVE)
+// ============================================================
+class _FlashSaleSheetWidget extends StatefulWidget {
+  final Map<String, dynamic>? initialProduct;
+  final VoidCallback onSaved;
+
+  const _FlashSaleSheetWidget({
+    required this.initialProduct,
+    required this.onSaved,
+  });
+
+  @override
+  State<_FlashSaleSheetWidget> createState() => _FlashSaleSheetWidgetState();
+}
+
+class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
+  ProductModel? _selectedProduct;
+  final TextEditingController _searchC = TextEditingController();
+  final TextEditingController _salePriceC = TextEditingController();
+  final TextEditingController _origPriceC = TextEditingController();
+  int _discountPct = 20;
+  bool _isInit = false;
+
+  double _parseDouble(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? 0.0;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isInit) {
+      _isInit = true;
+      final provider = context.read<ProductProvider>();
+
+      if (widget.initialProduct != null) {
+        final id = widget.initialProduct!['id']?.toString() ?? '';
+        _selectedProduct = provider.getProductById(id);
+      }
+
+      _recalculatePrices();
+    }
+  }
+
+  void _recalculatePrices() {
+    if (_selectedProduct == null) return;
+    final basePrice = _selectedProduct!.originalPrice ?? _selectedProduct!.price;
+    final discounted = basePrice * (1 - _discountPct / 100);
+    _origPriceC.text = basePrice.toStringAsFixed(0);
+    _salePriceC.text = discounted.toStringAsFixed(0);
   }
 
   String _formatNumber(dynamic number) {
@@ -1499,5 +2012,268 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match[1]}.',
         );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<ProductProvider>();
+    final nonFlashProducts = provider.allProducts.where((p) {
+      final matchesSearch = _searchC.text.isEmpty ||
+          p.name.toLowerCase().contains(_searchC.text.toLowerCase()) ||
+          p.brand.toLowerCase().contains(_searchC.text.toLowerCase());
+      return matchesSearch;
+    }).toList();
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 540),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 12,
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.textTertiary.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.local_fire_department, color: AppColors.error, size: 24),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedProduct != null ? 'Atur Promo Flash Sale' : 'Pilih Produk untuk Flash Sale',
+                        style: AppTextStyles.titleMedium,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(),
+
+                if (_selectedProduct == null) ...[
+                  Text('Cari dan pilih produk dari katalog toko:', style: AppTextStyles.bodySmall),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _searchC,
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama atau brand produk...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 220,
+                    child: nonFlashProducts.isEmpty
+                        ? const Center(child: Text('Tidak ada produk yang cocok'))
+                        : ListView.builder(
+                            itemCount: nonFlashProducts.length,
+                            itemBuilder: (ctx, i) {
+                              final p = nonFlashProducts[i];
+                              return ListTile(
+                                dense: true,
+                                title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text('Rp ${_formatNumber(p.price)} • Stok: ${p.stock}'),
+                                trailing: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.error,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedProduct = p;
+                                      _recalculatePrices();
+                                    });
+                                  },
+                                  child: const Text('Pilih', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedProduct!.name,
+                                style: AppTextStyles.titleSmall,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Brand: ${_selectedProduct!.brand} • Harga Normal: Rp ${_formatNumber(_selectedProduct!.originalPrice ?? _selectedProduct!.price)}',
+                                style: AppTextStyles.caption,
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedProduct = null;
+                            });
+                          },
+                          child: const Text('Ganti'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Text('Persentase Diskon Promo (%)', style: AppTextStyles.bodySmall),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Slider(
+                          value: _discountPct.toDouble(),
+                          min: 5,
+                          max: 80,
+                          divisions: 15,
+                          label: '$_discountPct%',
+                          activeColor: AppColors.error,
+                          onChanged: (val) {
+                            setState(() {
+                              _discountPct = val.round();
+                              _recalculatePrices();
+                            });
+                          },
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '-$_discountPct%',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    controller: _origPriceC,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Harga Asli Coret (Rp)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    controller: _salePriceC,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Harga Promo Flash Sale (Rp)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Batal'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.error,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () async {
+                            final salePrice = _parseDouble(_salePriceC.text.trim());
+                            final originalPrice = _parseDouble(_origPriceC.text.trim());
+
+                            if (salePrice <= 0 || salePrice >= originalPrice) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Harga promo harus lebih kecil dari harga asli')),
+                              );
+                              return;
+                            }
+
+                            final messenger = ScaffoldMessenger.of(context);
+                            final nav = Navigator.of(context);
+
+                            await provider.toggleFlashSale(
+                              _selectedProduct!.id,
+                              true,
+                              salePrice: salePrice,
+                              originalPrice: originalPrice,
+                            );
+
+                            try {
+                              await Supabase.instance.client.from('products').update({
+                                'is_on_sale': true,
+                                'price': salePrice,
+                                'original_price': originalPrice,
+                              }).eq('id', _selectedProduct!.id);
+                            } catch (e) {
+                              debugPrint('Supabase flash sale sync notice: $e');
+                            }
+
+                            nav.pop();
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('Produk berhasil masuk ke Flash Sale')),
+                            );
+                            widget.onSaved();
+                          },
+                          child: const Text('Aktifkan Flash Sale'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

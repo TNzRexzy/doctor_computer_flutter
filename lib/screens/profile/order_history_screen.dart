@@ -63,7 +63,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '💡 Anda memiliki sisa ${order.remainingEditDays} hari untuk mengubah rating pesanan ini (Maksimal 7 hari setelah rating awal).',
+                        'Informasi: Anda memiliki sisa ${order.remainingEditDays} hari untuk mengubah rating pesanan ini (Maksimal 7 hari setelah rating awal).',
                         style: AppTextStyles.caption.copyWith(color: AppColors.warning),
                       ),
                     ),

@@ -38,7 +38,7 @@ class _MinigameCardState extends State<MinigameCard> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '🎉 Minigame selesai! +${widget.game['expReward']} EXP',
+          'Minigame selesai! +${widget.game['expReward']} EXP',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.surface),
         ),
         backgroundColor: AppColors.success,

@@ -136,7 +136,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // 3. Add mobile notifications
     if (mounted) {
       context.read<NotificationProvider>().addNotification(
-        title: '📦 Pesanan Berhasil: $orderId',
+        title: 'Pesanan Berhasil: $orderId',
         message: 'Pesanan Anda senilai ${formatRupiah(newOrder.totalPrice)} sedang diproses untuk QC & perakitan aman.',
         type: 'order',
         actionRoute: AppRouter.orderHistory,
@@ -144,7 +144,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
 
       context.read<NotificationProvider>().addNotification(
-        title: '💎 Bonus Belanja: +500 EXP!',
+        title: 'Bonus Belanja: +500 EXP!',
         message: 'Blok #${block.index} berhasil ditambang di Blockchain untuk transaksi $itemName. Akumulasi EXP: ${blockchain.totalExp} EXP.',
         type: 'tier_upgrade',
         actionRoute: AppRouter.membership,
@@ -153,7 +153,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       if (newTier != oldTier) {
         context.read<NotificationProvider>().addNotification(
-          title: '🏆 Selamat! Upgrade ke Tier ${newTier.name.toUpperCase()}!',
+          title: 'Selamat! Upgrade ke Tier ${newTier.name.toUpperCase()}!',
           message: 'Akumulasi EXP Anda mencapai ${blockchain.totalExp} EXP. Tier Anda otomatis naik ke ${newTier.name}!',
           type: 'tier_upgrade',
         );
@@ -191,7 +191,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('🔗 Blockchain Transaksi (Blok #${block.index}):', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                  Text('Blockchain Transaksi (Blok #${block.index}):', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text('Reward: +500 EXP (Belanja $itemName)', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
                   Text('Akumulasi EXP: ${blockchain.totalExp} EXP', style: AppTextStyles.caption),
