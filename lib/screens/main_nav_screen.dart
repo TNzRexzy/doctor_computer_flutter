@@ -11,11 +11,17 @@ class MainNavScreen extends StatefulWidget {
   const MainNavScreen({super.key});
 
   @override
-  State<MainNavScreen> createState() => _MainNavScreenState();
+  State<MainNavScreen> createState() => MainNavScreenState();
 }
 
-class _MainNavScreenState extends State<MainNavScreen> {
+class MainNavScreenState extends State<MainNavScreen> {
   int _currentIndex = 0;
+
+  void switchToTab(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

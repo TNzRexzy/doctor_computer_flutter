@@ -25,7 +25,7 @@ class _ChatMessage {
 class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
   final List<_ChatMessage> _messages = [
     _ChatMessage(
-      text: 'Halo! 👋 Saya adalah AI Assistant Customer Service Doctor Computer bertenaga Gemini. Ada yang bisa saya bantu terkait perakitan PC, klaim garansi, spesifikasi komponen, atau status pesanan Anda?',
+      text: 'Halo! 👋 Saya adalah AI Assistant Customer Service Doctor Computer. Ada yang bisa saya bantu terkait perakitan PC, klaim garansi, spesifikasi komponen, atau status pesanan Anda?',
       isUser: false,
       time: DateTime.now().subtract(const Duration(minutes: 1)),
     ),
@@ -40,7 +40,15 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
     'Konsultasi upgrade RAM & SSD',
     'Kenapa PC sering bluescreen?',
     'Cara kerja Blockchain Member & Tier?',
+    'Rekomendasi spesifikasi PC gaming',
+    'Biaya dan paket rakit PC',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    GeminiService().loadApiKeyFromDb();
+  }
 
   void _sendMessage([String? presetText]) async {
     final text = presetText ?? _textController.text.trim();
@@ -148,7 +156,7 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Dokter PC AI Assistant', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Online • Bertenaga Gemini', style: TextStyle(fontSize: 11, color: AppColors.accent)),
+                Text('Online • AI Assistant', style: TextStyle(fontSize: 11, color: AppColors.accent)),
               ],
             ),
           ],

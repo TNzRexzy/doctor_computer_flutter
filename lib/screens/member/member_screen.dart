@@ -11,6 +11,8 @@ import 'package:doctor_computer/screens/member/minigames/memory_match_game.dart'
 import 'package:doctor_computer/screens/member/minigames/pc_quiz_game.dart';
 import 'package:doctor_computer/screens/member/minigames/speed_repair_game.dart';
 import 'package:doctor_computer/screens/member/blockchain_ledger_screen.dart';
+import 'package:doctor_computer/data/models/user_model.dart';
+import 'package:doctor_computer/models/blockchain/blockchain.dart';
 
 class MemberScreen extends StatelessWidget {
   const MemberScreen({super.key});
@@ -19,13 +21,17 @@ class MemberScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final blockchain = context.watch<BlockchainProvider>();
     final user = context.watch<AuthProvider>().currentUser;
-    final totalExp = blockchain.totalExp;
-    final currentTier = blockchain.currentTier;
-    final nextTier = currentTier.getNextTier();
+    final isAdmin = user?.role == UserRole.admin;
 
-    final progress = nextTier != null
-        ? ((totalExp - currentTier.value) / (nextTier.value - currentTier.value)).clamp(0.0, 1.0)
-        : 1.0;
+    final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
+    final totalExp = isAdmin ? 999999 : blockchain.totalExp;
+    final nextTier = isAdmin ? null : currentTier.getNextTier();
+
+    final progress = isAdmin
+        ? 1.0
+        : (nextTier != null
+            ? ((totalExp - currentTier.value) / (nextTier.value - currentTier.value)).clamp(0.0, 1.0)
+            : 1.0);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -82,7 +88,9 @@ class MemberScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Tier Aktif: ${currentTier.name.toUpperCase()} (Diskon ${currentTier.discountPercent}%)',
+                      isAdmin
+                          ? 'Tier Aktif: PLATINUM (MAX • Hak Akses Administrator)'
+                          : 'Tier Aktif: ${currentTier.name.toUpperCase()} (Diskon ${currentTier.discountPercent}%)',
                       style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
@@ -93,7 +101,7 @@ class MemberScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'Total: $totalExp EXP',
+                        isAdmin ? 'Total: 999,999 EXP (MAX)' : 'Total: $totalExp EXP',
                         style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -114,7 +122,11 @@ class MemberScreen extends StatelessWidget {
                       children: [
                         Text('Progress Naik Tier', style: AppTextStyles.titleSmall),
                         Text(
-                          nextTier != null ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}' : 'Maksimal (Platinum)',
+                          isAdmin
+                              ? 'Level Tertinggi (Maksimal)'
+                              : (nextTier != null
+                                  ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
+                                  : 'Maksimal (Platinum)'),
                           style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -122,7 +134,7 @@ class MemberScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     ExpProgressBar(
                       progress: progress,
-                      currentLevel: currentTier.name,
+                      currentLevel: isAdmin ? 'Platinum (MAX)' : currentTier.name,
                       nextLevel: nextTier?.name,
                     ),
                   ],

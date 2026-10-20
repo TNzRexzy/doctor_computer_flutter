@@ -4,7 +4,7 @@ class AppConstants {
 
   static const String appName = 'Doctor Computer';
   static const String appTagline = 'Your Trusted Tech Partner';
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '1.0.1-beta';
 
   static const double standardBuildFee = 250000.0;
   static const double premiumBuildFee = 500000.0;
@@ -13,23 +13,20 @@ class AppConstants {
 
   static const List<Map<String, dynamic>> shippingMethods = [
     {
-      'name': 'Regular',
-      'nameId': 'Reguler',
+      'name': 'Reguler',
       'price': 15000.0,
-      'days': '3-5'
+      'days': '3-5',
     },
     {
-      'name': 'Express',
-      'nameId': 'Ekspres',
+      'name': 'Ekspres',
       'price': 30000.0,
-      'days': '1-2'
+      'days': '1-2',
     },
     {
-      'name': 'Same Day',
-      'nameId': 'Hari Ini',
+      'name': 'Hari Ini',
       'price': 50000.0,
-      'days': 'Today'
-    }
+      'days': 'Hari ini',
+    },
   ];
 
   static const List<String> paymentMethods = [

@@ -55,7 +55,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Navigator.pushReplacementNamed(context, AppRouter.welcome);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage ?? 'Registration failed. Please try again.')),
+          SnackBar(content: Text(errorMessage ?? 'Registrasi gagal. Silakan coba lagi.')),
         );
       }
     }
@@ -63,6 +63,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context);
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
@@ -72,150 +73,152 @@ class _RegisterScreenState extends State<RegisterScreen> {
         elevation: 0,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            Image.asset('assets/images/logo.png', height: 140),
-            const SizedBox(height: 40),
-            GlassCard(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Daftar / Register', style: AppTextStyles.heading3),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.person, color: AppColors.textSecondary),
-                        hintText: 'Full Name',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      validator: (value) => Validators.validateRequired(value, 'Full Name'),
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.mail, color: AppColors.textSecondary),
-                        hintText: 'Email',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      validator: Validators.validateEmail,
-                      keyboardType: TextInputType.emailAddress,
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _phoneController,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.phone, color: AppColors.textSecondary),
-                        hintText: '+62',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      validator: Validators.validatePhone,
-                      keyboardType: TextInputType.phone,
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                            color: AppColors.textSecondary,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              Image.asset('assets/images/logo.png', height: 140),
+              const SizedBox(height: 40),
+              GlassCard(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Daftar', style: AppTextStyles.heading3),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.person, color: AppColors.textSecondary),
+                          hintText: 'Nama Lengkap',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
                         ),
-                        hintText: 'Password',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                        validator: (value) => Validators.validateRequired(value, 'Nama Lengkap'),
+                        style: AppTextStyles.bodyMedium,
                       ),
-                      validator: Validators.validatePassword,
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      obscureText: _obscureConfirm,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirm ? Icons.visibility : Icons.visibility_off,
-                            color: AppColors.textSecondary,
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.mail, color: AppColors.textSecondary),
+                          hintText: 'Email',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirm = !_obscureConfirm;
-                            });
-                          },
                         ),
-                        hintText: 'Confirm Password',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                        validator: Validators.validateEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        style: AppTextStyles.bodyMedium,
                       ),
-                      validator: (val) => Validators.validateConfirmPassword(val, _passwordController.text),
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    GradientButton(
-                      label: 'Daftar / Register',
-                      onPressed: _register,
-                      isLoading: isLoading,
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _phoneController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.phone, color: AppColors.textSecondary),
+                          hintText: '+62',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: Validators.validatePhone,
+                        keyboardType: TextInputType.phone,
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              color: AppColors.textSecondary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          hintText: 'Password',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: Validators.validatePassword,
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirm,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirm ? Icons.visibility : Icons.visibility_off,
+                              color: AppColors.textSecondary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirm = !_obscureConfirm;
+                              });
+                            },
+                          ),
+                          hintText: 'Konfirmasi Password',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: (val) => Validators.validateConfirmPassword(val, _passwordController.text),
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                      const SizedBox(height: 24),
+                      GradientButton(
+                        label: 'Daftar',
+                        onPressed: _register,
+                        isLoading: isLoading,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Sudah punya akun? ', style: AppTextStyles.bodyMedium),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: Text('Masuk / Login', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary)),
-                ),
-              ],
-            ),
-          ],
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Sudah punya akun? ', style: AppTextStyles.bodyMedium),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: Text('Masuk', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary)),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

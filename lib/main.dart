@@ -24,10 +24,14 @@ Future<void> main() async {
     anonKey: EnvConfig.supabaseAnonKey,
   );
 
+  // Ensure admin account exists (runs in background, won't block startup)
+  final authProvider = AuthProvider();
+  authProvider.ensureAdminAccount();
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => authProvider),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => PcBuilderProvider()),

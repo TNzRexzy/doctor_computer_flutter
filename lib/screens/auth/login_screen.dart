@@ -31,15 +31,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() async {
     if (_formKey.currentState?.validate() ?? false) {
+      final input = _emailController.text.trim();
+      String email = input;
+      if (input.toLowerCase() == 'admin') {
+        email = 'admin@doctorcomputer.id';
+      } else if (input.toLowerCase() == 'cashier') {
+        email = 'cashier@doctorcomputer.id';
+      }
+
       final success = await context.read<AuthProvider>().login(
-        _emailController.text.trim(),
+        email,
         _passwordController.text,
       );
       if (success && mounted) {
         Navigator.pushReplacementNamed(context, AppRouter.mainNav);
       } else if (mounted) {
+        final errorMsg = context.read<AuthProvider>().errorMessage ?? 'Login gagal. Silakan periksa kredensial Anda.';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login failed. Please check your credentials.')),
+          SnackBar(content: Text(errorMsg)),
         );
       }
     }
@@ -52,136 +61,146 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            const SizedBox(height: 60),
-            Image.asset('assets/images/logo.png', height: 140),
-            const SizedBox(height: 40),
-            GlassCard(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Masuk / Login', style: AppTextStyles.heading3),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.mail, color: AppColors.textSecondary),
-                        hintText: 'Email',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      validator: Validators.validateEmail,
-                      keyboardType: TextInputType.emailAddress,
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                            color: AppColors.textSecondary,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              const SizedBox(height: 60),
+              Image.asset('assets/images/logo.png', height: 140),
+              const SizedBox(height: 40),
+              GlassCard(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Masuk', style: AppTextStyles.heading3),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.person_outline, color: AppColors.textSecondary),
+                          hintText: 'Email atau Username',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
                         ),
-                        hintText: 'Password',
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                        validator: Validators.validateEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              color: AppColors.textSecondary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          hintText: 'Password',
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        validator: Validators.validatePassword,
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {},
+                          child: Text(
+                            'Lupa Password?',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent),
+                          ),
                         ),
                       ),
-                      validator: Validators.validatePassword,
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {},
-                        child: Text(
-                          'Lupa Password? / Forgot Password?',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent),
-                        ),
+                      const SizedBox(height: 24),
+                      GradientButton(
+                        label: 'Masuk',
+                        onPressed: _login,
+                        isLoading: isLoading,
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    GradientButton(
-                      label: 'Masuk / Login',
-                      onPressed: _login,
-                      isLoading: isLoading,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(child: Divider(color: AppColors.surfaceLight)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('atau / or', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                ),
-                Expanded(child: Divider(color: AppColors.surfaceLight)),
-              ],
-            ),
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.g_mobiledata, size: 28),
-              label: const Text('Masuk dengan Google'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                minimumSize: const Size(double.infinity, 50),
-                side: BorderSide(color: AppColors.surfaceLight),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(child: Divider(color: AppColors.surfaceLight)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('atau', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                  ),
+                  Expanded(child: Divider(color: AppColors.surfaceLight)),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.apple, size: 28),
-              label: const Text('Masuk dengan Apple'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                minimumSize: const Size(double.infinity, 50),
-                side: BorderSide(color: AppColors.surfaceLight),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Belum punya akun? ', style: AppTextStyles.bodyMedium),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, AppRouter.register);
-                  },
-                  child: Text('Daftar / Register', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary)),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Login dengan Google akan segera hadir')),
+                  );
+                },
+                icon: const Icon(Icons.g_mobiledata, size: 28),
+                label: const Text('Masuk dengan Google'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  minimumSize: const Size(double.infinity, 50),
+                  side: BorderSide(color: AppColors.surfaceLight),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Login dengan Apple akan segera hadir')),
+                  );
+                },
+                icon: const Icon(Icons.apple, size: 28),
+                label: const Text('Masuk dengan Apple'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  minimumSize: const Size(double.infinity, 50),
+                  side: BorderSide(color: AppColors.surfaceLight),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Belum punya akun? ', style: AppTextStyles.bodyMedium),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, AppRouter.register);
+                    },
+                    child: Text('Daftar', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary)),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

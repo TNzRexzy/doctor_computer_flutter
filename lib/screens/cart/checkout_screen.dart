@@ -14,6 +14,8 @@ import 'package:doctor_computer/providers/blockchain_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/screens/map/location_picker_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -31,6 +33,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
   final _postalController = TextEditingController();
+  double? _latitude;
+  double? _longitude;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = context.read<AuthProvider>().currentUser;
+    if (user != null) {
+      _nameController.text = user.fullName;
+      _phoneController.text = user.phone;
+      _addressController.text = user.address;
+      _cityController.text = user.city;
+      _latitude = user.latitude;
+      _longitude = user.longitude;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
+    _postalController.dispose();
+    super.dispose();
+  }
+
+  void _openMapPicker() async {
+    final result = await Navigator.pushNamed(
+      context,
+      AppRouter.locationPicker,
+      arguments: {
+        'lat': _latitude,
+        'lng': _longitude,
+        'address': _addressController.text,
+      },
+    );
+
+    if (result is LocationPickerResult) {
+      setState(() {
+        _addressController.text = result.address;
+        _cityController.text = result.city;
+        _latitude = result.latitude;
+        _longitude = result.longitude;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✅ Alamat dari peta berhasil dipilih dan tersimpan ke database!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    }
+  }
 
   void _processPayment() async {
     setState(() {
@@ -146,13 +203,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
         ),
         actions: [
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               context.read<CartProvider>().clearCart();
-              Navigator.pop(ctx);
-              Navigator.popUntil(context, ModalRoute.withName(AppRouter.mainNav));
+              Navigator.pop(ctx); // Close dialog
+              
+              // Cleanly reset stack to MainNavScreen and navigate straight to Order History
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                AppRouter.mainNav,
+                (route) => false,
+              );
+              Navigator.pushNamed(context, AppRouter.orderHistory);
             },
-            child: const Text('OK'),
+            child: const Text('OK - Lihat Pesanan Saya'),
           ),
         ],
       ),
@@ -180,22 +248,65 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                Text('Alamat Pengiriman / Shipping Address', style: AppTextStyles.titleMedium),
-                const SizedBox(height: 12),
+
+                // Alamat Pengiriman Header & Map Button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Alamat Pengiriman', style: AppTextStyles.titleMedium),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: _openMapPicker,
+                      icon: const Icon(Icons.map, size: 16),
+                      label: const Text('Pilih via Map', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Map Pin Status Badge
+                if (_latitude != null && _longitude != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.pin_drop, color: AppColors.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Titik Peta: ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)} (Tersimpan di Database)',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 GlassCard(
                   child: Column(
                     children: [
                       TextFormField(
                         controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'Nama Lengkap / Full Name'),
+                        decoration: const InputDecoration(labelText: 'Nama Lengkap'),
                       ),
                       TextFormField(
                         controller: _phoneController,
-                        decoration: const InputDecoration(labelText: 'Nomor Telepon / Phone Number'),
+                        decoration: const InputDecoration(labelText: 'Nomor Telepon'),
                       ),
                       TextFormField(
                         controller: _addressController,
-                        decoration: const InputDecoration(labelText: 'Alamat / Address'),
+                        decoration: const InputDecoration(labelText: 'Alamat'),
                         maxLines: 2,
                       ),
                       Row(
@@ -203,7 +314,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           Expanded(
                             child: TextFormField(
                               controller: _cityController,
-                              decoration: const InputDecoration(labelText: 'Kota / City'),
+                              decoration: const InputDecoration(labelText: 'Kota'),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -211,7 +322,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             width: 120,
                             child: TextFormField(
                               controller: _postalController,
-                              decoration: const InputDecoration(labelText: 'Kode Pos / Postal'),
+                              decoration: const InputDecoration(labelText: 'Kode Pos'),
                             ),
                           ),
                         ],
@@ -220,7 +331,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text('Metode Pengiriman / Shipping Method', style: AppTextStyles.titleMedium),
+                Text('Metode Pengiriman', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 12),
                 Column(
                   children: List.generate(AppConstants.shippingMethods.length, (index) {
@@ -239,7 +350,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   }),
                 ),
                 const SizedBox(height: 24),
-                Text('Metode Pembayaran / Payment Method', style: AppTextStyles.titleMedium),
+                Text('Metode Pembayaran', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 12),
                 Column(
                   children: List.generate(AppConstants.paymentMethods.length, (index) {
@@ -251,69 +362,55 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         if (val != null) setState(() => _selectedPayment = val);
                       },
                       title: Text(method),
-                      secondary: const Icon(Icons.payment),
                       activeColor: AppColors.primary,
                     );
                   }),
                 ),
                 const SizedBox(height: 24),
-                Text('Ringkasan Pesanan / Order Summary', style: AppTextStyles.titleMedium),
+                Text('Ringkasan Pesanan', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 12),
-                Consumer<CartProvider>(
-                  builder: (context, provider, child) {
-                    final shippingFee = AppConstants.shippingMethods[_selectedShipping]['price'] as double;
-                    final grandTotal = provider.totalPrice + shippingFee;
-                    return GlassCard(
-                      child: Column(
+                GlassCard(
+                  child: Consumer<CartProvider>(
+                    builder: (context, cart, _) {
+                      final shippingPrice = AppConstants.shippingMethods[_selectedShipping]['price'] as double;
+                      final total = cart.totalPrice + shippingPrice;
+
+                      return Column(
                         children: [
-                          ...provider.items.map((item) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(child: Text('${item.product.name} x${item.quantity}')),
-                                  Text(formatRupiah(item.subtotal)),
-                                ],
-                              ),
-                            );
-                          }),
-                          const Divider(),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Subtotal'),
-                              Text(formatRupiah(provider.totalPrice)),
+                              Text('Subtotal', style: AppTextStyles.bodyMedium),
+                              Text(formatRupiah(cart.totalPrice), style: AppTextStyles.bodyMedium),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Ongkir / Shipping'),
-                              Text(formatRupiah(shippingFee)),
+                              Text('Ongkir', style: AppTextStyles.bodyMedium),
+                              Text(formatRupiah(shippingPrice), style: AppTextStyles.bodyMedium),
                             ],
                           ),
-                          const Divider(),
+                          const Divider(height: 24),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Total Pembayaran / Total Payment', style: AppTextStyles.titleMedium),
-                              Text(formatRupiah(grandTotal), style: AppTextStyles.price),
+                              Text('Total Pembayaran', style: AppTextStyles.titleMedium),
+                              Text(formatRupiah(total), style: AppTextStyles.price),
                             ],
                           ),
                         ],
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 32),
+                GradientButton(
+                  label: _isProcessing ? 'Memproses Pesanan...' : 'Bayar Sekarang',
+                  onPressed: _isProcessing ? () {} : _processPayment,
                 ),
                 const SizedBox(height: 24),
-                GradientButton(
-                  label: 'Bayar Sekarang / Pay Now',
-                  isLoading: _isProcessing,
-                  onPressed: _processPayment,
-                ),
-                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -322,4 +419,3 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 }
-

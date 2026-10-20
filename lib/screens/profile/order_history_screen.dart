@@ -5,6 +5,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/screens/order/order_tracking_screen.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
@@ -18,6 +19,17 @@ class OrderHistoryScreen extends StatefulWidget {
 
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   int _selectedTab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthProvider>().currentUser;
+      if (user != null) {
+        context.read<OrderProvider>().setUserId(user.id);
+      }
+    });
+  }
 
   void _showRatingDialog(BuildContext context, OrderModel order, {bool isEditing = false}) {
     double selectedRating = order.rating ?? 5.0;
@@ -211,7 +223,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    Text('Order #${order.id}', style: AppTextStyles.titleSmall),
+                                    Text('Pesanan #${order.id}', style: AppTextStyles.titleSmall),
                                     const Spacer(),
                                     Chip(
                                       label: Text(order.status.displayNameId),

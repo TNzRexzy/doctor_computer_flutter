@@ -26,9 +26,9 @@ class CartScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.shopping_cart_outlined, size: 80, color: AppColors.textTertiary),
                     const SizedBox(height: 16),
-                    Text('Keranjang Kosong / Cart is Empty', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
+                    Text('Keranjang Kosong', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
                     const SizedBox(height: 8),
-                    Text('Mulai belanja sekarang / Start shopping now', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textTertiary)),
+                    Text('Mulai belanja sekarang', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textTertiary)),
                   ],
                 ),
               );
@@ -39,7 +39,7 @@ class CartScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
                     children: [
-                      Text('Keranjang / Cart', style: AppTextStyles.heading3),
+                      Text('Keranjang', style: AppTextStyles.heading3),
                       Text(' (${provider.itemCount} items)', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
@@ -133,7 +133,7 @@ class CartScreen extends StatelessWidget {
                         const Expanded(
                           child: TextField(
                             decoration: InputDecoration(
-                              hintText: 'Kode Kupon / Coupon Code',
+                              hintText: 'Kode Kupon',
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.symmetric(horizontal: 12),
                             ),
@@ -162,7 +162,7 @@ class CartScreen extends StatelessWidget {
                       const Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Estimasi Ongkir / Est. Shipping'),
+                          Text('Estimasi Ongkir'),
                           Text('Rp 15.000'),
                         ],
                       ),

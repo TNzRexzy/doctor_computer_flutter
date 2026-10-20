@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
+import 'package:doctor_computer/data/models/pc_build_model.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
+import 'package:doctor_computer/data/models/product_model.dart';
+import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/providers/pc_builder_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/pc_builder/part_slot_card.dart';
@@ -30,8 +33,8 @@ class PcBuilderScreen extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Rakit PC / PC Builder', style: AppTextStyles.heading3),
-                      Text('Pilih komponen / Choose components', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                      Text('Rakit PC', style: AppTextStyles.heading3),
+                      Text('Pilih komponen', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                   const Spacer(),
@@ -186,18 +189,71 @@ class PcBuilderScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
                           GradientButton(
-                            label: 'Tambah ke Keranjang / Add Build to Cart',
+                            label: 'Tambah ke Keranjang',
                             icon: Icons.shopping_cart,
                             isEnabled: provider.selectedParts.containsKey(PcPartCategory.cpu) &&
                                 provider.selectedParts.containsKey(PcPartCategory.gpu) &&
                                 provider.selectedParts.containsKey(PcPartCategory.motherboard) &&
                                 provider.selectedParts.containsKey(PcPartCategory.ram),
                             onPressed: () {
+                              final parts = provider.selectedParts;
+                              // Add each selected part as a separate cart item
+                              final cart = context.read<CartProvider>();
+                              
+                              int addedCount = 0;
+                              for (final entry in parts.entries) {
+                                if (entry.value != null) {
+                                  final part = entry.value!;
+                                  final product = ProductModel(
+                                    id: 'build-${part.id}',
+                                    name: '${part.name} (Rakit PC)',
+                                    description: 'Komponen rakit PC - ${entry.key.displayNameId}',
+                                    descriptionId: 'Komponen rakit PC - ${entry.key.displayNameId}',
+                                    price: part.price,
+                                    categoryId: 'pc-build',
+                                    brand: part.brand,
+                                    images: part.imageUrl != null ? [part.imageUrl!] : [],
+                                    specs: part.specs,
+                                    rating: 4.5,
+                                    reviewCount: 0,
+                                    stock: 10,
+                                    isNew: false,
+                                    isOnSale: false,
+                                  );
+                                  cart.addToCart(product);
+                                  addedCount++;
+                                }
+                              }
+                              
+                              // Also add build service fee as an item
+                              if (addedCount > 0) {
+                                final serviceName = provider.serviceTier == BuildServiceTier.standard 
+                                    ? 'Jasa Rakit PC Standard' 
+                                    : 'Jasa Rakit PC Premium';
+                                final serviceProduct = ProductModel(
+                                  id: 'build-service-fee',
+                                  name: serviceName,
+                                  description: 'Biaya jasa perakitan PC',
+                                  descriptionId: 'Biaya jasa perakitan PC',
+                                  price: provider.buildFee,
+                                  categoryId: 'service',
+                                  brand: 'Doctor Computer',
+                                  images: [],
+                                  specs: {},
+                                  rating: 5.0,
+                                  reviewCount: 0,
+                                  stock: 999,
+                                  isNew: false,
+                                  isOnSale: false,
+                                );
+                                cart.addToCart(serviceProduct);
+                              }
+                              
                               showDialog(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
-                                  title: const Text('Berhasil / Success'),
-                                  content: const Text('Build ditambahkan ke keranjang / Build added to cart'),
+                                  title: const Text('Berhasil!'),
+                                  content: Text('$addedCount komponen + jasa rakit berhasil ditambahkan ke keranjang.'),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(ctx),

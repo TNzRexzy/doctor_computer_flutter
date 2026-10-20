@@ -439,7 +439,52 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         }
 
-        final results = provider.filteredProducts;
+        final query = _searchController.text.toLowerCase().trim();
+        List<ProductModel> results = List<ProductModel>.from(provider.filteredProducts);
+
+        // Add categoryId matching: if someone types 'SSD', also match by categoryId 'storage'
+        final categoryKeywords = {
+          'ssd': 'storage',
+          'hdd': 'storage',
+          'nvme': 'storage',
+          'storage': 'storage',
+          'laptop': 'laptop',
+          'monitor': 'monitor',
+          'keyboard': 'keyboard',
+          'mouse': 'mouse',
+          'headset': 'headset',
+          'router': 'networking',
+          'wifi': 'networking',
+          'desktop': 'desktop',
+        };
+
+        String? matchedCat;
+        for (final entry in categoryKeywords.entries) {
+          if (query.contains(entry.key)) {
+            matchedCat = entry.value;
+            break;
+          }
+        }
+
+        final existingIds = results.map((p) => p.id).toSet();
+        if (matchedCat != null) {
+          final catProducts = provider.allProducts.where((p) => p.categoryId.toLowerCase() == matchedCat).toList();
+          for (final p in catProducts) {
+            if (!existingIds.contains(p.id)) {
+              results.add(p);
+              existingIds.add(p.id);
+            }
+          }
+        } else {
+          // Direct categoryId matching if query contains or matches category ID
+          final directCatProducts = provider.allProducts.where((p) => p.categoryId.toLowerCase().contains(query)).toList();
+          for (final p in directCatProducts) {
+            if (!existingIds.contains(p.id)) {
+              results.add(p);
+              existingIds.add(p.id);
+            }
+          }
+        }
 
         if (results.isEmpty) {
           return Center(

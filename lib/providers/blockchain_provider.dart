@@ -17,11 +17,22 @@ class BlockchainProvider extends ChangeNotifier {
     initWallet('guest', 'Pengguna Baru');
   }
 
-  Future<void> initWallet(String userId, String userName) async {
+  Future<void> initWallet(String userId, String userName, {bool isAdmin = false}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
+      if (isAdmin) {
+        _wallet = UserWallet(
+          userId: userId,
+          userName: userName,
+          totalExp: 999999,
+          currentTier: MemberTier.platinum,
+        );
+        await _saveWallet();
+        return;
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final key = 'blockchain_wallet_$userId';
       final jsonString = prefs.getString(key);
@@ -35,9 +46,27 @@ class BlockchainProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error loading wallet: $e');
-      _wallet = UserWallet(userId: userId, userName: userName);
+      _wallet = UserWallet(
+        userId: userId,
+        userName: userName,
+        totalExp: isAdmin ? 999999 : 0,
+        currentTier: isAdmin ? MemberTier.platinum : MemberTier.bronze,
+      );
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void syncWithUser(String userId, String userName, bool isAdmin) {
+    if (isAdmin && (_wallet.currentTier != MemberTier.platinum || _wallet.totalExp < 999999)) {
+      _wallet = UserWallet(
+        userId: userId,
+        userName: userName,
+        totalExp: 999999,
+        currentTier: MemberTier.platinum,
+      );
+      _saveWallet();
       notifyListeners();
     }
   }

@@ -1,5 +1,7 @@
 enum MembershipTier { bronze, silver, gold, platinum }
 
+enum UserRole { user, cashier, admin }
+
 /// Represents a user in the application.
 class UserModel {
   final String id;
@@ -12,6 +14,10 @@ class UserModel {
   final MembershipTier membershipTier;
   final int points;
   final DateTime joinDate;
+  final UserRole role;
+  final double? latitude;
+  final double? longitude;
+  final String? profileImageUrl;
 
   const UserModel({
     required this.id,
@@ -24,6 +30,10 @@ class UserModel {
     required this.membershipTier,
     required this.points,
     required this.joinDate,
+    this.role = UserRole.user,
+    this.latitude,
+    this.longitude,
+    this.profileImageUrl,
   });
 
   UserModel copyWith({
@@ -37,6 +47,10 @@ class UserModel {
     MembershipTier? membershipTier,
     int? points,
     DateTime? joinDate,
+    UserRole? role,
+    double? latitude,
+    double? longitude,
+    String? profileImageUrl,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -49,6 +63,10 @@ class UserModel {
       membershipTier: membershipTier ?? this.membershipTier,
       points: points ?? this.points,
       joinDate: joinDate ?? this.joinDate,
+      role: role ?? this.role,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
     );
   }
 
@@ -63,6 +81,7 @@ class UserModel {
       membershipTier: MembershipTier.bronze,
       points: 0,
       joinDate: DateTime.now(),
+      role: UserRole.user,
     );
   }
 }

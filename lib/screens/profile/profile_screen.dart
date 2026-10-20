@@ -12,6 +12,9 @@ import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 import 'package:doctor_computer/screens/member/member_screen.dart';
+import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/models/blockchain/blockchain.dart';
+import 'package:doctor_computer/core/constants/app_constants.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -33,12 +36,12 @@ class ProfileScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.person_outline, size: 80, color: AppColors.textTertiary),
-                        Text('Masuk untuk melanjutkan / Login to continue', style: AppTextStyles.titleMedium),
+                        Text('Masuk untuk melanjutkan', style: AppTextStyles.titleMedium),
                         const SizedBox(height: 16),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 32.0),
                           child: GradientButton(
-                            label: 'Masuk / Login',
+                            label: 'Masuk',
                             onPressed: () => Navigator.pushNamed(context, AppRouter.login),
                           ),
                         ),
@@ -47,7 +50,7 @@ class ProfileScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 32.0),
                           child: OutlinedButton(
                             onPressed: () => Navigator.pushNamed(context, AppRouter.register),
-                            child: const Text('Daftar / Register'),
+                            child: const Text('Daftar'),
                           ),
                         ),
                       ],
@@ -58,6 +61,23 @@ class ProfileScreen extends StatelessWidget {
 
               final user = authProvider.currentUser!;
               final initials = user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?';
+              final blockchain = context.watch<BlockchainProvider>();
+              final isAdmin = user.role == UserRole.admin;
+
+              // Ensure blockchain wallet matches admin level
+              if (isAdmin) {
+                blockchain.syncWithUser(user.id, user.fullName, true);
+              }
+
+              final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
+              final totalExp = isAdmin ? 999999 : blockchain.totalExp;
+              final nextTier = isAdmin ? null : currentTier.getNextTier();
+
+              final progress = isAdmin
+                  ? 1.0
+                  : (nextTier != null
+                      ? ((totalExp - currentTier.value) / (nextTier.value - currentTier.value)).clamp(0.0, 1.0)
+                      : 1.0);
 
               return Column(
                 children: [
@@ -66,7 +86,12 @@ class ProfileScreen extends StatelessWidget {
                     child: CircleAvatar(
                       radius: 45,
                       backgroundColor: AppColors.surface,
-                      child: Text(initials, style: AppTextStyles.heading2.copyWith(color: AppColors.primary)),
+                      backgroundImage: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
+                          ? NetworkImage(user.profileImageUrl!)
+                          : null,
+                      child: user.profileImageUrl == null || user.profileImageUrl!.isEmpty
+                          ? Text(initials, style: AppTextStyles.heading2.copyWith(color: AppColors.primary))
+                          : null,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -75,12 +100,21 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Center(
                     child: Chip(
-                      label: Text(user.membershipTier.name.toUpperCase()),
-                      side: BorderSide(color: _getTierColor(user.membershipTier)),
+                      label: Text(
+                        isAdmin ? 'PLATINUM (MAX)' : currentTier.name.toUpperCase(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      backgroundColor: Color(currentTier.color).withValues(alpha: 0.15),
+                      side: BorderSide(color: Color(currentTier.color)),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Center(child: Text('${user.points} Points', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.accent))),
+                  Center(
+                    child: Text(
+                      isAdmin ? '999,999 EXP (MAX) • Level Tertinggi' : '$totalExp EXP (Diskon ${currentTier.discountPercent}%)',
+                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.accent, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -88,19 +122,41 @@ class ProfileScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Progress Member', style: AppTextStyles.titleSmall),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: 0.6,
-                            backgroundColor: AppColors.surface,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(height: 4),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Current: ${user.membershipTier.name}'),
-                              const Text('Next: Gold (400 pts)'),
+                              Text('Progress Member (Blockchain)', style: AppTextStyles.titleSmall),
+                              Text(
+                                isAdmin
+                                    ? 'Maksimal (Platinum)'
+                                    : (nextTier != null
+                                        ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
+                                        : 'Maksimal (${currentTier.name})'),
+                                style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 10,
+                              backgroundColor: AppColors.surface,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(currentTier.color)),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Current: ${isAdmin ? 'Platinum (MAX)' : currentTier.name}', style: AppTextStyles.caption),
+                              Text(
+                                isAdmin
+                                    ? 'Level Tertinggi (Maksimal)'
+                                    : (nextTier != null ? 'Next: ${nextTier.name}' : 'Level Tertinggi'),
+                                style: AppTextStyles.caption,
+                              ),
                             ],
                           ),
                         ],
@@ -108,7 +164,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _buildMenuItem(context, Icons.receipt_long, 'Pesanan Saya / My Orders', () => Navigator.pushNamed(context, AppRouter.orderHistory)),
+                  _buildMenuItem(context, Icons.receipt_long, 'Pesanan Saya', () => Navigator.pushNamed(context, AppRouter.orderHistory)),
                   Consumer<WishlistProvider>(
                     builder: (context, wishlist, child) => _buildMenuItem(
                       context, 
@@ -128,11 +184,22 @@ class ProfileScreen extends StatelessWidget {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberScreen()));
                   }),
                   _buildMenuItem(context, Icons.card_membership, 'Membership', () => Navigator.pushNamed(context, AppRouter.membership)),
-                  _buildMenuItem(context, Icons.edit, 'Edit Profil / Edit Profile', () => Navigator.pushNamed(context, AppRouter.editProfile)),
+                  if (user.role == UserRole.admin || user.role == UserRole.cashier)
+                    _buildMenuItem(
+                      context, 
+                      Icons.admin_panel_settings, 
+                      user.role == UserRole.admin ? '🔧 Dashboard Admin' : '🔧 Dashboard Kasir', 
+                      () => Navigator.pushNamed(context, AppRouter.adminDashboard),
+                      trailing: Chip(
+                        label: Text(user.role.name.toUpperCase(), style: const TextStyle(fontSize: 10)),
+                        backgroundColor: AppColors.warning,
+                      ),
+                    ),
+                  _buildMenuItem(context, Icons.edit, 'Edit Profil', () => Navigator.pushNamed(context, AppRouter.editProfile)),
                   _buildMenuItem(
                     context, 
                     Icons.dark_mode, 
-                    'Tema / Theme', 
+                    'Tema', 
                     () { context.read<ThemeProvider>().toggleTheme(); }, 
                     trailing: Switch(
                       value: context.watch<ThemeProvider>().themeMode == ThemeMode.dark, 
@@ -140,15 +207,26 @@ class ProfileScreen extends StatelessWidget {
                       activeColor: AppColors.primary,
                     ),
                   ),
-                  _buildMenuItem(context, Icons.info_outline, 'Tentang / About', () {
-                    showAboutDialog(context: context, applicationName: 'Doctor Computer', applicationVersion: '1.0.0');
+                  _buildMenuItem(context, Icons.info_outline, 'Tentang', () {
+                    showAboutDialog(
+                      context: context, 
+                      applicationName: 'Doctor Computer',
+                      applicationVersion: 'Beta v${AppConstants.appVersion}',
+                      applicationLegalese: '© 2026 Doctor Computer. All rights reserved.',
+                      children: [
+                        const SizedBox(height: 16),
+                        Text('Aplikasi toko komputer dan perakitan PC terpercaya.', style: AppTextStyles.bodySmall),
+                        const SizedBox(height: 8),
+                        Text('Status: Beta', style: AppTextStyles.caption.copyWith(color: AppColors.warning)),
+                      ],
+                    );
                   }),
-                  _buildMenuItem(context, Icons.logout, 'Keluar / Logout', () {
+                  _buildMenuItem(context, Icons.logout, 'Keluar', () {
                     showDialog(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text('Konfirmasi / Confirmation'),
-                        content: const Text('Apakah Anda yakin ingin keluar? / Are you sure you want to logout?'),
+                        title: const Text('Konfirmasi'),
+                        content: const Text('Apakah Anda yakin ingin keluar?'),
                         actions: [
                           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
                           TextButton(
@@ -171,15 +249,6 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Color _getTierColor(MembershipTier tier) {
-    switch (tier) {
-      case MembershipTier.bronze: return AppColors.bronze;
-      case MembershipTier.silver: return AppColors.silver;
-      case MembershipTier.gold: return AppColors.gold;
-      case MembershipTier.platinum: return AppColors.platinum;
-    }
   }
 
   Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap, {Widget? trailing, Color? color}) {

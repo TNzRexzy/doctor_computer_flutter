@@ -148,28 +148,101 @@ class AiBottleneckSheet extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Game FPS Estimates
-            Text('Estimasi FPS Pada Game Populer:', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Estimasi FPS Pada Game Populer:', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    _buildLegendDot(AppColors.success, '≥60'),
+                    const SizedBox(width: 8),
+                    _buildLegendDot(AppColors.warning, '30-59'),
+                    const SizedBox(width: 8),
+                    _buildLegendDot(AppColors.error, '<30'),
+                  ],
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
               ),
-              child: Column(
-                children: fpsMap.entries.map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(entry.key, style: AppTextStyles.bodySmall),
-                        Text(entry.value, style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent, fontWeight: FontWeight.bold)),
-                      ],
+              child: fpsMap.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                          'Pilih CPU dan GPU untuk melihat estimasi FPS.',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: fpsMap.entries.map((entry) {
+                        final fpsValue = int.tryParse(entry.value.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                        final Color fpsColor;
+                        if (fpsValue >= 60) {
+                          fpsColor = AppColors.success;
+                        } else if (fpsValue >= 30) {
+                          fpsColor = AppColors.warning;
+                        } else {
+                          fpsColor = AppColors.error;
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5.0),
+                          child: Row(
+                            children: [
+                              Icon(Icons.sports_esports, size: 16, color: AppColors.textSecondary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  entry.key,
+                                  style: AppTextStyles.bodySmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: fpsColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: fpsColor.withValues(alpha: 0.4)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: fpsColor,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      entry.value,
+                                      style: TextStyle(
+                                        color: fpsColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
             ),
 
             const SizedBox(height: 20),
@@ -212,6 +285,31 @@ class AiBottleneckSheet extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 }

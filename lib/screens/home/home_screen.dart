@@ -17,6 +17,7 @@ import 'package:doctor_computer/screens/notifications/notifications_screen.dart'
 import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
 import 'package:doctor_computer/screens/member/member_screen.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
+import 'package:doctor_computer/screens/main_nav_screen.dart';
 
 /// Home Screen
 class HomeScreen extends StatelessWidget {
@@ -94,7 +95,7 @@ class HomeScreen extends StatelessWidget {
                         Icon(Icons.search, color: AppColors.textSecondary),
                         const SizedBox(width: 8),
                         Text(
-                          'Cari produk... / Search products...',
+                          'Cari produk...',
                           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
                         ),
                       ],
@@ -172,10 +173,10 @@ class HomeScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Kategori / Categories', style: AppTextStyles.titleMedium),
+                    Text('Kategori', style: AppTextStyles.titleMedium),
                     TextButton(
                       onPressed: () => Navigator.pushNamed(context, AppRouter.catalog),
-                      child: Text('Lihat Semua / See All', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+                      child: Text('Lihat Semua', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
                     ),
                   ],
                 ),
@@ -234,7 +235,7 @@ class HomeScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Produk Terlaris / Best Sellers', style: AppTextStyles.titleMedium),
+                    Text('Produk Terlaris', style: AppTextStyles.titleMedium),
                     TextButton(
                       onPressed: () => Navigator.pushNamed(context, AppRouter.catalog),
                       child: Text('Lihat Semua', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
@@ -271,7 +272,7 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text('Baru Datang / New Arrivals', style: AppTextStyles.titleMedium),
+                child: Text('Baru Datang', style: AppTextStyles.titleMedium),
               ),
               const SizedBox(height: 12),
               Consumer2<ProductProvider, WishlistProvider>(
@@ -307,8 +308,13 @@ class HomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: GestureDetector(
                   onTap: () {
-                    // For now, push pcBuilder route directly as requested
-                    Navigator.pushNamed(context, AppRouter.pcBuilder);
+                    // Switch to PC Builder tab in MainNavScreen instead of pushing new route
+                    final mainNavState = context.findAncestorStateOfType<MainNavScreenState>();
+                    if (mainNavState != null) {
+                      mainNavState.switchToTab(2);
+                    } else {
+                      Navigator.pushNamed(context, AppRouter.pcBuilder);
+                    }
                   },
                   child: GlassCard(
                     padding: const EdgeInsets.all(16),
@@ -330,9 +336,9 @@ class HomeScreen extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Rakit PC Impianmu / Build Your Dream PC', style: AppTextStyles.titleMedium),
+                                  Text('Rakit PC Impianmu', style: AppTextStyles.titleMedium),
                                   const SizedBox(height: 4),
-                                  Text('Konfigurator interaktif / Interactive configurator', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                                  Text('Konfigurator interaktif', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                                 ],
                               ),
                             ),
