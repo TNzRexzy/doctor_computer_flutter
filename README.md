@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.3-beta
+* **Release Version:** 1.0.4-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -86,7 +86,7 @@ The system implements strict role-based authorization to divide administrative f
 3. **Database Schema Fallback Handling:** Implemented defensive schema mapping to gracefully handle environments where new columns (`role`, `profile_image_url`, `latitude`, `longitude`) are pending migration, preventing `PGRST204` crashes during registration.
 4. **Registration Error Handling:** Enhanced authentication exception handling to intercept HTTP 422 errors and display clear duplicate account notices.
 5. **Flexible Authentication Input:** Extended the login credential validator to accept identity aliases (`admin`, `cashier`) alongside standard email formats.
-6. **Application Version Metadata:** Synchronized application build metadata across dialogs and constants to display `Beta v1.0.3-beta`.
+6. **Application Version Metadata:** Synchronized application build metadata across dialogs and constants to display `Beta v1.0.4-beta`.
 7. **Code Analysis & Lint Compliance:** Eliminated unused imports, corrected 8-digit hexadecimal color values, and resolved asynchronous context gap warnings. The codebase passes `flutter analyze` with 0 issues.
 
 ---
@@ -103,6 +103,19 @@ The system implements strict role-based authorization to divide administrative f
 | BUG-006 | AI Smart Search category pollution | Query algorithm evaluated textual description tokens before category categorization | Resolved (Category-first isolation implemented) |
 | BUG-007 | Database schema cache error on register (PGRST204) | Insert query passed uncommitted schema columns | Resolved (Standardized core schema insert with fallback role resolution) |
 | BUG-008 | PostgREST single object coercion failure on login | Multiple matching rows triggered coercion exceptions on `.single()` | Resolved (Transitioned to `.limit(1)` query format) |
+| BUG-009 | Admin user editing does not persist to database | Supabase RLS blocks cross-user updates; no `role` column in schema | Resolved (Dual persistence with SharedPreferences cache + RLS policy migration) |
+
+---
+
+## Version 1.0.4-beta Changelog
+
+1. **Admin Product Management:** Full CRUD operations for products in the admin/cashier dashboard -- add new products, edit name/brand/price/stock/description, and delete products with Supabase sync and local cache fallback.
+2. **Flash Sale Configuration:** Admin and cashier can toggle Flash Sale status on any product, configure discount percentage via slider, set sale price and original price, with real-time product catalog updates.
+3. **Review Reply System:** Admin and cashier can reply to customer reviews from a dedicated Reviews tab. Replies display as "Respon Penjual" cards on both the admin dashboard and the public product detail screen, persisted via SharedPreferences cache and Supabase sync.
+4. **User Access Editing Fix:** Admin user management now correctly persists role, tier, name, and points changes. Implements dual-write strategy (Supabase update + SharedPreferences cache) so changes take effect immediately even if Supabase RLS rejects the remote write.
+5. **ReviewProvider Architecture:** New centralized `ReviewProvider` managing review data from mock, Supabase, and local cache with merge strategy. Registered globally via `MultiProvider`.
+6. **ProductModel Enhancement:** Added `copyWith`, `toMap`, and `fromMap` methods to `ProductModel` for admin CRUD serialization.
+7. **SQL Migration:** Added `supabase/migrations/add_admin_features.sql` with role column, review reply columns, and RLS policies for admin operations.
 
 ---
 

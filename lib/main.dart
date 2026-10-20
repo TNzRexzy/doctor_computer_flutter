@@ -10,6 +10,7 @@ import 'package:doctor_computer/providers/theme_provider.dart';
 import 'package:doctor_computer/providers/blockchain_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/core/config/env_config.dart';
 import 'package:doctor_computer/app.dart';
 
@@ -48,6 +49,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => BlockchainProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProxyProvider<AuthProvider, OrderProvider>(
           create: (_) {
             final op = OrderProvider();

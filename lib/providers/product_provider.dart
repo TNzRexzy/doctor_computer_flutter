@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/category_model.dart';
 import 'package:doctor_computer/data/mock/mock_categories.dart';
@@ -8,6 +10,9 @@ import 'package:doctor_computer/core/constants/app_images.dart';
 
 class ProductProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
+  static const String _prefCustomProductsKey = 'admin_custom_products';
+  static const String _prefProductOverridesKey = 'admin_product_overrides';
+  static const String _prefDeletedProductsKey = 'admin_deleted_products';
 
   String? _selectedCategoryId;
   String _searchQuery = '';
@@ -35,7 +40,6 @@ class ProductProvider extends ChangeNotifier {
 
     if (_selectedCategoryId != null) {
       result = result.where((p) {
-        // Match both exact category_id or name lowercase
         if (p.categoryId == _selectedCategoryId) return true;
         final selectedCat = categories.cast<CategoryModel?>().firstWhere(
               (c) => c?.id == _selectedCategoryId,
@@ -131,8 +135,11 @@ class ProductProvider extends ChangeNotifier {
         _categories = List.from(mockCategories);
       }
 
+      final Map<String, ProductModel> productMap = {};
+
+      // 1. Initial products from Supabase or mock
       if (prodsRes.isNotEmpty) {
-        _allProducts = prodsRes.map((p) {
+        for (final p in prodsRes) {
           final rawImages = p['image_url'];
           final List<String> images = AppImages.resolveProductImages(
             rawImages,
@@ -149,9 +156,10 @@ class ProductProvider extends ChangeNotifier {
 
           final price = (p['price'] as num?)?.toDouble() ?? 0.0;
           final origPrice = (p['original_price'] as num?)?.toDouble();
+          final id = p['id']?.toString() ?? '';
 
-          return ProductModel(
-            id: p['id']?.toString() ?? '',
+          productMap[id] = ProductModel(
+            id: id,
             name: p['name']?.toString() ?? '',
             description: p['description']?.toString() ?? '',
             descriptionId: p['description_id']?.toString() ?? p['description']?.toString() ?? '',
@@ -164,13 +172,67 @@ class ProductProvider extends ChangeNotifier {
             rating: (p['rating'] as num?)?.toDouble() ?? 4.5,
             reviewCount: (p['review_count'] as num?)?.toInt() ?? 10,
             stock: (p['stock'] as num?)?.toInt() ?? 10,
-            isNew: p['is_new'] as bool? ?? true,
+            isNew: p['is_new'] as bool? ?? false,
             isOnSale: p['is_on_sale'] as bool? ?? (origPrice != null && origPrice > price),
           );
-        }).toList();
+        }
       } else {
-        _allProducts = List.from(mockProducts);
+        for (final p in mockProducts) {
+          productMap[p.id] = p;
+        }
       }
+
+      // 2. Merge local custom products from SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final customJson = prefs.getString(_prefCustomProductsKey);
+        if (customJson != null && customJson.isNotEmpty) {
+          final List list = jsonDecode(customJson);
+          for (final item in list) {
+            final prod = ProductModel.fromMap(item as Map<String, dynamic>);
+            productMap[prod.id] = prod;
+          }
+        }
+
+        // 3. Apply product overrides (flash sale, price, stock edits)
+        final overridesJson = prefs.getString(_prefProductOverridesKey);
+        if (overridesJson != null && overridesJson.isNotEmpty) {
+          final Map<String, dynamic> overrides = jsonDecode(overridesJson);
+          for (final entry in overrides.entries) {
+            final pid = entry.key;
+            if (productMap.containsKey(pid)) {
+              final overMap = entry.value as Map<String, dynamic>;
+              final existing = productMap[pid]!;
+              productMap[pid] = existing.copyWith(
+                name: overMap['name']?.toString() ?? existing.name,
+                price: (overMap['price'] as num?)?.toDouble() ?? existing.price,
+                originalPrice: overMap.containsKey('original_price')
+                    ? (overMap['original_price'] as num?)?.toDouble()
+                    : existing.originalPrice,
+                stock: (overMap['stock'] as num?)?.toInt() ?? existing.stock,
+                isOnSale: overMap['is_on_sale'] as bool? ?? existing.isOnSale,
+                brand: overMap['brand']?.toString() ?? existing.brand,
+                categoryId: overMap['category_id']?.toString() ?? existing.categoryId,
+                description: overMap['description']?.toString() ?? existing.description,
+                descriptionId: overMap['description']?.toString() ?? existing.descriptionId,
+              );
+            }
+          }
+        }
+
+        // 4. Remove deleted products
+        final deletedJson = prefs.getString(_prefDeletedProductsKey);
+        if (deletedJson != null && deletedJson.isNotEmpty) {
+          final List deletedList = jsonDecode(deletedJson);
+          for (final id in deletedList) {
+            productMap.remove(id.toString());
+          }
+        }
+      } catch (e) {
+        debugPrint('Error applying product cache in ProductProvider: $e');
+      }
+
+      _allProducts = productMap.values.toList();
     } catch (e) {
       debugPrint('Error loading Supabase products: $e');
       if (_categories.isEmpty) _categories = List.from(mockCategories);
@@ -181,7 +243,151 @@ class ProductProvider extends ChangeNotifier {
     }
   }
 
+  // ============================================================
+  // ADMIN & CASHIER PRODUCT MANAGEMENT
+  // ============================================================
 
+  /// Adds a new product to the catalog, caches locally, and syncs to Supabase.
+  Future<bool> addProduct(ProductModel product) async {
+    _allProducts.insert(0, product);
+    notifyListeners();
+
+    // 1. Save to SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<dynamic> customList = [];
+      final existingJson = prefs.getString(_prefCustomProductsKey);
+      if (existingJson != null && existingJson.isNotEmpty) {
+        customList = jsonDecode(existingJson);
+      }
+      customList.removeWhere((item) => item['id'] == product.id);
+      customList.insert(0, product.toMap());
+      await prefs.setString(_prefCustomProductsKey, jsonEncode(customList));
+    } catch (e) {
+      debugPrint('Error caching new product: $e');
+    }
+
+    // 2. Sync to Supabase products table
+    try {
+      await supabase.from('products').insert(product.toMap());
+    } catch (e) {
+      debugPrint('Supabase add product notice: $e');
+    }
+
+    return true;
+  }
+
+  /// Updates an existing product details, price, stock, or flash sale status.
+  Future<bool> updateProduct(ProductModel product) async {
+    final index = _allProducts.indexWhere((p) => p.id == product.id);
+    if (index != -1) {
+      _allProducts[index] = product;
+    } else {
+      _allProducts.insert(0, product);
+    }
+    notifyListeners();
+
+    // 1. Save override to SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> overrides = {};
+      final existingJson = prefs.getString(_prefProductOverridesKey);
+      if (existingJson != null && existingJson.isNotEmpty) {
+        overrides = Map<String, dynamic>.from(jsonDecode(existingJson));
+      }
+      overrides[product.id] = product.toMap();
+      await prefs.setString(_prefProductOverridesKey, jsonEncode(overrides));
+    } catch (e) {
+      debugPrint('Error caching product update: $e');
+    }
+
+    // 2. Sync to Supabase products table
+    try {
+      await supabase.from('products').update(product.toMap()).eq('id', product.id);
+    } catch (e) {
+      debugPrint('Supabase update product notice: $e');
+    }
+
+    return true;
+  }
+
+  /// Toggles Flash Sale on a product with optional sale price and original price.
+  Future<bool> toggleFlashSale(
+    String productId,
+    bool isOnSale, {
+    double? salePrice,
+    double? originalPrice,
+  }) async {
+    final prod = getProductById(productId);
+    if (prod == null) return false;
+
+    double newPrice = prod.price;
+    double? newOrigPrice = prod.originalPrice;
+
+    if (isOnSale) {
+      if (salePrice != null && salePrice > 0) {
+        newPrice = salePrice;
+        newOrigPrice = originalPrice ?? (prod.originalPrice ?? prod.price);
+      } else if (newOrigPrice == null || newOrigPrice <= prod.price) {
+        // Default 20% discount if not specified
+        newOrigPrice = prod.price;
+        newPrice = prod.price * 0.8;
+      }
+    } else {
+      // Revert from flash sale
+      if (prod.originalPrice != null && prod.originalPrice! > prod.price) {
+        newPrice = prod.originalPrice!;
+        newOrigPrice = null;
+      }
+    }
+
+    final updated = prod.copyWith(
+      isOnSale: isOnSale,
+      price: newPrice,
+      originalPrice: newOrigPrice,
+    );
+
+    return await updateProduct(updated);
+  }
+
+  /// Deletes a product from local memory, cache, and Supabase.
+  Future<bool> deleteProduct(String productId) async {
+    _allProducts.removeWhere((p) => p.id == productId);
+    notifyListeners();
+
+    // 1. Update SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Remove from custom products
+      final customJson = prefs.getString(_prefCustomProductsKey);
+      if (customJson != null && customJson.isNotEmpty) {
+        final List customList = jsonDecode(customJson);
+        customList.removeWhere((item) => item['id'] == productId);
+        await prefs.setString(_prefCustomProductsKey, jsonEncode(customList));
+      }
+      // Add to deleted products list
+      List<dynamic> deletedList = [];
+      final delJson = prefs.getString(_prefDeletedProductsKey);
+      if (delJson != null && delJson.isNotEmpty) {
+        deletedList = jsonDecode(delJson);
+      }
+      if (!deletedList.contains(productId)) {
+        deletedList.add(productId);
+      }
+      await prefs.setString(_prefDeletedProductsKey, jsonEncode(deletedList));
+    } catch (e) {
+      debugPrint('Error updating deleted products cache: $e');
+    }
+
+    // 2. Sync to Supabase
+    try {
+      await supabase.from('products').delete().eq('id', productId);
+    } catch (e) {
+      debugPrint('Supabase delete product notice: $e');
+    }
+
+    return true;
+  }
 
   IconData _mapIcon(String iconName) {
     final lower = iconName.toLowerCase();

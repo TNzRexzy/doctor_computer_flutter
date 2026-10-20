@@ -6,10 +6,10 @@ import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/providers/wishlist_provider.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
+import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
-import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 
 /// Product Detail Screen
 class ProductDetailScreen extends StatelessWidget {
@@ -20,7 +20,7 @@ class ProductDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
-    final reviews = mockReviews.where((r) => r.productId == product.id).toList();
+    final reviews = context.watch<ReviewProvider>().getReviewsForProduct(product.id);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -77,7 +77,7 @@ class ProductDetailScreen extends StatelessWidget {
                                   Icon(Icons.star, color: Colors.amber, size: 16),
                                   SizedBox(width: 4),
                                   Text(
-                                    '${product.rating} (${product.reviewCount} reviews)',
+                                    '${product.rating} (${product.reviewCount} ulasan)',
                                     style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                                   ),
                                 ],
@@ -154,9 +154,18 @@ class ProductDetailScreen extends StatelessWidget {
                         SizedBox(height: 8),
                         Text(product.descriptionId, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
                         SizedBox(height: 16),
-                        Text('Ulasan', style: AppTextStyles.titleMedium),
+                        Text('Ulasan (${reviews.length})', style: AppTextStyles.titleMedium),
                         SizedBox(height: 8),
-                        ...reviews.take(3).map((r) => Padding(
+                        if (reviews.isEmpty)
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Text(
+                              'Belum ada ulasan untuk produk ini',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textTertiary),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ...reviews.take(5).map((r) => Padding(
                           padding: EdgeInsets.only(bottom: 8.0),
                           child: GlassCard(
                             padding: EdgeInsets.all(12),
@@ -186,6 +195,46 @@ class ProductDetailScreen extends StatelessWidget {
                                 ),
                                 SizedBox(height: 8),
                                 Text(r.comment, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                                // Seller reply
+                                if (r.reply != null && r.reply!.isNotEmpty) ...[
+                                  SizedBox(height: 10),
+                                  Container(
+                                    padding: EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.07),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.store, size: 14, color: AppColors.primary),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              'Respon Penjual${r.replyRole != null ? ' - ${r.replyRole == 'admin' ? 'Admin' : 'Kasir'}' : ''}',
+                                              style: AppTextStyles.caption.copyWith(
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(r.reply!, style: AppTextStyles.bodySmall),
+                                        if (r.replyDate != null)
+                                          Text(
+                                            r.replyDate!.toString().substring(0, 10),
+                                            style: AppTextStyles.caption.copyWith(
+                                              color: AppColors.textTertiary,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -271,6 +320,3 @@ class ProductDetailScreen extends StatelessWidget {
     );
   }
 }
-
-
-
