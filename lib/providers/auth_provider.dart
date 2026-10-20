@@ -18,6 +18,66 @@ class AuthProvider extends ChangeNotifier {
 
   final supabase = Supabase.instance.client;
 
+  AuthProvider() {
+    restoreSession();
+  }
+
+  // ============================================
+  // SESSION PERSISTENCE & RESTORATION
+  // ============================================
+  Future<void> _saveSessionToPrefs(UserModel user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('cached_active_user', jsonEncode(user.toMap()));
+      await prefs.setBool('is_logged_in', true);
+    } catch (e) {
+      debugPrint('Error caching user session: $e');
+    }
+  }
+
+  Future<void> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedInFlag = prefs.getBool('is_logged_in') ?? false;
+      final cachedUserJson = prefs.getString('cached_active_user');
+
+      // 1. Instant local restore from SharedPreferences (survives browser refresh)
+      if (isLoggedInFlag && cachedUserJson != null && cachedUserJson.isNotEmpty) {
+        try {
+          final Map<String, dynamic> userMap = jsonDecode(cachedUserJson);
+          _currentUser = UserModel.fromMap(userMap);
+          _isLoggedIn = true;
+          notifyListeners();
+        } catch (e) {
+          debugPrint('Error decoding cached user in restoreSession: $e');
+        }
+      }
+
+      // 2. Sync with Supabase Auth session if available
+      final supaUser = supabase.auth.currentUser;
+      if (supaUser != null) {
+        try {
+          final List res = await supabase
+              .from('users')
+              .select()
+              .eq('id', supaUser.id)
+              .limit(1);
+
+          if (res.isNotEmpty) {
+            _currentUser = _mapToUserModel(res.first as Map<String, dynamic>);
+            _isLoggedIn = true;
+            await _saveSessionToPrefs(_currentUser!);
+            notifyListeners();
+          }
+        } catch (e) {
+          debugPrint('Error syncing fresh Supabase profile: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('restoreSession error: $e');
+    }
+  }
+
   // ============================================
   // LOGIN
   // ============================================
@@ -62,6 +122,7 @@ class AuthProvider extends ChangeNotifier {
           );
           _isLoggedIn = true;
           _isLoading = false;
+          await _saveSessionToPrefs(_currentUser!);
           notifyListeners();
           return true;
         }
@@ -82,6 +143,7 @@ class AuthProvider extends ChangeNotifier {
           );
           _isLoggedIn = true;
           _isLoading = false;
+          await _saveSessionToPrefs(_currentUser!);
           notifyListeners();
           return true;
         }
@@ -96,17 +158,17 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      // 2. Fetch user profile dari tabel users using .limit(1) to avoid "Cannot coerce" error
+      // 2. Fetch user profile from users table
       final List res = await supabase
           .from('users')
           .select()
           .eq('id', userId)
           .limit(1);
 
-      Map<String, dynamic>? data = res.isNotEmpty ? res.first as Map<String, dynamic> : null;
-
-      if (data == null) {
-        // Try searching by email
+      Map<String, dynamic>? data;
+      if (res.isNotEmpty) {
+        data = res.first as Map<String, dynamic>;
+      } else {
         final List byEmail = await supabase
             .from('users')
             .select()
@@ -152,6 +214,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _isLoggedIn = true;
+      await _saveSessionToPrefs(_currentUser!);
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -207,7 +270,6 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // 2. Insert user profile into users table
-      // Standard columns that always exist in users table
       final insertData = {
         'id': userId,
         'full_name': name,
@@ -226,7 +288,6 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('Notice inserting profile on register: $e');
       }
 
-      // Every registered user automatically receives UserRole.user (biasa)
       _currentUser = UserModel(
         id: userId,
         fullName: name,
@@ -240,6 +301,7 @@ class AuthProvider extends ChangeNotifier {
         role: UserRole.user,
       );
       _isLoggedIn = true;
+      await _saveSessionToPrefs(_currentUser!);
 
       // Genesis Block
       try {
@@ -316,10 +378,9 @@ class AuthProvider extends ChangeNotifier {
             .update(updates)
             .eq('id', currentUserId);
       } catch (e) {
-        debugPrint('Notice updating profile: $e');
+        debugPrint('Notice updating profile table: $e');
       }
 
-      // Update local state
       _currentUser = _currentUser?.copyWith(
         fullName: name,
         phone: phone,
@@ -330,11 +391,14 @@ class AuthProvider extends ChangeNotifier {
         profileImageUrl: profileImageUrl ?? _currentUser?.profileImageUrl,
       );
 
-      return true;
+      if (_currentUser != null) {
+        await _saveSessionToPrefs(_currentUser!);
+      }
 
+      return true;
     } catch (e) {
       _errorMessage = e.toString();
-      debugPrint('Update exception: $e');
+      debugPrint('updateProfile exception: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -370,6 +434,9 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _currentUser = _currentUser?.copyWith(profileImageUrl: imageUrl);
+      if (_currentUser != null) {
+        await _saveSessionToPrefs(_currentUser!);
+      }
       return true;
     } catch (e) {
       _errorMessage = e.toString();
@@ -410,6 +477,9 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _currentUser = _currentUser?.copyWith(latitude: lat, longitude: lng);
+      if (_currentUser != null) {
+        await _saveSessionToPrefs(_currentUser!);
+      }
       return true;
     } catch (e) {
       _errorMessage = e.toString();
@@ -494,38 +564,25 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> logout() async {
     try {
       await supabase.auth.signOut();
-      _currentUser = null;
-      _isLoggedIn = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _currentUser = null;
-      _isLoggedIn = false;
-      notifyListeners();
-      return true;
-    }
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('cached_active_user');
+      await prefs.setBool('is_logged_in', false);
+    } catch (_) {}
+
+    _currentUser = null;
+    _isLoggedIn = false;
+    notifyListeners();
+    return true;
   }
 
   // ============================================
   // HELPER: Map response ke UserModel
   // ============================================
   UserModel _mapToUserModel(Map<String, dynamic> data) {
-    final email = data['email']?.toString() ?? '';
-    return UserModel(
-      id: data['id']?.toString() ?? '',
-      fullName: data['full_name']?.toString() ?? '',
-      email: email,
-      phone: data['phone']?.toString() ?? '',
-      address: data['address']?.toString() ?? '',
-      city: data['city']?.toString() ?? '',
-      membershipTier: _parseMembershipTier(data['membership_tier']),
-      points: (data['points'] as num? ?? 0).toInt(),
-      joinDate: _parseDateTime(data['join_date']),
-      role: _parseUserRole(data['role'], email: email),
-      latitude: (data['latitude'] as num?)?.toDouble(),
-      longitude: (data['longitude'] as num?)?.toDouble(),
-      profileImageUrl: data['profile_image_url']?.toString(),
-    );
+    return UserModel.fromMap(data);
   }
 
   UserRole _parseUserRole(dynamic role, {String? email}) {
@@ -551,41 +608,5 @@ class AuthProvider extends ChangeNotifier {
       }
     }
     return UserRole.user;
-  }
-
-  MembershipTier _parseMembershipTier(dynamic tier) {
-    if (tier == null) return MembershipTier.bronze;
-    if (tier is String) {
-      switch (tier.toLowerCase()) {
-        case 'bronze': return MembershipTier.bronze;
-        case 'silver': return MembershipTier.silver;
-        case 'gold':   return MembershipTier.gold;
-        case 'platinum': return MembershipTier.platinum;
-        default: return MembershipTier.bronze;
-      }
-    }
-    if (tier is num) {
-      switch (tier.toInt()) {
-        case 1: return MembershipTier.bronze;
-        case 2: return MembershipTier.silver;
-        case 3: return MembershipTier.gold;
-        case 4: return MembershipTier.platinum;
-        default: return MembershipTier.bronze;
-      }
-    }
-    return MembershipTier.bronze;
-  }
-
-  DateTime _parseDateTime(dynamic value) {
-    if (value == null) return DateTime.now();
-    if (value is DateTime) return value;
-    if (value is String) {
-      try {
-        return DateTime.parse(value);
-      } catch (_) {
-        return DateTime.now();
-      }
-    }
-    return DateTime.now();
   }
 }

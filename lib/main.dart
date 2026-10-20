@@ -32,14 +32,15 @@ Future<void> main() async {
     debugPrint('Supabase initialize notice: $e');
   }
 
-  // Ensure admin account exists (runs asynchronously in background, won't block startup)
+  // Restore authenticated user session before UI build
   final authProvider = AuthProvider();
+  await authProvider.restoreSession();
   authProvider.ensureAdminAccount();
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => authProvider),
+        ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => PcBuilderProvider()),
@@ -47,7 +48,22 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => BlockchainProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, OrderProvider>(
+          create: (_) {
+            final op = OrderProvider();
+            if (authProvider.currentUser?.id != null) {
+              op.setUserId(authProvider.currentUser!.id);
+            }
+            return op;
+          },
+          update: (_, auth, orderProvider) {
+            final op = orderProvider ?? OrderProvider();
+            if (auth.currentUser?.id != op.userId) {
+              op.setUserId(auth.currentUser?.id);
+            }
+            return op;
+          },
+        ),
       ],
       child: const DoctorComputerApp(),
     ),

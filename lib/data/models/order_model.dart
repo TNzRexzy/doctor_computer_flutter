@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
@@ -84,4 +85,67 @@ class OrderModel {
   bool get canEditRating => hasRating && daysSinceRating <= 7;
 
   int get remainingEditDays => 7 - daysSinceRating;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'items': items.map((it) => it.toMap()).toList(),
+      'total_price': totalPrice,
+      'status': status.name,
+      'order_date': orderDate.toIso8601String(),
+      'shipping_address': shippingAddress,
+      'payment_method': paymentMethod,
+      'tracking_number': trackingNumber,
+      'courier': courier,
+      'warranty_months': warrantyDurationMonths,
+      'serial_number': serialNumber,
+      'rating': rating,
+      'review_comment': reviewComment,
+      'rated_at': ratedAt?.toIso8601String(),
+    };
+  }
+
+  factory OrderModel.fromMap(Map<String, dynamic> map) {
+    List<CartItemModel> orderItems = [];
+    final rawItems = map['items'] ?? map['items_summary'];
+    if (rawItems != null) {
+      try {
+        final list = rawItems is String ? (jsonDecode(rawItems) as List) : (rawItems as List);
+        orderItems = list
+            .map((item) => CartItemModel.fromMap(item as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        debugPrint('Error decoding order items: $e');
+      }
+    }
+
+    OrderStatus parseStatus(dynamic s) {
+      if (s is String) {
+        switch (s.toLowerCase()) {
+          case 'processing': return OrderStatus.processing;
+          case 'shipped': return OrderStatus.shipped;
+          case 'delivered': return OrderStatus.delivered;
+          case 'cancelled': return OrderStatus.cancelled;
+        }
+      }
+      return OrderStatus.processing;
+    }
+
+    return OrderModel(
+      id: map['id']?.toString() ?? '',
+      items: orderItems,
+      totalPrice: (map['total_price'] as num?)?.toDouble() ?? 0,
+      status: parseStatus(map['status']),
+      orderDate: DateTime.tryParse(map['order_date']?.toString() ?? '') ?? DateTime.now(),
+      shippingAddress: map['shipping_address']?.toString() ?? '',
+      paymentMethod: map['payment_method']?.toString() ?? '',
+      trackingNumber: map['tracking_number']?.toString() ?? 'JNE-DC98124982',
+      courier: map['courier']?.toString() ?? 'JNE Reguler',
+      warrantyDurationMonths: (map['warranty_months'] as num?)?.toInt() ?? 24,
+      serialNumber: map['serial_number']?.toString() ?? 'SN-DC2026-00918',
+      rating: (map['rating'] as num?)?.toDouble(),
+      reviewComment: map['review_comment']?.toString(),
+      ratedAt: map['rated_at'] != null ? DateTime.tryParse(map['rated_at'].toString()) : null,
+    );
+  }
 }

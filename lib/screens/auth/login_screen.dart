@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/validators.dart';
@@ -21,6 +22,28 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _rememberEmail = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('saved_login_email');
+      if (savedEmail != null && savedEmail.isNotEmpty) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _rememberEmail = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading saved email: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -32,6 +55,20 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() async {
     if (_formKey.currentState?.validate() ?? false) {
       final input = _emailController.text.trim();
+      final auth = context.read<AuthProvider>();
+
+      // Persist or clear remembered email
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (_rememberEmail) {
+          await prefs.setString('saved_login_email', input);
+        } else {
+          await prefs.remove('saved_login_email');
+        }
+      } catch (e) {
+        debugPrint('Error saving remembered email: $e');
+      }
+
       String email = input;
       if (input.toLowerCase() == 'admin') {
         email = 'admin@doctorcomputer.id';
@@ -39,14 +76,15 @@ class _LoginScreenState extends State<LoginScreen> {
         email = 'cashier@doctorcomputer.id';
       }
 
-      final success = await context.read<AuthProvider>().login(
+      final success = await auth.login(
         email,
         _passwordController.text,
       );
-      if (success && mounted) {
+      if (!mounted) return;
+      if (success) {
         Navigator.pushReplacementNamed(context, AppRouter.mainNav);
-      } else if (mounted) {
-        final errorMsg = context.read<AuthProvider>().errorMessage ?? 'Login gagal. Silakan periksa kredensial Anda.';
+      } else {
+        final errorMsg = auth.errorMessage ?? 'Login gagal. Silakan periksa kredensial Anda.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMsg)),
         );
@@ -122,18 +160,54 @@ class _LoginScreenState extends State<LoginScreen> {
                         validator: Validators.validatePassword,
                         style: AppTextStyles.bodyMedium,
                       ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {},
-                          child: Text(
-                            'Lupa Password?',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: _rememberEmail,
+                                  activeColor: AppColors.primary,
+                                  checkColor: AppColors.buttonText,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _rememberEmail = val ?? false;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _rememberEmail = !_rememberEmail;
+                                  });
+                                },
+                                child: Text(
+                                  'Ingat email saya',
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
+                          TextButton(
+                            onPressed: () {},
+                            child: Text(
+                              'Lupa Password?',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       GradientButton(
                         label: 'Masuk',
                         onPressed: _login,
@@ -206,4 +280,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

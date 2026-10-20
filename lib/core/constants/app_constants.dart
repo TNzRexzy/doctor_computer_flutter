@@ -4,7 +4,7 @@ class AppConstants {
 
   static const String appName = 'Doctor Computer';
   static const String appTagline = 'Your Trusted Tech Partner';
-  static const String appVersion = '1.0.1-beta';
+  static const String appVersion = '1.0.2-beta';
 
   static const double standardBuildFee = 250000.0;
   static const double premiumBuildFee = 500000.0;
