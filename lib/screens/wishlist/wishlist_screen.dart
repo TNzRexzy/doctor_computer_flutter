@@ -44,9 +44,9 @@ class WishlistScreen extends StatelessWidget {
                         children: [
                           Icon(Icons.favorite_outline, size: 80, color: AppColors.textTertiary),
                           const SizedBox(height: 16),
-                          Text('Wishlist Kosong / Wishlist Empty', style: AppTextStyles.titleMedium),
+                          Text('Wishlist Kosong', style: AppTextStyles.titleMedium),
                           const SizedBox(height: 8),
-                          Text('Simpan produk favoritmu / Save your favorite products', style: AppTextStyles.bodySmall),
+                          Text('Simpan produk favoritmu', style: AppTextStyles.bodySmall),
                         ],
                       ),
                     );

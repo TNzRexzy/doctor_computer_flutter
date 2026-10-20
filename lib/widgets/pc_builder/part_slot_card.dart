@@ -106,7 +106,7 @@ class PartSlotCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Pilih ${_getCategoryName(category)} / Select ${_getCategoryName(category)}',
+                    'Pilih ${_getCategoryName(category)}',
                     style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 4),

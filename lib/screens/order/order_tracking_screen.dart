@@ -45,7 +45,7 @@ class OrderTrackingScreen extends StatelessWidget {
         'isCompleted': order.status == OrderStatus.delivered,
       },
       {
-        'title': 'Pesanan Selesai / Terkirim',
+        'title': 'Pesanan Selesai',
         'subtitle': 'Paket telah diterima dengan baik di alamat tujuan.',
         'time': order.status == OrderStatus.delivered ? 'Terkirim' : 'Estimasi: 1-2 hari kerja',
         'isCompleted': order.status == OrderStatus.delivered,

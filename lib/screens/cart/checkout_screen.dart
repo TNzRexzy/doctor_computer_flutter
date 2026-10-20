@@ -253,7 +253,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Alamat Pengiriman', style: AppTextStyles.titleMedium),
+                    Expanded(
+                      child: Text('Alamat Pengiriman', style: AppTextStyles.titleMedium),
+                    ),
+                    const SizedBox(width: 8),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,

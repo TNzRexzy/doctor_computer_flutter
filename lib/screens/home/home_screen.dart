@@ -356,7 +356,7 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 60.0),
+        padding: EdgeInsets.only(bottom: 75.0 + MediaQuery.of(context).padding.bottom),
         child: FloatingActionButton.extended(
           backgroundColor: AppColors.primary,
           icon: const Icon(Icons.smart_toy, color: Colors.white),

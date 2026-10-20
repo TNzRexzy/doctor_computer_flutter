@@ -6,6 +6,7 @@ import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 
 class CartScreen extends StatelessWidget {
@@ -14,6 +15,8 @@ class CartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -63,35 +66,56 @@ class CartScreen extends StatelessWidget {
                         },
                         child: GlassCard(
                           margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                          padding: const EdgeInsets.all(10),
                           child: Row(
                             children: [
                               Container(
-                                width: 80,
-                                height: 80,
+                                width: 70,
+                                height: 70,
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Center(child: Icon(Icons.image)),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: AppImageView(
+                                    imageUrl: item.product.images.isNotEmpty
+                                        ? item.product.images.first
+                                        : item.product.id,
+                                    fit: BoxFit.cover,
+                                    width: 70,
+                                    height: 70,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item.product.name, style: AppTextStyles.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    Text(
+                                      item.product.name,
+                                      style: AppTextStyles.titleSmall,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     Text(item.product.brand, style: AppTextStyles.caption),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     Text(formatRupiah(item.product.price), style: AppTextStyles.priceSmall),
                                   ],
                                 ),
                               ),
                               Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.remove),
+                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.remove, size: 18),
                                         onPressed: () {
                                           if (item.quantity > 1) {
                                             provider.updateQuantity(item.product.id, item.quantity - 1);
@@ -101,20 +125,35 @@ class CartScreen extends StatelessWidget {
                                         },
                                       ),
                                       Container(
-                                        width: 40,
-                                        height: 30,
-                                        color: AppColors.surface,
-                                        child: Center(child: Text('${item.quantity}')),
+                                        width: 28,
+                                        height: 26,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surface,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            '${item.quantity}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                        ),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.add),
+                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.add, size: 18),
                                         onPressed: () {
                                           provider.updateQuantity(item.product.id, item.quantity + 1);
                                         },
                                       ),
                                     ],
                                   ),
-                                  Text(formatRupiah(item.subtotal), style: AppTextStyles.caption.copyWith(color: AppColors.accent)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    formatRupiah(item.subtotal),
+                                    style: AppTextStyles.caption.copyWith(color: AppColors.accent, fontWeight: FontWeight.bold),
+                                  ),
                                 ],
                               ),
                             ],
@@ -187,7 +226,7 @@ class CartScreen extends StatelessWidget {
                     },
                   ),
                 ),
-                const SizedBox(height: 80),
+                SizedBox(height: 85 + bottomInset),
               ],
             );
           },
@@ -196,4 +235,3 @@ class CartScreen extends StatelessWidget {
     );
   }
 }
-

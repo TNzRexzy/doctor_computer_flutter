@@ -90,7 +90,7 @@ class PcBuilderScreen extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      '🤖 AI Bottleneck Calculator',
+                                      'AI Bottleneck Calculator',
                                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                     ),
                                     Text(

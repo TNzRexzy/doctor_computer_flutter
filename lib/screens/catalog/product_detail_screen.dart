@@ -121,7 +121,7 @@ class ProductDetailScreen extends StatelessWidget {
                           ),
                         ),
                         SizedBox(height: 16),
-                        Text('Spesifikasi / Specifications', style: AppTextStyles.titleMedium),
+                        Text('Spesifikasi', style: AppTextStyles.titleMedium),
                         SizedBox(height: 8),
                         GlassCard(
                           padding: EdgeInsets.zero,
@@ -150,11 +150,11 @@ class ProductDetailScreen extends StatelessWidget {
                           ),
                         ),
                         SizedBox(height: 16),
-                        Text('Deskripsi / Description', style: AppTextStyles.titleMedium),
+                        Text('Deskripsi', style: AppTextStyles.titleMedium),
                         SizedBox(height: 8),
                         Text(product.descriptionId, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
                         SizedBox(height: 16),
-                        Text('Ulasan / Reviews', style: AppTextStyles.titleMedium),
+                        Text('Ulasan', style: AppTextStyles.titleMedium),
                         SizedBox(height: 8),
                         ...reviews.take(3).map((r) => Padding(
                           padding: EdgeInsets.only(bottom: 8.0),
@@ -255,12 +255,12 @@ class ProductDetailScreen extends StatelessWidget {
           children: [
             Expanded(
               child: GradientButton(
-                label: 'Tambah ke Keranjang / Add to Cart',
+                label: 'Tambah ke Keranjang',
                 icon: Icons.shopping_cart,
                 onPressed: () {
                   context.read<CartProvider>().addToCart(product);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ditambahkan ke keranjang / Added to cart')),
+                    SnackBar(content: Text('Ditambahkan ke keranjang')),
                   );
                 },
               ),

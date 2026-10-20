@@ -19,9 +19,14 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      margin: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: bottomInset > 0 ? bottomInset + 6 : 16,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(24),

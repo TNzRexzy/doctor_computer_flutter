@@ -33,7 +33,7 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.pop(context),
                 ),
-                Text('Pilih ${widget.category.displayNameId} / Select ${widget.category.displayName}', style: AppTextStyles.titleMedium),
+                Text('Pilih ${widget.category.displayNameId}', style: AppTextStyles.titleMedium),
                 const Spacer(),
               ],
             ),
@@ -44,7 +44,7 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                   filled: true,
                   fillColor: AppColors.surface,
                   prefixIcon: const Icon(Icons.search),
-                  hintText: 'Cari komponen / Search parts...',
+                  hintText: 'Cari komponen...',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,

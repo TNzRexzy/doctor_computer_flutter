@@ -120,7 +120,10 @@ class MemberScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Progress Naik Tier', style: AppTextStyles.titleSmall),
+                        Expanded(
+                          child: Text('Progress Naik Tier', style: AppTextStyles.titleSmall),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
                           isAdmin
                               ? 'Level Tertinggi (Maksimal)'
@@ -147,7 +150,7 @@ class MemberScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('🎮 Minigames (Klaim EXP)', style: AppTextStyles.titleMedium),
+                  Text('Minigames (Klaim EXP)', style: AppTextStyles.titleMedium),
                   Text('Mainkan & Naikkan Tier', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                 ],
               ),

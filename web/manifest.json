@@ -1,6 +1,6 @@
 {
-    "name": "doctor_computer",
-    "short_name": "doctor_computer",
+    "name": "Doctor Computer",
+    "short_name": "Doctor Computer",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

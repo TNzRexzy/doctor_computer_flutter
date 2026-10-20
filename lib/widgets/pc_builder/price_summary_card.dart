@@ -33,7 +33,7 @@ class PriceSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Ringkasan Harga / Price Summary', style: AppTextStyles.titleMedium),
+          Text('Ringkasan Harga', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           if (activeParts.isNotEmpty) ...[
             ListView.separated(
@@ -101,7 +101,7 @@ class PriceSummaryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total Estimasi / Estimated Total', style: AppTextStyles.titleMedium),
+              Text('Total Estimasi', style: AppTextStyles.titleMedium),
               Text(
                 formatRupiah(grandTotal),
                 style: AppTextStyles.heading3.copyWith(color: AppColors.accent),

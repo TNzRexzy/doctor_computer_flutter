@@ -45,7 +45,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           ),
           Divider(color: AppColors.cardBorder),
           SizedBox(height: 16),
-          Text('Rentang Harga / Price Range', style: AppTextStyles.titleMedium),
+          Text('Rentang Harga', style: AppTextStyles.titleMedium),
           RangeSlider(
             values: _priceRange,
             min: 0,
@@ -64,7 +64,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             },
           ),
           SizedBox(height: 16),
-          Text('Merek / Brand', style: AppTextStyles.titleMedium),
+          Text('Merek', style: AppTextStyles.titleMedium),
           SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -121,7 +121,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               SizedBox(width: 16),
               Expanded(
                 child: GradientButton(
-                  label: 'Terapkan / Apply',
+                  label: 'Terapkan',
                   onPressed: () {
                     provider.setPriceRange(_priceRange);
                     Navigator.pop(context);

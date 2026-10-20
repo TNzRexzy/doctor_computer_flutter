@@ -49,7 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final errorMessage = context.read<AuthProvider>().errorMessage;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Registrasi berhasil!')),
+          const SnackBar(content: Text('Registrasi berhasil.')),
         );
         // Redirect to Welcome Page
         Navigator.pushReplacementNamed(context, AppRouter.welcome);

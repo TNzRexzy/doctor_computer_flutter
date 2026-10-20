@@ -125,7 +125,10 @@ class ProfileScreen extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Progress Member (Blockchain)', style: AppTextStyles.titleSmall),
+                              Expanded(
+                                child: Text('Progress Member (Blockchain)', style: AppTextStyles.titleSmall),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
                                 isAdmin
                                     ? 'Maksimal (Platinum)'
@@ -174,13 +177,13 @@ class ProfileScreen extends StatelessWidget {
                       trailing: CircleAvatar(radius: 12, backgroundColor: AppColors.primary, child: Text('${wishlist.itemCount}', style: AppTextStyles.caption)),
                     ),
                   ),
-                  _buildMenuItem(context, Icons.smart_toy, '🤖 Tanya Dokter AI (Customer Service)', () {
+                  _buildMenuItem(context, Icons.smart_toy, 'Tanya Dokter AI (Customer Service)', () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen()));
                   }),
-                  _buildMenuItem(context, Icons.verified_user, '🛡️ Cek Masa Garansi Aktif', () {
+                  _buildMenuItem(context, Icons.verified_user, 'Cek Masa Garansi Aktif', () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const WarrantyCheckScreen()));
                   }),
-                  _buildMenuItem(context, Icons.sports_esports, '🎮 Minigames & Blockchain Member', () {
+                  _buildMenuItem(context, Icons.sports_esports, 'Minigames & Blockchain Member', () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberScreen()));
                   }),
                   _buildMenuItem(context, Icons.card_membership, 'Membership', () => Navigator.pushNamed(context, AppRouter.membership)),
@@ -188,7 +191,7 @@ class ProfileScreen extends StatelessWidget {
                     _buildMenuItem(
                       context, 
                       Icons.admin_panel_settings, 
-                      user.role == UserRole.admin ? '🔧 Dashboard Admin' : '🔧 Dashboard Kasir', 
+                      user.role == UserRole.admin ? 'Dashboard Admin' : 'Dashboard Kasir', 
                       () => Navigator.pushNamed(context, AppRouter.adminDashboard),
                       trailing: Chip(
                         label: Text(user.role.name.toUpperCase(), style: const TextStyle(fontSize: 10)),

@@ -52,19 +52,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     icon: Icons.shopping_bag_rounded,
                     color: AppColors.primary,
                     title: 'Belanja Komputer Mudah',
-                    subtitle: 'Easy Computer Shopping\nTemukan laptop, aksesoris, dan komponen PC terbaik dengan harga kompetitif',
+                    subtitle: 'Temukan laptop, aksesoris, dan komponen PC terbaik dengan harga kompetitif.',
                   ),
                   _buildPage(
                     icon: Icons.build_rounded,
                     color: AppColors.accent,
                     title: 'Rakit PC Impianmu',
-                    subtitle: 'Build Your Dream PC\nKonfigurator PC interaktif dengan pengecekan kompatibilitas otomatis',
+                    subtitle: 'Konfigurator PC interaktif dengan pengecekan kompatibilitas otomatis.',
                   ),
                   _buildPage(
                     icon: Icons.card_membership_rounded,
                     color: AppColors.success,
                     title: 'Member & Rewards',
-                    subtitle: 'Membership & Rewards\nDapatkan poin dari setiap pembelian dan nikmati diskon eksklusif',
+                    subtitle: 'Dapatkan poin dari setiap pembelian dan nikmati diskon eksklusif.',
                   ),
                 ],
               ),
@@ -91,12 +91,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         TextButton(
                           onPressed: _completeOnboarding,
                           child: Text(
-                            'Lewati / Skip',
+                            'Lewati',
                             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
                           ),
                         ),
                         GradientButton(
-                          label: 'Lanjut / Next',
+                          label: 'Lanjut',
                           onPressed: () {
                             _pageController.nextPage(
                               duration: const Duration(milliseconds: 300),
@@ -110,7 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: GradientButton(
-                        label: 'Mulai Belanja / Start Shopping',
+                        label: 'Mulai Belanja',
                         onPressed: _completeOnboarding,
                       ),
                     ),

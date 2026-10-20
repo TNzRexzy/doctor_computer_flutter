@@ -126,12 +126,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     );
                   }
 
+                  final bottomPadding = 95.0 + MediaQuery.of(context).padding.bottom;
+                  final screenWidth = MediaQuery.of(context).size.width;
+
                   if (_isGridView) {
                     return GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.55,
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: screenWidth > 600 ? 3 : 2,
+                        childAspectRatio: screenWidth < 360 ? 0.52 : 0.56,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
                       ),
@@ -149,7 +152,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   }
 
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: EdgeInsets.fromLTRB(0, 8, 0, bottomPadding),
                     itemCount: products.length,
                     itemBuilder: (context, index) {
                       final product = products[index];

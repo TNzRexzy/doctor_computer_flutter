@@ -4,6 +4,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+base {
+    archivesName.set("Doctor Computer")
+}
+
 android {
     namespace = "com.example.doctor_computer"
     compileSdk = flutter.compileSdkVersion

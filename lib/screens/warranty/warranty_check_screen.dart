@@ -78,7 +78,7 @@ class _WarrantyCheckScreenState extends State<WarrantyCheckScreen> {
                     children: [
                       Icon(Icons.verified, color: AppColors.primary, size: 28),
                       const SizedBox(width: 10),
-                      Text('Cari Nomor Seri / Serial Number', style: AppTextStyles.titleSmall),
+                      Text('Cari Nomor Seri', style: AppTextStyles.titleSmall),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -261,7 +261,7 @@ class _WarrantyCheckScreenState extends State<WarrantyCheckScreen> {
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.primary)),
                   icon: const Icon(Icons.support_agent, size: 18),
-                  label: const Text('Klaim Garansi / Servis'),
+                  label: const Text('Klaim Garansi'),
                   onPressed: () {
                     Navigator.push(
                       context,
