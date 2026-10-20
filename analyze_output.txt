@@ -1,0 +1,37 @@
+﻿Analyzing doctor_computer...                                    
+
+warning - Unused import: 'package:doctor_computer/data/models/cart_item_model.dart'. Try removing the import directive - lib\data\mock\mock_pc_parts.dart:4:8 - unused_import
+   info - The private field _selectedBrands could be 'final'. Try making the field 'final' - lib\providers\product_provider.dart:15:16 - prefer_final_fields
+  error - Invalid constant value - lib\screens\auth\register_screen.dart:67:47 - invalid_constant
+  error - Invalid constant value - lib\screens\cart\cart_screen.dart:58:66 - invalid_constant
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\screens\cart\checkout_screen.dart:129:23 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\screens\cart\checkout_screen.dart:130:23 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\screens\cart\checkout_screen.dart:148:23 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\screens\cart\checkout_screen.dart:149:23 - deprecated_member_use
+   info - Unnecessary use of 'toList' in a spread. Try removing the invocation of 'toList' - lib\screens\cart\checkout_screen.dart:179:30 - unnecessary_to_list_in_spreads
+  error - Invalid constant value - lib\screens\catalog\catalog_screen.dart:57:65 - invalid_constant
+  error - Invalid constant value - lib\screens\catalog\catalog_screen.dart:68:64 - invalid_constant
+warning - Unused import: 'package:doctor_computer/data/mock/mock_products.dart'. Try removing the import directive - lib\screens\catalog\product_detail_screen.dart:7:8 - unused_import
+   info - Constructors in '@immutable' classes should be declared as 'const'. Try adding 'const' to the constructor declaration - lib\screens\catalog\product_detail_screen.dart:18:3 - prefer_const_constructors_in_immutables
+  error - Invalid constant value - lib\screens\home\home_screen.dart:55:61 - invalid_constant
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\screens\home\home_screen.dart:137:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\screens\home\home_screen.dart:177:45 - unnecessary_underscores
+   info - Unnecessary use of string interpolation. Try replacing the string literal with the variable name - lib\screens\pc_builder\part_selection_screen.dart:132:61 - unnecessary_string_interpolations
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\pc_builder\pc_builder_screen.dart:53:48 - deprecated_member_use
+   info - Unnecessary use of 'toList' in a spread. Try removing the invocation of 'toList' - lib\screens\pc_builder\pc_builder_screen.dart:106:30 - unnecessary_to_list_in_spreads
+warning - The operand can't be 'null', so the condition is always 'true'. Remove the condition - lib\screens\pc_builder\pc_builder_screen.dart:115:40 - unnecessary_null_comparison
+  error - Invalid constant value - lib\screens\profile\edit_profile_screen.dart:70:80 - invalid_constant
+warning - Unused import: 'package:doctor_computer/data/models/user_model.dart'. Try removing the import directive - lib\screens\profile\membership_screen.dart:7:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement - lib\screens\profile\order_history_screen.dart:76:67 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre. Try replacing the use of the deprecated member with the replacement - lib\screens\profile\profile_screen.dart:127:23 - deprecated_member_use
+  error - Invalid constant value - lib\screens\search\search_screen.dart:60:63 - invalid_constant
+   info - Constructors in '@immutable' classes should be declared as 'const'. Try adding 'const' to the constructor declaration - lib\widgets\catalog\filter_bottom_sheet.dart:10:3 - prefer_const_constructors_in_immutables
+   info - Constructors in '@immutable' classes should be declared as 'const'. Try adding 'const' to the constructor declaration - lib\widgets\common\badge_icon.dart:12:3 - prefer_const_constructors_in_immutables
+  error - Invalid constant value - lib\widgets\common\custom_app_bar.dart:27:65 - invalid_constant
+  error - Invalid constant value - lib\widgets\common\gradient_button.dart:62:30 - invalid_constant
+  error - Invalid constant value - lib\widgets\common\shimmer_loading.dart:26:24 - invalid_constant
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\widgets\common\shimmer_loading.dart:62:31 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\widgets\common\shimmer_loading.dart:63:26 - unnecessary_underscores
+   info - Constructors in '@immutable' classes should be declared as 'const'. Try adding 'const' to the constructor declaration - lib\widgets\home\promo_banner_carousel.dart:8:3 - prefer_const_constructors_in_immutables
+   info - Unnecessary use of multiple underscores. Try using '_' - lib\widgets\pc_builder\price_summary_card.dart:42:37 - unnecessary_underscores
+
