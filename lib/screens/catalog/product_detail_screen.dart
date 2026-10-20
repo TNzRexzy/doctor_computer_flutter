@@ -8,6 +8,7 @@ import 'package:doctor_computer/providers/wishlist_provider.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 
 /// Product Detail Screen
@@ -39,17 +40,14 @@ class ProductDetailScreen extends StatelessWidget {
                       colors: [AppColors.surfaceLight, AppColors.surface],
                     ),
                   ),
-                  child: product.images.isNotEmpty
-                      ? Image.network(
-                          product.images.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Icon(Icons.computer, size: 100, color: AppColors.primary),
-                          ),
-                        )
-                      : Center(
-                          child: Icon(Icons.computer, size: 100, color: AppColors.primary),
-                        ),
+                  child: AppImageView(
+                    imageUrl: product.images.isNotEmpty
+                        ? product.images.first
+                        : product.id,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: 300,
+                  ),
                 ),
                 Transform.translate(
                   offset: Offset(0, -20),

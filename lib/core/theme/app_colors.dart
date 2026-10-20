@@ -47,7 +47,7 @@ class AppColors {
   static Color get accent40 => const Color(0x6648CAE4); // 40% of accent  
   static Color get primary15 => const Color(0x26FCA311); // 15% of primary
   static Color get success40 => const Color(0x6600E676); // 40% of success
-  static Color get warning50 => const Color(0x80ffffbe21); // 50% of warning
+  static Color get warning50 => const Color(0x80FFBE21); // 50% of warning
 
   static LinearGradient get primaryGradient => LinearGradient(
     colors: [primary, primaryLight],

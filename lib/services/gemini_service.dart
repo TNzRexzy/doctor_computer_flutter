@@ -4,22 +4,26 @@ import 'package:http/http.dart' as http;
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 
+import 'package:doctor_computer/core/config/env_config.dart';
+
 class GeminiService {
   static final GeminiService _instance = GeminiService._internal();
   factory GeminiService() => _instance;
   GeminiService._internal();
 
-  String apiKey = '';
+  String get apiKey => EnvConfig.geminiApiKey;
+  set apiKey(String value) => EnvConfig.setGeminiApiKey(value);
 
   /// Generate AI reply for Customer Service Chat
   Future<String> getCustomerServiceResponse(
     String userQuery,
     List<Map<String, String>> history,
   ) async {
-    if (apiKey.isNotEmpty) {
+    final currentKey = apiKey;
+    if (currentKey.isNotEmpty) {
       try {
         final url = Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey',
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$currentKey',
         );
 
         final systemPrompt = '''

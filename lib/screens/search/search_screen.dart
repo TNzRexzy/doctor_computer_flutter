@@ -9,6 +9,7 @@ import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/services/gemini_service.dart';
 import 'package:doctor_computer/widgets/home/category_grid.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 
 /// Search Screen with AI Smart Search & Keyword Search
 class SearchScreen extends StatefulWidget {
@@ -369,16 +370,12 @@ class _SearchScreenState extends State<SearchScreen> {
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: product.images.isNotEmpty
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              product.images.first,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Icon(Icons.computer, color: AppColors.primary),
-                            ),
-                          )
-                        : Icon(Icons.computer, color: AppColors.primary),
+                    child: AppImageView(
+                      imageUrl: product.images.isNotEmpty ? product.images.first : product.id,
+                      width: 60,
+                      height: 60,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -465,16 +462,12 @@ class _SearchScreenState extends State<SearchScreen> {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: product.images.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          product.images.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Icon(Icons.computer, color: AppColors.primary),
-                        ),
-                      )
-                    : Icon(Icons.computer, color: AppColors.primary),
+                child: AppImageView(
+                  imageUrl: product.images.isNotEmpty ? product.images.first : product.id,
+                  width: 48,
+                  height: 48,
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               title: Text(product.name, style: AppTextStyles.bodyMedium),
               subtitle: Text(
