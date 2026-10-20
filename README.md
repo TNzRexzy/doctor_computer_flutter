@@ -86,7 +86,7 @@ The system implements strict role-based authorization to divide administrative f
 3. **Database Schema Fallback Handling:** Implemented defensive schema mapping to gracefully handle environments where new columns (`role`, `profile_image_url`, `latitude`, `longitude`) are pending migration, preventing `PGRST204` crashes during registration.
 4. **Registration Error Handling:** Enhanced authentication exception handling to intercept HTTP 422 errors and display clear duplicate account notices.
 5. **Flexible Authentication Input:** Extended the login credential validator to accept identity aliases (`admin`, `cashier`) alongside standard email formats.
-6. **Application Version Metadata:** Synchronized application build metadata across dialogs and constants to display `Beta v1.0.6-beta`.
+6. **Application Version Metadata:** Synchronized application build metadata across dialogs, constants, and `pubspec.yaml` to display `Beta v1.0.7-beta`.
 7. **Code Analysis & Lint Compliance:** Eliminated unused imports, corrected 8-digit hexadecimal color values, and resolved asynchronous context gap warnings. The codebase passes `flutter analyze` with 0 issues.
 
 ---
