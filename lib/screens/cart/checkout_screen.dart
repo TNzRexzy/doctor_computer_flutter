@@ -9,6 +9,11 @@ import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'dart:math';
 import 'package:doctor_computer/navigation/app_router.dart';
+import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/providers/notification_provider.dart';
+import 'package:doctor_computer/data/models/order_model.dart';
+import 'package:doctor_computer/data/models/cart_item_model.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -38,13 +43,108 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     
     if (!mounted) return;
     final randomDigits = Random().nextInt(900000) + 100000;
-    
+    final orderId = 'DC-$randomDigits';
+    final serial = 'SN-DC2026-$randomDigits';
+    final cart = context.read<CartProvider>();
+    final shipping = AppConstants.shippingMethods[_selectedShipping];
+    final payment = AppConstants.paymentMethods[_selectedPayment];
+    final fullAddress = '${_addressController.text.trim()}, ${_cityController.text.trim()} ${_postalController.text.trim()}';
+
+    // 1. Create order in OrderProvider
+    final newOrder = OrderModel(
+      id: orderId,
+      items: List<CartItemModel>.from(cart.items),
+      totalPrice: cart.totalPrice + (shipping['price'] as double),
+      status: OrderStatus.processing,
+      orderDate: DateTime.now(),
+      shippingAddress: fullAddress.isNotEmpty ? fullAddress : 'Jl. Merdeka No 1, Jakarta',
+      paymentMethod: payment,
+      trackingNumber: 'JNE-$randomDigits',
+      courier: '${shipping['name']} (${shipping['days']} hari)',
+      serialNumber: serial,
+      warrantyDurationMonths: 24,
+    );
+    context.read<OrderProvider>().addOrder(newOrder);
+
+    // 2. Mine Block 2: Belanja Komponen (+500 EXP)
+    final itemName = cart.items.isNotEmpty ? cart.items.first.product.name : 'Komponen PC / RAM';
+    final blockchain = context.read<BlockchainProvider>();
+    final oldTier = blockchain.currentTier;
+    final block = await blockchain.addShoppingReward(
+      itemName: itemName,
+      expEarned: 500,
+    );
+    final newTier = blockchain.currentTier;
+
+    // 3. Add mobile notifications
+    if (mounted) {
+      context.read<NotificationProvider>().addNotification(
+        title: '📦 Pesanan Berhasil: $orderId',
+        message: 'Pesanan Anda senilai ${formatRupiah(newOrder.totalPrice)} sedang diproses untuk QC & perakitan aman.',
+        type: 'order',
+        actionRoute: AppRouter.orderHistory,
+        actionLabel: 'Lacak Pesanan',
+      );
+
+      context.read<NotificationProvider>().addNotification(
+        title: '💎 Bonus Belanja: +500 EXP!',
+        message: 'Blok #${block.index} berhasil ditambang di Blockchain untuk transaksi $itemName. Akumulasi EXP: ${blockchain.totalExp} EXP.',
+        type: 'tier_upgrade',
+        actionRoute: AppRouter.membership,
+        actionLabel: 'Lihat Blockchain',
+      );
+
+      if (newTier != oldTier) {
+        context.read<NotificationProvider>().addNotification(
+          title: '🏆 Selamat! Upgrade ke Tier ${newTier.name.toUpperCase()}!',
+          message: 'Akumulasi EXP Anda mencapai ${blockchain.totalExp} EXP. Tier Anda otomatis naik ke ${newTier.name}!',
+          type: 'tier_upgrade',
+        );
+      }
+    }
+
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Pesanan berhasil! / Order placed!'),
-        content: Text('Order ID: DC-$randomDigits'),
+        backgroundColor: AppColors.surface,
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success, size: 28),
+            const SizedBox(width: 8),
+            const Text('Pesanan Berhasil!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Order ID: $orderId', style: AppTextStyles.titleSmall),
+            const SizedBox(height: 4),
+            Text('Nomor Seri: $serial (Garansi 24 Bulan)', style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('🔗 Blockchain Transaksi (Blok #${block.index}):', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text('Reward: +500 EXP (Belanja $itemName)', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
+                  Text('Akumulasi EXP: ${blockchain.totalExp} EXP', style: AppTextStyles.caption),
+                  Text('Tier Member: ${newTier.name.toUpperCase()}', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
+                  Text('Hash: ${block.hash.substring(0, 16)}...', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -177,7 +277,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ],
                               ),
                             );
-                          }).toList(),
+                          }),
                           const Divider(),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,

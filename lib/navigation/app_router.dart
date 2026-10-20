@@ -7,6 +7,7 @@ import 'package:doctor_computer/screens/onboarding/onboarding_screen.dart';
 import 'package:doctor_computer/screens/auth/login_screen.dart';
 import 'package:doctor_computer/screens/auth/register_screen.dart';
 import 'package:doctor_computer/screens/main_nav_screen.dart';
+import 'package:doctor_computer/screens/welcome/welcome_screen.dart';
 import 'package:doctor_computer/screens/catalog/catalog_screen.dart';
 import 'package:doctor_computer/screens/catalog/product_detail_screen.dart';
 import 'package:doctor_computer/screens/search/search_screen.dart';
@@ -16,15 +17,20 @@ import 'package:doctor_computer/screens/cart/cart_screen.dart';
 import 'package:doctor_computer/screens/cart/checkout_screen.dart';
 import 'package:doctor_computer/screens/profile/profile_screen.dart';
 import 'package:doctor_computer/screens/profile/edit_profile_screen.dart';
-import 'package:doctor_computer/screens/profile/membership_screen.dart';
 import 'package:doctor_computer/screens/profile/order_history_screen.dart';
 import 'package:doctor_computer/screens/wishlist/wishlist_screen.dart';
+import 'package:doctor_computer/screens/member/member_screen.dart';
+import 'package:doctor_computer/screens/member/blockchain_ledger_screen.dart';
+import 'package:doctor_computer/screens/notifications/notifications_screen.dart';
+import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
+import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 
 class AppRouter {
   static const String splash = '/';
   static const String onboarding = '/onboarding';
   static const String login = '/login';
   static const String register = '/register';
+  static const String welcome = '/welcome';
   static const String mainNav = '/main';
   static const String catalog = '/catalog';
   static const String productDetail = '/product-detail';
@@ -38,6 +44,11 @@ class AppRouter {
   static const String membership = '/membership';
   static const String orderHistory = '/order-history';
   static const String wishlist = '/wishlist';
+  static const String member = '/member';
+  static const String blockchainLedger = '/blockchain-ledger';
+  static const String notifications = '/notifications';
+  static const String aiChat = '/ai-chat';
+  static const String warranty = '/warranty';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -49,6 +60,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const LoginScreen());
       case register:
         return MaterialPageRoute(builder: (_) => const RegisterScreen());
+      case welcome:
+        return MaterialPageRoute(builder: (_) => const WelcomeScreen());
       case mainNav:
         return MaterialPageRoute(builder: (_) => const MainNavScreen());
       case catalog:
@@ -73,11 +86,21 @@ class AppRouter {
       case editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfileScreen());
       case membership:
-        return MaterialPageRoute(builder: (_) => const MembershipScreen());
+        return MaterialPageRoute(builder: (_) => const MemberScreen());
       case orderHistory:
         return MaterialPageRoute(builder: (_) => const OrderHistoryScreen());
       case wishlist:
         return MaterialPageRoute(builder: (_) => const WishlistScreen());
+      case member:
+        return MaterialPageRoute(builder: (_) => const MemberScreen());
+      case blockchainLedger:
+        return MaterialPageRoute(builder: (_) => const BlockchainLedgerScreen());
+      case notifications:
+        return MaterialPageRoute(builder: (_) => const NotificationsScreen());
+      case aiChat:
+        return MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen());
+      case warranty:
+        return MaterialPageRoute(builder: (_) => const WarrantyCheckScreen());
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(

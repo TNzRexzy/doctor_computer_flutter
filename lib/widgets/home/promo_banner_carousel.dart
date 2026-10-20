@@ -5,7 +5,7 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 
 class PromoBannerCarousel extends StatefulWidget {
-  PromoBannerCarousel({super.key});
+  const PromoBannerCarousel({super.key});
 
   @override
   State<PromoBannerCarousel> createState() => _PromoBannerCarouselState();

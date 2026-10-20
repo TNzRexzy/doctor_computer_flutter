@@ -9,7 +9,7 @@ class BadgeIcon extends StatelessWidget {
   final double size;
   final Color? color;
 
-  BadgeIcon({
+  const BadgeIcon({
     super.key,
     required this.icon,
     this.count = 0,

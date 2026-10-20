@@ -7,6 +7,7 @@ import 'package:doctor_computer/providers/pc_builder_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/pc_builder/part_slot_card.dart';
 import 'package:doctor_computer/widgets/pc_builder/price_summary_card.dart';
+import 'package:doctor_computer/widgets/pc_builder/ai_bottleneck_sheet.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 
 class PcBuilderScreen extends StatelessWidget {
@@ -44,35 +45,102 @@ class PcBuilderScreen extends StatelessWidget {
                 ],
               ),
             ),
-            Consumer<PcBuilderProvider>(
+             Consumer<PcBuilderProvider>(
               builder: (context, provider, child) {
-                if (provider.compatibilityIssues.isNotEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                final cpu = provider.selectedParts[PcPartCategory.cpu];
+                final gpu = provider.selectedParts[PcPartCategory.gpu];
+                final ram = provider.selectedParts[PcPartCategory.ram];
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: Column(
+                    children: [
+                      // AI Bottleneck Banner
+                      InkWell(
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => AiBottleneckSheet(cpu: cpu, gpu: gpu, ram: ram),
+                          );
+                        },
                         borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: provider.compatibilityIssues.map((issue) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 4.0),
-                            child: Row(
-                              children: [
-                                Icon(Icons.warning, color: AppColors.error, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(issue, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.15),
+                                AppColors.accent.withValues(alpha: 0.15),
                               ],
                             ),
-                          );
-                        }).toList(),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.speed, color: AppColors.primary, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '🤖 AI Bottleneck Calculator',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    Text(
+                                      (cpu != null && gpu != null)
+                                          ? 'Analisis seimbang: ${cpu.name.split(' ').take(2).join(' ')} + ${gpu.name.split(' ').take(2).join(' ')}'
+                                          : 'Pilih CPU & GPU untuk menghitung bottleneck',
+                                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Cek AI',
+                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
+                      if (provider.compatibilityIssues.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            children: provider.compatibilityIssues.map((issue) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4.0),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.warning, color: AppColors.error, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(issue, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
               },
             ),
             Expanded(
@@ -104,7 +172,7 @@ class PcBuilderScreen extends StatelessWidget {
                                 onRemove: () => provider.removePart(category),
                               ),
                             );
-                          }).toList(),
+                          }),
                           const SizedBox(height: 16),
                           PriceSummaryCard(
                             selectedParts: provider.selectedParts,
@@ -113,7 +181,7 @@ class PcBuilderScreen extends StatelessWidget {
                             grandTotal: provider.grandTotal,
                             serviceTier: provider.serviceTier,
                             onServiceTierChanged: (tier) {
-                              if (tier != null) provider.setServiceTier(tier);
+                              provider.setServiceTier(tier);
                             },
                           ),
                           const SizedBox(height: 16),

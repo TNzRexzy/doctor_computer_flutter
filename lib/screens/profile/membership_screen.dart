@@ -4,7 +4,6 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
-import 'package:doctor_computer/data/models/user_model.dart';
 
 class MembershipScreen extends StatelessWidget {
   const MembershipScreen({super.key});

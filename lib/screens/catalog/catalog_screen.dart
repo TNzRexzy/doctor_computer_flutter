@@ -90,8 +90,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   return CategoryGrid(
                     categories: provider.categories,
                     onCategoryTap: (category) {
-                      provider.setCategory(category);
-                    },
+                                          provider.setCategory(category);
+                                        },
                   );
                 },
               ),

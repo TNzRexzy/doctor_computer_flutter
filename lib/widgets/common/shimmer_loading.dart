@@ -61,8 +61,8 @@ class ShimmerProductList extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
         itemCount: 4,
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
-        itemBuilder: (_, __) => const ShimmerProductCard(),
+        separatorBuilder: (_, _) => const SizedBox(width: 16),
+        itemBuilder: (_, _) => const ShimmerProductCard(),
       ),
     );
   }

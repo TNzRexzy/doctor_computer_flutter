@@ -1,7 +1,6 @@
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/review_model.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
-import 'package:doctor_computer/data/models/cart_item_model.dart';
 
 final List<PcPartModel> mockPcParts = [
   // CPUs (10)

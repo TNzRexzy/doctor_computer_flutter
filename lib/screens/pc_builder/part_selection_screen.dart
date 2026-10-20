@@ -130,7 +130,7 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                                             return Padding(
                                               padding: const EdgeInsets.only(right: 4.0),
                                               child: Chip(
-                                                label: Text('${e.value}', style: AppTextStyles.caption),
+                                                label: Text(e.value, style: AppTextStyles.caption),
                                                 padding: EdgeInsets.zero,
                                                 visualDensity: VisualDensity.compact,
                                               ),
