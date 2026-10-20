@@ -18,9 +18,7 @@ class AuthProvider extends ChangeNotifier {
 
   final supabase = Supabase.instance.client;
 
-  AuthProvider() {
-    restoreSession();
-  }
+  AuthProvider();
 
   // ============================================
   // SESSION PERSISTENCE & RESTORATION

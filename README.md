@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.6-beta
+* **Release Version:** 1.0.7-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -105,6 +105,20 @@ The system implements strict role-based authorization to divide administrative f
 | BUG-008 | PostgREST single object coercion failure on login | Multiple matching rows triggered coercion exceptions on `.single()` | Resolved (Transitioned to `.limit(1)` query format) |
 | BUG-009 | Admin user editing does not persist to database | Supabase RLS blocks cross-user updates; no `role` column in schema | Resolved (Dual persistence with SharedPreferences cache + RLS policy migration) |
 | BUG-010 | Blank white screen upon triggering Flash Sale dialog | Unbounded layout constraints on Slider in dialog and type cast exceptions on numeric price strings | Resolved (Replaced dialog with constrained modal bottom sheet, bounded box layout, and defensive numeric parsing) |
+| BUG-011 | App stuck before splash screen (runApp never reached) | `AuthProvider` constructor called `restoreSession()` fire-and-forget while `main()` awaited it again, causing a race condition on Supabase and SharedPreferences | Resolved (Removed duplicate `restoreSession()` call from constructor) |
+| BUG-012 | Undefined identifier `user` in admin dashboard | `user` variable referenced in admin blockchain sync was never declared in scope | Resolved (Replaced with `context.read<AuthProvider>().currentUser`) |
+| BUG-013 | `use_build_context_synchronously` warning in admin dashboard | `context.read<BlockchainProvider>()` called after async gap without mounted check | Resolved (Added `if (!ctx.mounted) return;` guard before async context usage) |
+| BUG-014 | `invalid_constant` error in product detail screen | `const Icon` used with non-const `AppColors.error` color value | Resolved (Removed `const` keyword from Icon constructor) |
+
+---
+
+## Version 1.0.7-beta Changelog
+
+1. **Critical Startup Race Condition Fix:** Eliminated duplicate `restoreSession()` invocation — constructor fired it without `await` while `main()` awaited it again, causing concurrent Supabase/SharedPreferences access that could hang the app before the UI ever rendered.
+2. **Admin Dashboard Undefined Identifier Fix:** Resolved `undefined_identifier` error where `user` variable was referenced but never declared in the admin blockchain points sync dialog; replaced with proper `context.read<AuthProvider>().currentUser`.
+3. **Async Context Safety:** Added `mounted` guard before `context.read<BlockchainProvider>()` call that occurred after an async gap in admin user editing flow.
+4. **Const Correctness Fix:** Removed invalid `const` keyword from `Icon` widget using non-const `AppColors.error` color in product detail Flash Sale badge.
+5. **Code Analysis Compliance:** Codebase passes `flutter analyze` with 0 issues.
 
 ---
 

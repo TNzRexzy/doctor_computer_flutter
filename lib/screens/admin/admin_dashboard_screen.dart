@@ -1517,6 +1517,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 }
 
                 // 3. Update blockchain wallet points & tier
+                if (!ctx.mounted) return;
                 try {
                   MemberTier targetTier = MemberTier.bronze;
                   for (final t in MemberTier.values) {
@@ -1534,7 +1535,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     userName: targetName,
                     newExp: newExp,
                     newTier: targetTier,
-                    adminNote: 'Penyesuaian oleh Admin (${user?.fullName ?? "Admin"})',
+                    adminNote: 'Penyesuaian oleh Admin (${context.read<AuthProvider>().currentUser?.fullName ?? "Admin"})',
                   );
                 } catch (e) {
                   debugPrint('Error syncing blockchain points in admin dialog: $e');

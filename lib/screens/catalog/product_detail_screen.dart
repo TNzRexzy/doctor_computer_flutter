@@ -94,7 +94,7 @@ class ProductDetailScreen extends StatelessWidget {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.bolt, color: AppColors.error, size: 16),
+                                      Icon(Icons.bolt, color: AppColors.error, size: 16),
                                       const SizedBox(width: 4),
                                       Text(
                                         'PROMO FLASH SALE SEDANG BERLANGSUNG',
