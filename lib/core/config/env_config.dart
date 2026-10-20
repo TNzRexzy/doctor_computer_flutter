@@ -14,6 +14,16 @@ class EnvConfig {
 
   static String _inMemoryGeminiKey = '';
 
+  /// Safe helper to read environment variables without throwing
+  static String? _getEnv(String key) {
+    try {
+      if (dotenv.isInitialized) {
+        return dotenv.maybeGet(key);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /// Initialize dotenv from `.env` file
   static Future<void> init() async {
     try {
@@ -25,40 +35,40 @@ class EnvConfig {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      _inMemoryGeminiKey = prefs.getString(_prefGeminiKey) ?? dotenv.env['GEMINI_API_KEY'] ?? '';
+      _inMemoryGeminiKey = prefs.getString(_prefGeminiKey) ?? _getEnv('GEMINI_API_KEY') ?? '';
     } catch (e) {
-      _inMemoryGeminiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+      _inMemoryGeminiKey = _getEnv('GEMINI_API_KEY') ?? '';
     }
   }
 
   /// Supabase project URL
   static String get supabaseUrl {
-    final url = dotenv.env['SUPABASE_URL'];
+    final url = _getEnv('SUPABASE_URL');
     return (url != null && url.isNotEmpty) ? url : _defaultSupabaseUrl;
   }
 
   /// Supabase public anonymous key
   static String get supabaseAnonKey {
-    final key = dotenv.env['SUPABASE_ANON_KEY'];
+    final key = _getEnv('SUPABASE_ANON_KEY');
     return (key != null && key.isNotEmpty) ? key : _defaultSupabaseAnonKey;
   }
 
   /// Supabase dedicated storage endpoint
   static String get storageUrl {
-    final sUrl = dotenv.env['SUPABASE_STORAGE_URL'];
+    final sUrl = _getEnv('SUPABASE_STORAGE_URL');
     return (sUrl != null && sUrl.isNotEmpty) ? sUrl : _defaultStorageUrl;
   }
 
   /// Supabase public storage bucket
   static String get storageBucket {
-    final b = dotenv.env['SUPABASE_STORAGE_BUCKET'];
+    final b = _getEnv('SUPABASE_STORAGE_BUCKET');
     return (b != null && b.isNotEmpty) ? b : _defaultStorageBucket;
   }
 
   /// Google Gemini API Key
   static String get geminiApiKey {
     if (_inMemoryGeminiKey.isNotEmpty) return _inMemoryGeminiKey;
-    return dotenv.env['GEMINI_API_KEY'] ?? '';
+    return _getEnv('GEMINI_API_KEY') ?? '';
   }
 
   /// Set Gemini API Key dynamically and persist to SharedPreferences

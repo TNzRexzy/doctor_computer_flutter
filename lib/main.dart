@@ -16,15 +16,23 @@ import 'package:doctor_computer/app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables from .env
-  await EnvConfig.init();
+  try {
+    // Load environment variables from .env
+    await EnvConfig.init();
+  } catch (e) {
+    debugPrint('EnvConfig init notice: $e');
+  }
 
-  await Supabase.initialize(
-    url: EnvConfig.supabaseUrl,
-    anonKey: EnvConfig.supabaseAnonKey,
-  );
+  try {
+    await Supabase.initialize(
+      url: EnvConfig.supabaseUrl,
+      anonKey: EnvConfig.supabaseAnonKey,
+    );
+  } catch (e) {
+    debugPrint('Supabase initialize notice: $e');
+  }
 
-  // Ensure admin account exists (runs in background, won't block startup)
+  // Ensure admin account exists (runs asynchronously in background, won't block startup)
   final authProvider = AuthProvider();
   authProvider.ensureAdminAccount();
 
