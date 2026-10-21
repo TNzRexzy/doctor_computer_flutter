@@ -33,6 +33,34 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Reads a single profile row from `public.users` without relying on
+  /// PostgREST single-object coercion.
+  ///
+  /// `.single()` / `.maybeSingle()` ask PostgREST to return one JSON object and
+  /// raise `PGRST116` ("Cannot coerce the result to a single JSON object")
+  /// whenever more than one row matches — e.g. a duplicated profile row left by
+  /// a retried registration. Every profile read therefore goes through a plain
+  /// list query capped with `.limit(1)`, so login and session restore stay
+  /// deterministic even when duplicates exist.
+  Future<Map<String, dynamic>?> _fetchProfileRow({String? id, String? email}) async {
+    if (id == null && email == null) return null;
+
+    try {
+      var query = supabase.from('users').select();
+      query = id != null ? query.eq('id', id) : query.eq('email', email!);
+
+      final rows = await query.limit(1);
+      if (rows.isEmpty) return null;
+      return Map<String, dynamic>.from(rows.first as Map);
+    } on PostgrestException catch (e) {
+      debugPrint('[AuthProvider] profile lookup failed (${e.code}): ${e.message}');
+      return null;
+    } catch (e) {
+      debugPrint('[AuthProvider] profile lookup failed: $e');
+      return null;
+    }
+  }
+
   Future<void> restoreSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -54,21 +82,12 @@ class AuthProvider extends ChangeNotifier {
       // 2. Sync with Supabase Auth session if available
       final supaUser = supabase.auth.currentUser;
       if (supaUser != null) {
-        try {
-          final List res = await supabase
-              .from('users')
-              .select()
-              .eq('id', supaUser.id)
-              .limit(1);
-
-          if (res.isNotEmpty) {
-            _currentUser = _mapToUserModel(res.first as Map<String, dynamic>);
-            _isLoggedIn = true;
-            await _saveSessionToPrefs(_currentUser!);
-            notifyListeners();
-          }
-        } catch (e) {
-          debugPrint('Error syncing fresh Supabase profile: $e');
+        final data = await _fetchProfileRow(id: supaUser.id);
+        if (data != null) {
+          _currentUser = _mapToUserModel(data);
+          _isLoggedIn = true;
+          await _saveSessionToPrefs(_currentUser!);
+          notifyListeners();
         }
       }
     } catch (e) {
@@ -156,26 +175,11 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      // 2. Fetch user profile from users table
-      final List res = await supabase
-          .from('users')
-          .select()
-          .eq('id', userId)
-          .limit(1);
-
-      Map<String, dynamic>? data;
-      if (res.isNotEmpty) {
-        data = res.first as Map<String, dynamic>;
-      } else {
-        final List byEmail = await supabase
-            .from('users')
-            .select()
-            .eq('email', authRes.user?.email ?? email)
-            .limit(1);
-        if (byEmail.isNotEmpty) {
-          data = byEmail.first as Map<String, dynamic>;
-        }
-      }
+      // 2. Fetch user profile from users table: id first, then email alias.
+      //    Both reads are list-based (see _fetchProfileRow) so duplicate rows
+      //    can no longer trigger a PostgREST coercion failure during login.
+      final data = await _fetchProfileRow(id: userId) ??
+          await _fetchProfileRow(email: authRes.user?.email ?? email);
 
       if (data == null) {
         // User authenticated but no profile row yet - create one
@@ -532,13 +536,9 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {}
 
       // 3. Make sure admin row exists in users table
-      final List adminCheck = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', 'admin@doctorcomputer.id')
-          .limit(1);
+      final adminRow = await _fetchProfileRow(email: 'admin@doctorcomputer.id');
 
-      if (adminCheck.isEmpty) {
+      if (adminRow == null) {
         await supabase.from('users').insert({
           'id': 'admin-dc-001',
           'full_name': 'Administrator',

@@ -37,13 +37,16 @@ class DatabaseMigration {
   static Future<void> _seedAdminAccount() async {
     try {
       // Check if admin exists
-      final existing = await supabase
+      // List-based read (`limit(1)`): `.maybeSingle()` throws PGRST116 when
+      // duplicate profile rows exist, which is the same coercion bug fixed in
+      // AuthProvider's login/session sync.
+      final rows = await supabase
           .from('users')
           .select('id')
           .eq('email', 'admin@doctorcomputer.id')
-          .maybeSingle();
+          .limit(1);
 
-      if (existing == null) {
+      if (rows.isEmpty) {
         debugPrint('Admin account will be created on first admin login.');
       }
     } catch (e) {

@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.7-beta
+* **Release Version:** 1.0.8-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -102,13 +102,39 @@ The system implements strict role-based authorization to divide administrative f
 | BUG-005 | Post-purchase blank screen | `Navigator.popUntil` failed to identify route due to missing `RouteSettings` in router | Resolved (RouteSettings attached across router; deterministic navigation to order history deployed) |
 | BUG-006 | AI Smart Search category pollution | Query algorithm evaluated textual description tokens before category categorization | Resolved (Category-first isolation implemented) |
 | BUG-007 | Database schema cache error on register (PGRST204) | Insert query passed uncommitted schema columns | Resolved (Standardized core schema insert with fallback role resolution) |
-| BUG-008 | PostgREST single object coercion failure on login | Multiple matching rows triggered coercion exceptions on `.single()` | Resolved (Transitioned to `.limit(1)` query format) |
-| BUG-009 | Admin user editing does not persist to database | Supabase RLS blocks cross-user updates; no `role` column in schema | Resolved (Dual persistence with SharedPreferences cache + RLS policy migration) |
+| BUG-008 | PostgREST single object coercion failure on login | Multiple matching rows triggered coercion exceptions on `.single()` | Resolved (Transitioned to `.limit(1)` query format; hardened for all session reads in v1.0.8-beta — see BUG-016) |
+| BUG-009 | Admin user editing does not persist to database | Supabase RLS blocks cross-user updates; no `role` column in schema | Resolved (Dual persistence with SharedPreferences cache + rewritten RLS policies in v1.0.8-beta — see BUG-015) |
 | BUG-010 | Blank white screen upon triggering Flash Sale dialog | Unbounded layout constraints on Slider in dialog and type cast exceptions on numeric price strings | Resolved (Replaced dialog with constrained modal bottom sheet, bounded box layout, and defensive numeric parsing) |
 | BUG-011 | App stuck before splash screen (runApp never reached) | `AuthProvider` constructor called `restoreSession()` fire-and-forget while `main()` awaited it again, causing a race condition on Supabase and SharedPreferences | Resolved (Removed duplicate `restoreSession()` call from constructor) |
 | BUG-012 | Undefined identifier `user` in admin dashboard | `user` variable referenced in admin blockchain sync was never declared in scope | Resolved (Replaced with `context.read<AuthProvider>().currentUser`) |
 | BUG-013 | `use_build_context_synchronously` warning in admin dashboard | `context.read<BlockchainProvider>()` called after async gap without mounted check | Resolved (Added `if (!ctx.mounted) return;` guard before async context usage) |
 | BUG-014 | `invalid_constant` error in product detail screen | `const Icon` used with non-const `AppColors.error` color value | Resolved (Removed `const` keyword from Icon constructor) |
+
+---
+
+## Known Bugs (Fixed)
+
+### BUG-015 — Cross-user account editing rejected by RLS (fixed in v1.0.8-beta)
+
+* **Symptom:** The admin dashboard reported a successful save when editing another customer's name, role, tier, or points, but the Supabase write was rejected. The change lived only in the device's `SharedPreferences` cache, so it disappeared on another device or after clearing app data.
+* **Root cause:** `supabase/migrations/add_admin_features.sql` created policies with `CREATE POLICY IF NOT EXISTS`, which is not valid PostgreSQL, so the script aborted before the admin policies existed. It also compared `auth.uid()` (uuid) against `users.id` (varchar) with no cast, and evaluated `EXISTS (SELECT ... FROM users ...)` **inside** a policy on `users`, which PostgreSQL rejects with `infinite recursion detected in policy for relation users`. On top of that, the self-update policy allowed any signed-in customer to write `role` on their own row.
+* **Fix:** The RLS section is now idempotent (drop-then-create) and resolves the caller's role through `public.is_admin()` / `public.is_staff()` — `STABLE SECURITY DEFINER` helpers that read the caller's own row once, without re-entering RLS and without exposing other rows. `public.users` is covered by self-or-staff read, self-or-admin insert/update, and admin-only delete policies, plus a `BEFORE UPDATE` trigger that rejects changes to `role`, `points`, and `membership_tier` unless the caller is an admin.
+* **Action required:** re-run `supabase/migrations/add_admin_features.sql` in the Supabase SQL Editor. Cross-user writes apply when the signed-in admin holds a real Supabase session; the local credential fallback has no JWT and therefore still cannot write to the server.
+
+### BUG-016 — PostgREST single-object coercion failure during login sync (fixed in v1.0.8-beta)
+
+* **Symptom:** `PostgrestException: Cannot coerce the result to a single JSON object` (`PGRST116`) interrupted login or session restore whenever `public.users` held duplicate rows for the same identity, leaving the app on stale cached data.
+* **Root cause:** Profile reads requested PostgREST's single-object mode (`.single()` / `.maybeSingle()`), which throws as soon as more than one row matches. The same pattern survived in the startup admin check inside `DatabaseMigration`.
+* **Fix:** Login and session restore now read the profile through `AuthProvider._fetchProfileRow()`, which queries as a list with `.limit(1)`, tolerates duplicate rows, and logs `PostgrestException` instead of throwing. `DatabaseMigration._seedAdminAccount()` uses the same list-based read.
+
+---
+
+## Version 1.0.8-beta Changelog
+
+1. **Admin RLS Cross-User Editing Fix (BUG-015):** Rewrote the RLS section of `supabase/migrations/add_admin_features.sql` — idempotent drop-then-create policies, explicit `auth.uid()::text` casts, non-recursive `SECURITY DEFINER` role helpers (`is_admin`, `is_staff`), RLS enabled on `public.users`, and a guard trigger that blocks non-admins from changing `role`, `points`, or `membership_tier`.
+2. **PostgREST Login Coercion Fix (BUG-016):** Login and session restore read the user profile through `AuthProvider._fetchProfileRow()`, a list-based `.limit(1)` query that no longer raises `PGRST116` when duplicate rows exist. The startup admin check in `DatabaseMigration` follows the same pattern.
+3. **Version Metadata:** `pubspec.yaml` bumped to `1.0.8-beta+8` and `AppConstants.appVersion` synchronized to `1.0.8-beta`.
+4. **Code Analysis Compliance:** Analysed with `flutter analyze lib` and exercised with `flutter test` — both pass with 0 issues.
 
 ---
 
