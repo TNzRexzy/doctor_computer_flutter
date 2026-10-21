@@ -18,6 +18,41 @@ class AuthProvider extends ChangeNotifier {
 
   final supabase = Supabase.instance.client;
 
+  static const String _sessionKey = 'cached_active_user';
+  static const String _sessionSavedAtKey = 'cached_active_user_saved_at';
+
+  /// Cache slots written by earlier builds. They are purged on every save so
+  /// an old display name (for example the raw `usn nopal48` profile name)
+  /// cannot survive a profile update.
+  static const List<String> _legacySessionKeys = [
+    'cached_user',
+    'cached_user_name',
+    'current_user',
+    'current_user_name',
+    'active_user',
+    'active_user_name',
+    'logged_in_user',
+    'user_name',
+  ];
+
+  /// Database roles PostgREST is allowed to switch into. Any other value in the
+  /// JWT `role` claim makes every REST call fail with SQLSTATE 22023.
+  static const Set<String> _validDatabaseRoles = {
+    'authenticated',
+    'anon',
+    'service_role',
+    'supabase_admin',
+    'postgres',
+    'authenticator',
+  };
+
+  bool _staffAccountsChecked = false;
+
+  bool get isAdmin => _currentUser?.role == UserRole.admin;
+  bool get isStaff =>
+      _currentUser?.role == UserRole.admin ||
+      _currentUser?.role == UserRole.cashier;
+
   AuthProvider();
 
   // ============================================
@@ -26,10 +61,105 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _saveSessionToPrefs(UserModel user) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cached_active_user', jsonEncode(user.toMap()));
+
+      // Drop stale payloads from previous builds before writing the new one.
+      for (final key in _legacySessionKeys) {
+        if (prefs.containsKey(key)) {
+          await prefs.remove(key);
+        }
+      }
+      await prefs.remove(_sessionKey);
+
+      await prefs.setString(_sessionKey, jsonEncode(user.toMap()));
+      await prefs.setString(_sessionSavedAtKey, DateTime.now().toIso8601String());
       await prefs.setBool('is_logged_in', true);
     } catch (e) {
       debugPrint('Error caching user session: $e');
+    }
+  }
+
+  // ============================================
+  // JWT ROLE CLAIM SAFETY
+  // ============================================
+
+  /// Reads the `role` claim of the current access token.
+  String? _jwtRoleClaim() {
+    final token = supabase.auth.currentSession?.accessToken;
+    if (token == null || token.isEmpty) return null;
+
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+
+    try {
+      final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final claims = jsonDecode(payload);
+      if (claims is Map) return claims['role']?.toString();
+    } catch (e) {
+      debugPrint('[AuthProvider] unable to decode JWT claims: $e');
+    }
+    return null;
+  }
+
+  /// Detects a token whose `role` claim is an application role (`admin`)
+  /// instead of a database role (`authenticated`).
+  ///
+  /// Supabase copies `raw_app_meta_data` into the access token as top-level
+  /// claims, so an `app_metadata.role = 'admin'` entry makes PostgREST run
+  /// `SET LOCAL ROLE "admin"` and every request (cart, pc_parts, products, …)
+  /// fails with `role "admin" does not exist` (SQLSTATE 22023).
+  ///
+  /// The claim itself can only be removed server-side by
+  /// `supabase/migrations/fix_admin_role_claim.sql`; this guard refreshes the
+  /// session so the corrected metadata produces a clean token right away.
+  Future<void> _guardJwtRoleClaim() async {
+    final claim = _jwtRoleClaim();
+    if (claim == null || _validDatabaseRoles.contains(claim)) return;
+
+    debugPrint(
+      '[AuthProvider] JWT role claim "$claim" is not a database role. '
+      'PostgREST will reject every request with SQLSTATE 22023 until the leaked '
+      'app_metadata.role key is removed by supabase/migrations/fix_admin_role_claim.sql.',
+    );
+
+    try {
+      await supabase.auth.refreshSession();
+    } catch (e) {
+      debugPrint('[AuthProvider] token refresh after role-claim leak failed: $e');
+      return;
+    }
+
+    final refreshed = _jwtRoleClaim();
+    if (refreshed != null && !_validDatabaseRoles.contains(refreshed)) {
+      debugPrint(
+        '[AuthProvider] role claim is still "$refreshed" after refresh. '
+        'Run supabase/migrations/fix_admin_role_claim.sql in the Supabase SQL Editor.',
+      );
+    }
+  }
+
+  /// Re-reads `public.users.role` for the active account and refreshes the
+  /// in-memory user plus the SharedPreferences cache when it changed.
+  ///
+  /// Called when the admin dashboard opens, so a promotion made on the server
+  /// is picked up without forcing the user to log out and back in.
+  Future<void> refreshRole() async {
+    final cached = _currentUser;
+    if (cached == null) return;
+
+    try {
+      final supaUser = supabase.auth.currentUser;
+      final row = (supaUser != null ? await _fetchProfileRow(id: supaUser.id) : null) ??
+          await _fetchProfileRow(email: cached.email);
+      if (row == null) return;
+
+      final fresh = _mapToUserModel(row);
+      if (fresh.role == cached.role && fresh.fullName == cached.fullName) return;
+
+      _currentUser = fresh;
+      await _saveSessionToPrefs(fresh);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AuthProvider] refreshRole failed: $e');
     }
   }
 
@@ -79,10 +209,14 @@ class AuthProvider extends ChangeNotifier {
         }
       }
 
-      // 2. Sync with Supabase Auth session if available
+      // 2. Repair a token whose role claim was leaked from auth metadata
+      await _guardJwtRoleClaim();
+
+      // 3. Sync with Supabase Auth session if available
       final supaUser = supabase.auth.currentUser;
       if (supaUser != null) {
-        final data = await _fetchProfileRow(id: supaUser.id);
+        final data = await _fetchProfileRow(id: supaUser.id) ??
+            await _fetchProfileRow(email: supaUser.email);
         if (data != null) {
           _currentUser = _mapToUserModel(data);
           _isLoggedIn = true;
@@ -168,6 +302,10 @@ class AuthProvider extends ChangeNotifier {
         _errorMessage = 'Email atau password salah';
         return false;
       }
+
+      // The profile read below uses PostgREST, which is unreachable while the
+      // token still carries a non-database `role` claim.
+      await _guardJwtRoleClaim();
 
       final userId = authRes.user?.id;
       if (userId == null) {
@@ -516,43 +654,88 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Ensures Admin and Cashier accounts are ready.
+  /// Ensures the built-in staff profiles exist in `public.users` with the
+  /// correct application role.
+  ///
+  /// This deliberately never calls `supabase.auth.signUp()`: signing up while a
+  /// customer is logged in replaces the active session, and writing `role` into
+  /// auth metadata leaks into the JWT as a PostgreSQL role claim (SQLSTATE
+  /// 22023). The application role lives only in `public.users.role`.
   Future<void> ensureAdminAccount() async {
+    if (_staffAccountsChecked) return;
+    _staffAccountsChecked = true;
+
+    await _ensureStaffProfile(
+      email: 'admin@doctorcomputer.id',
+      role: 'admin',
+      fullName: 'Administrator',
+      fallbackId: 'admin-dc-001',
+      tier: 'platinum',
+      points: 99999,
+    );
+
+    await _ensureStaffProfile(
+      email: 'cashier@doctorcomputer.id',
+      role: 'cashier',
+      fullName: 'Kasir Toko Doctor Computer',
+      fallbackId: 'cashier-dc-001',
+      tier: 'silver',
+      points: 1500,
+    );
+
+    // Owner accounts must stay admin. The write is best effort: RLS only lets a
+    // real admin change the `role` column, so any rejection is non-fatal and
+    // UserModel.resolveRole still keeps the owner in the admin dashboard.
+    for (final email in UserModel.ownerEmails) {
+      await _promoteProfileRole(email, 'admin');
+    }
+  }
+
+  Future<void> _ensureStaffProfile({
+    required String email,
+    required String role,
+    required String fullName,
+    required String fallbackId,
+    required String tier,
+    required int points,
+  }) async {
     try {
-      // 1. Check if admin exists in Supabase Auth
-      try {
-        await supabase.auth.signUp(
-          email: 'admin@doctorcomputer.id',
-          password: 'Admin@DC2026!',
-        );
-      } catch (_) {}
+      final row = await _fetchProfileRow(email: email);
 
-      // 2. Check if cashier exists in Supabase Auth
-      try {
-        await supabase.auth.signUp(
-          email: 'cashier@doctorcomputer.id',
-          password: 'Cashier@DC2026!',
-        );
-      } catch (_) {}
-
-      // 3. Make sure admin row exists in users table
-      final adminRow = await _fetchProfileRow(email: 'admin@doctorcomputer.id');
-
-      if (adminRow == null) {
+      if (row == null) {
         await supabase.from('users').insert({
-          'id': 'admin-dc-001',
-          'full_name': 'Administrator',
-          'email': 'admin@doctorcomputer.id',
-          'phone': '081234567890',
+          'id': fallbackId,
+          'full_name': fullName,
+          'email': email,
+          'phone': '',
           'address': 'Doctor Computer HQ',
           'city': 'Jakarta',
-          'membership_tier': 'platinum',
-          'points': 99999,
+          'membership_tier': tier,
+          'points': points,
           'join_date': DateTime.now().toIso8601String(),
+          'role': role,
         });
+        return;
+      }
+
+      if (row['role']?.toString().toLowerCase() != role) {
+        await _promoteProfileRole(email, role);
       }
     } catch (e) {
-      debugPrint('ensureAdminAccount notice: $e');
+      debugPrint('ensureAdminAccount notice ($email): $e');
+    }
+  }
+
+  /// Updates `public.users.role` for an email. Rejected writes are logged and
+  /// swallowed because a signed-out or non-admin session cannot change roles.
+  Future<void> _promoteProfileRole(String email, String role) async {
+    try {
+      await supabase
+          .from('users')
+          .update({'role': role})
+          .eq('email', email);
+    } catch (e) {
+      debugPrint('Role sync skipped ($email -> $role): $e');
     }
   }
 
@@ -580,31 +763,16 @@ class AuthProvider extends ChangeNotifier {
   // HELPER: Map response ke UserModel
   // ============================================
   UserModel _mapToUserModel(Map<String, dynamic> data) {
-    return UserModel.fromMap(data);
+    final model = UserModel.fromMap(data);
+
+    // `public.users.role` is the source of truth. The email allowlist inside
+    // resolveRole only prevents owner/cashier accounts from being demoted to
+    // `UserRole.user` by a stale row or an old cached session.
+    final role = _parseUserRole(data['role'], email: model.email);
+    return role == model.role ? model : model.copyWith(role: role);
   }
 
   UserRole _parseUserRole(dynamic role, {String? email}) {
-    if (email != null) {
-      final lowerEmail = email.toLowerCase();
-      if (lowerEmail == 'admin@doctorcomputer.id' || lowerEmail == 'admin') {
-        return UserRole.admin;
-      }
-      if (lowerEmail == 'cashier@doctorcomputer.id' || lowerEmail == 'cashier') {
-        return UserRole.cashier;
-      }
-    }
-    if (role == null) return UserRole.user;
-    if (role is String) {
-      switch (role.toLowerCase()) {
-        case 'admin':
-          return UserRole.admin;
-        case 'cashier':
-          return UserRole.cashier;
-        case 'user':
-        default:
-          return UserRole.user;
-      }
-    }
-    return UserRole.user;
+    return UserModel.resolveRole(role, email: email);
   }
 }

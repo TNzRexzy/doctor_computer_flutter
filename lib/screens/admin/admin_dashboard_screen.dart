@@ -41,24 +41,59 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Timer? _flashSaleTicker;
 
+  late final AuthProvider _auth;
+  bool _isAdmin = false;
+  bool _isStaff = false;
+
   @override
   void initState() {
     super.initState();
-    final user = context.read<AuthProvider>().currentUser;
-    final isAdmin = user?.role == UserRole.admin;
+    _auth = context.read<AuthProvider>();
+    _isAdmin = _auth.isAdmin;
+    _isStaff = _auth.isStaff;
     _tabController = TabController(
-      length: isAdmin ? 6 : 4,
+      length: _isAdmin ? 6 : 4,
       vsync: this,
     );
+    _auth.addListener(_handleAuthChange);
     _loadData();
 
     _flashSaleTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+
+    // Pull the freshest `public.users.role` so an account promoted on the
+    // server opens the admin tabs without a re-login.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _auth.refreshRole();
+    });
+  }
+
+  /// Keeps the tab controller and the tab count in sync with the resolved
+  /// role. A previous `TabController(length: 4)` combined with a late role
+  /// upgrade to admin built 6 tabs and threw a length-mismatch error.
+  void _handleAuthChange() {
+    if (!mounted) return;
+    final adminNow = _auth.isAdmin;
+    final staffNow = _auth.isStaff;
+    if (adminNow == _isAdmin && staffNow == _isStaff) return;
+
+    final previous = _tabController;
+    final next = TabController(length: adminNow ? 6 : 4, vsync: this);
+    setState(() {
+      _isAdmin = adminNow;
+      _isStaff = staffNow;
+      _tabController = next;
+    });
+
+    // Dispose only after the rebuild: TabBar/TabBarView must detach from the
+    // old controller first, otherwise they touch a disposed one.
+    WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
   }
 
   @override
   void dispose() {
+    _auth.removeListener(_handleAuthChange);
     _flashSaleTicker?.cancel();
     _tabController.dispose();
     super.dispose();
@@ -99,8 +134,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final user = context.read<AuthProvider>().currentUser;
-      final isAdmin = user?.role == UserRole.admin;
+      final isAdmin = _isAdmin;
 
       // Products - merge Supabase + ProductProvider (includes locally cached & newly added products)
       final productsRes = await supabase.from('products').select();
@@ -187,8 +221,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    final user = context.read<AuthProvider>().currentUser;
-    final isAdmin = user?.role == UserRole.admin;
+    final isAdmin = _isAdmin;
+
+    // Page guard: a customer session (or a stale cached role) must never reach
+    // the staff tabs, and the dashboard must not build a TabBarView whose
+    // length disagrees with the controller.
+    if (!_isStaff) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Akses Ditolak'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock_outline, size: 64, color: AppColors.textTertiary),
+                const SizedBox(height: 16),
+                Text(
+                  'Halaman ini khusus admin dan kasir',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Masuk dengan akun staf untuk membuka dashboard.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -269,14 +338,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  Text('Total: ${filtered.length} produk', style: AppTextStyles.caption),
-                  const Spacer(),
+                  Expanded(
+                    child: Text(
+                      'Total: ${filtered.length} produk',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption,
+                    ),
+                  ),
                   if (_products.any((p) => p['is_on_sale'] == true))
-                    TextButton.icon(
-                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                      icon: Icon(Icons.local_fire_department, size: 16, color: AppColors.error),
-                      label: Text('Ke Tab Flash Sale', style: TextStyle(color: AppColors.error, fontSize: 12)),
-                      onPressed: () => _tabController.animateTo(1),
+                    Flexible(
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        icon: Icon(Icons.local_fire_department, size: 16, color: AppColors.error),
+                        label: Text(
+                          'Ke Tab Flash Sale',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: AppColors.error, fontSize: 12),
+                        ),
+                        onPressed: () => _tabController.animateTo(1),
+                      ),
                     ),
                 ],
               ),
@@ -574,9 +659,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
               // Active Flash Sale Products Section
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Produk Flash Sale (${flashProducts.length})', style: AppTextStyles.titleMedium),
+                  Expanded(
+                    child: Text(
+                      'Produk Flash Sale (${flashProducts.length})',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleMedium,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
@@ -585,7 +677,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       visualDensity: VisualDensity.compact,
                     ),
                     icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Tambah Produk'),
+                    label: const Text('Tambah Produk', maxLines: 1, overflow: TextOverflow.ellipsis),
                     onPressed: () => _openFlashSaleConfigSheet(null),
                   ),
                 ],
@@ -769,12 +861,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Rp ${_formatNumber(product.price)}',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                Flexible(
+                  child: Text(
+                    'Rp ${_formatNumber(product.price)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
                 if (product.originalPrice != null) ...[
@@ -1147,11 +1243,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           children: [
                             Icon(Icons.store, size: 14, color: AppColors.primary),
                             const SizedBox(width: 6),
-                            Text(
-                              'Respon Penjual${review.replyRole != null ? ' - ${review.replyRole == 'admin' ? 'Admin' : 'Kasir'}' : ''}',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Text(
+                                'Respon Penjual${review.replyRole != null ? ' - ${review.replyRole == 'admin' ? 'Admin' : 'Kasir'}' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -1362,14 +1462,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(u['email']?.toString() ?? '-', style: AppTextStyles.caption),
-                              Row(
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Chip(
                                     label: Text(tier.toUpperCase(), style: const TextStyle(fontSize: 9)),
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
                                   ),
-                                  const SizedBox(width: 4),
                                   Chip(
                                     label: Text(
                                       role.toUpperCase(),
@@ -1383,7 +1485,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
                                   ),
-                                  const SizedBox(width: 4),
                                   Text('$points pts',
                                       style: AppTextStyles.caption.copyWith(color: AppColors.accent)),
                                 ],

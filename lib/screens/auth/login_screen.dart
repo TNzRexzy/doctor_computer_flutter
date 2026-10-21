@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/validators.dart';
+import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
@@ -82,7 +83,15 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (success) {
-        Navigator.pushReplacementNamed(context, AppRouter.mainNav);
+        final role = auth.currentUser?.role;
+        final navigator = Navigator.of(context);
+        navigator.pushReplacementNamed(AppRouter.mainNav);
+
+        // Staff accounts enter their dashboard directly; the storefront stays
+        // underneath, so the back arrow returns to it instead of exiting.
+        if (role == UserRole.admin || role == UserRole.cashier) {
+          navigator.pushNamed(AppRouter.adminDashboard);
+        }
       } else {
         final errorMsg = auth.errorMessage ?? 'Login gagal. Silakan periksa kredensial Anda.';
         ScaffoldMessenger.of(context).showSnackBar(
@@ -161,47 +170,55 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: AppTextStyles.bodyMedium,
                       ),
                       const SizedBox(height: 12),
+                      // Single flat row with a flexible label: the previous
+                      // nested row + fixed TextButton overflowed on ~320dp
+                      // screens ("RenderFlex overflowed by N pixels").
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: Checkbox(
-                                  value: _rememberEmail,
-                                  activeColor: AppColors.primary,
-                                  checkColor: AppColors.buttonText,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      _rememberEmail = val ?? false;
-                                    });
-                                  },
-                                ),
+                          SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: Checkbox(
+                              value: _rememberEmail,
+                              activeColor: AppColors.primary,
+                              checkColor: AppColors.buttonText,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _rememberEmail = !_rememberEmail;
-                                  });
-                                },
-                                child: Text(
-                                  'Ingat email saya',
-                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                                ),
+                              onChanged: (val) {
+                                setState(() {
+                                  _rememberEmail = val ?? false;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _rememberEmail = !_rememberEmail;
+                                });
+                              },
+                              child: Text(
+                                'Ingat email saya',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                               ),
-                            ],
+                            ),
                           ),
                           TextButton(
                             onPressed: () {},
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: const Size(0, 36),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
                             child: Text(
                               'Lupa Password?',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent),
                             ),
                           ),

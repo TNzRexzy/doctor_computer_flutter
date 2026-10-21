@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.8-beta
+* **Release Version:** 1.0.9-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -126,6 +126,33 @@ The system implements strict role-based authorization to divide administrative f
 * **Symptom:** `PostgrestException: Cannot coerce the result to a single JSON object` (`PGRST116`) interrupted login or session restore whenever `public.users` held duplicate rows for the same identity, leaving the app on stale cached data.
 * **Root cause:** Profile reads requested PostgREST's single-object mode (`.single()` / `.maybeSingle()`), which throws as soon as more than one row matches. The same pattern survived in the startup admin check inside `DatabaseMigration`.
 * **Fix:** Login and session restore now read the profile through `AuthProvider._fetchProfileRow()`, which queries as a list with `.limit(1)`, tolerates duplicate rows, and logs `PostgrestException` instead of throwing. `DatabaseMigration._seedAdminAccount()` uses the same list-based read.
+
+### BUG-017 — `role "admin" does not exist` blocks cart, PC parts and products (fixed in v1.0.9-beta)
+
+* **Symptom:** Every Supabase read raised `PostgrestException: role "admin" does not exist (code 22023)` — loading the cart, PC parts, and product catalog failed even though the tables and RLS policies were correct.
+* **Root cause:** Supabase copies each key of `auth.users.raw_app_meta_data` into the access token as a **top-level JWT claim**. An `app_metadata.role = 'admin'` entry therefore replaced the `role` claim PostgREST uses to `SET LOCAL ROLE` on every request. PostgreSQL has no database role named `admin`, so it answered with SQLSTATE `22023` before RLS was ever evaluated. The application role belongs in `public.users.role`, not in the `role` key of auth metadata.
+* **Fix:** New migration `supabase/migrations/fix_admin_role_claim.sql` removes the leaked `role` key from the auth metadata, records the flag only as a namespaced `app_role` custom claim, and promotes the owner account through `public.users.role`. The Flutter client no longer writes `role` into auth metadata anywhere; `AuthProvider._guardJwtRoleClaim()` decodes the access token, detects a non-database role claim, and refreshes the session so the corrected metadata yields a clean `authenticated` token. All profile reads resolve the app role from `public.users.role`.
+* **Action required:** run `supabase/migrations/fix_admin_role_claim.sql` in the Supabase SQL Editor, then sign out and back in (or restart the app) so a fresh token is issued.
+
+### BUG-018 — Owner account demoted to `user` after session restore (fixed in v1.0.9-beta)
+
+* **Symptom:** nopal48@gmail.com could sign in, but the session resolved to a regular customer: the "Dashboard Admin" entry stayed hidden while the catalog loaded.
+* **Root cause:** Role mapping only accepted literal `admin`/`cashier` strings and returned `UserRole.user` for every other email, so a profile row without the `role` column reset the owner. On top of that, `ensureAdminAccount()` called `supabase.auth.signUp()` on every launch — replacing the active session — and the cached `SharedPreferences` payload kept the old display name.
+* **Fix:** `UserModel.resolveRole()` treats `public.users.role` as the source of truth and never demotes owner/cashier accounts to `user`; `ensureAdminAccount()` no longer touches Supabase Auth (it only ensures the staff profile rows and their `role`, once per launch, best effort); `refreshRole()` re-reads the role whenever the dashboard opens; `_saveSessionToPrefs()` purges legacy cache slots and writes the fresh payload plus a timestamp. Login now opens the staff dashboard on top of the storefront, and the dashboard rejects non-staff sessions and rebuilds its `TabController` when the role changes.
+
+---
+
+## Version 1.0.9-beta Changelog
+
+1. **PostgREST Role Claim Fix (BUG-017):** Added `supabase/migrations/fix_admin_role_claim.sql`, which strips the leaked `app_metadata.role` key that PostgREST interpreted as a PostgreSQL role (`SQLSTATE 22023`) and keeps the admin flag in the namespaced `app_role` claim instead.
+2. **JWT Claim Guard:** `AuthProvider._guardJwtRoleClaim()` decodes the access token on login and session restore, logs an actionable message when the `role` claim is not a database role, and refreshes the session so a corrected metadata payload takes effect immediately.
+3. **Database-First Role Resolution (BUG-018):** `UserModel.resolveRole()` and `AuthProvider._parseUserRole()` now read the role from `public.users.role`, with an owner/cashier allowlist that prevents nopal48@gmail.com and the built-in staff accounts from being demoted to `UserRole.user` by a stale row or cached session.
+4. **Non-Destructive Staff Bootstrap:** `ensureAdminAccount()` no longer calls `supabase.auth.signUp()` at startup, so restoring a session can no longer replace the signed-in account or corrupt the JWT role claim; it only reconciles the staff profile rows and their role, once per launch.
+5. **Session Cache Hygiene:** `_saveSessionToPrefs()` clears legacy cache slots (`cached_user`, `active_user`, `user_name`, …) before writing the current profile, so an outdated display name no longer persists after a profile update.
+6. **Role-Aware Navigation:** Staff logins open the admin/cashier dashboard on top of the storefront, `AdminDashboardScreen` refuses non-staff sessions, rebuilds its tab controller when the resolved role changes, and re-reads the role from the database on entry.
+7. **Layout Overflow Cleanup:** Removed the remaining `RenderFlex overflowed` sources in the login/register forms and the admin dashboard (flexible labels in the auth footer, flash-sale header and product rows, review reply header, and a `Wrap` for the user tier/role chips).
+8. **Version Metadata:** `pubspec.yaml` bumped to `1.0.9-beta+9` and `AppConstants.appVersion` synchronized to `1.0.9-beta`.
+9. **Code Analysis Compliance:** Analysed with `flutter analyze lib` and exercised with `flutter test` — both pass with 0 issues.
 
 ---
 
