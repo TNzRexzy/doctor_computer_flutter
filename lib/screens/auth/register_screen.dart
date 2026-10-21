@@ -208,7 +208,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Sudah punya akun? ', style: AppTextStyles.bodyMedium),
+                  Flexible(
+                    child: Text(
+                      'Sudah punya akun? ',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium,
+                    ),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);
