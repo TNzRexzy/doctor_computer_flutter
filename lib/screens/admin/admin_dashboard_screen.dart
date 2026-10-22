@@ -45,12 +45,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   bool _isAdmin = false;
   bool _isStaff = false;
 
+  /// Derived from the public [AuthProvider.currentUser] API on purpose: this
+  /// screen only reads the provider, so it keeps compiling no matter which
+  /// helper getters a given `auth_provider.dart` revision exposes.
+  bool get _currentIsAdmin => _auth.currentUser?.role == UserRole.admin;
+
+  bool get _currentIsStaff {
+    final role = _auth.currentUser?.role;
+    return role == UserRole.admin || role == UserRole.cashier;
+  }
+
   @override
   void initState() {
     super.initState();
     _auth = context.read<AuthProvider>();
-    _isAdmin = _auth.isAdmin;
-    _isStaff = _auth.isStaff;
+    _isAdmin = _currentIsAdmin;
+    _isStaff = _currentIsStaff;
     _tabController = TabController(
       length: _isAdmin ? 6 : 4,
       vsync: this,
@@ -62,10 +72,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       if (mounted) setState(() {});
     });
 
-    // Pull the freshest `public.users.role` so an account promoted on the
-    // server opens the admin tabs without a re-login.
+    // Re-sync the profile so an account promoted on the server opens the admin
+    // tabs without a re-login. `restoreSession()` is the long-standing public
+    // entry point for that read (it refreshes the cached user and notifies).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _auth.refreshRole();
+      if (mounted) _auth.restoreSession();
     });
   }
 
@@ -74,8 +85,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   /// upgrade to admin built 6 tabs and threw a length-mismatch error.
   void _handleAuthChange() {
     if (!mounted) return;
-    final adminNow = _auth.isAdmin;
-    final staffNow = _auth.isStaff;
+    final adminNow = _currentIsAdmin;
+    final staffNow = _currentIsStaff;
     if (adminNow == _isAdmin && staffNow == _isStaff) return;
 
     final previous = _tabController;
