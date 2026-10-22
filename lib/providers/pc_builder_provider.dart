@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/pc_build_model.dart';
-import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/constants/app_constants.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
@@ -74,15 +73,11 @@ class PcBuilderProvider extends ChangeNotifier {
     _loadParts();
   }
 
-  List<PcPartModel> get allParts => _allParts.isNotEmpty ? _allParts : mockPcParts;
+  List<PcPartModel> get allParts => _allParts;
   bool get isLoading => _isLoading;
 
   List<PcPartModel> getPartsForCategory(PcPartCategory category) {
-    final list = allParts.where((part) => part.category == category).toList();
-    if (list.isEmpty) {
-      return mockPcParts.where((part) => part.category == category).toList();
-    }
-    return list;
+    return _allParts.where((part) => part.category == category).toList();
   }
 
   Future<void> reloadParts() async {
@@ -100,18 +95,12 @@ class PcBuilderProvider extends ChangeNotifier {
 
       if (res.isNotEmpty) {
         _allParts = res.map((p) => _mapPart(p)).toList();
-        // Also combine with mock parts to ensure all categories have choices
-        for (var mock in mockPcParts) {
-          if (!_allParts.any((p) => p.name == mock.name)) {
-            _allParts.add(mock);
-          }
-        }
       } else {
-        _allParts = List.from(mockPcParts);
+        _allParts = [];
       }
     } catch (e) {
       debugPrint('Error loading pc parts from Supabase: $e');
-      _allParts = List.from(mockPcParts);
+      _allParts = [];
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -169,7 +158,30 @@ class PcBuilderProvider extends ChangeNotifier {
       specs: specsMap,
       imageUrl: imageUrl,
       compatibilityTags: tags,
+      sku: p['sku']?.toString(),
+      brandCode: p['brand_code']?.toString(),
+      subtype: p['subtype']?.toString(),
+      createdAt: p['created_at'] != null ? DateTime.tryParse(p['created_at'].toString()) : null,
     );
+  }
+
+  /// Saves the current PC build configuration to the Supabase pc_builds table.
+  Future<String?> saveBuildToDatabase(String userId) async {
+    try {
+      final buildModel = PcBuildModel(
+        selectedParts: _selectedParts,
+        serviceTier: _serviceTier,
+      );
+      final res = await Supabase.instance.client
+          .from('pc_builds')
+          .insert(buildModel.toSupabaseMap(userId))
+          .select('id')
+          .single();
+      return res['id']?.toString();
+    } catch (e) {
+      debugPrint('Error saving PC build to Supabase pc_builds table: $e');
+      return null;
+    }
   }
 
   void selectPart(PcPartCategory category, PcPartModel part) {

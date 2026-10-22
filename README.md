@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.7-beta
+* **Release Version:** 1.0.8-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -86,7 +86,7 @@ The system implements strict role-based authorization to divide administrative f
 3. **Database Schema Fallback Handling:** Implemented defensive schema mapping to gracefully handle environments where new columns (`role`, `profile_image_url`, `latitude`, `longitude`) are pending migration, preventing `PGRST204` crashes during registration.
 4. **Registration Error Handling:** Enhanced authentication exception handling to intercept HTTP 422 errors and display clear duplicate account notices.
 5. **Flexible Authentication Input:** Extended the login credential validator to accept identity aliases (`admin`, `cashier`) alongside standard email formats.
-6. **Application Version Metadata:** Synchronized application build metadata across dialogs, constants, and `pubspec.yaml` to display `Beta v1.0.7-beta`.
+6. **Application Version Metadata:** Synchronized application build metadata across dialogs, constants, and `pubspec.yaml` to display `Beta v1.0.8-beta`.
 7. **Code Analysis & Lint Compliance:** Eliminated unused imports, corrected 8-digit hexadecimal color values, and resolved asynchronous context gap warnings. The codebase passes `flutter analyze` with 0 issues.
 
 ---
@@ -109,6 +109,34 @@ The system implements strict role-based authorization to divide administrative f
 | BUG-012 | Undefined identifier `user` in admin dashboard | `user` variable referenced in admin blockchain sync was never declared in scope | Resolved (Replaced with `context.read<AuthProvider>().currentUser`) |
 | BUG-013 | `use_build_context_synchronously` warning in admin dashboard | `context.read<BlockchainProvider>()` called after async gap without mounted check | Resolved (Added `if (!ctx.mounted) return;` guard before async context usage) |
 | BUG-014 | `invalid_constant` error in product detail screen | `const Icon` used with non-const `AppColors.error` color value | Resolved (Removed `const` keyword from Icon constructor) |
+| BUG-015 | Cart upsert fails on `cart_items` table | `.upsert(onConflict: 'user_id,product_id')` assumed a unique constraint that does not exist on the table | Resolved (Replaced with select-then-insert/update logic) |
+| BUG-016 | Review insert crashes with schema mismatch | `toMap()` included `media_urls` field not present in `reviews` table schema | Resolved (Created separate `toSupabaseMap()` that excludes non-DB fields) |
+| BUG-017 | Order items FK violation for PC build parts | Cart items with `build-` prefixed IDs reference non-existent products table rows | Resolved (Added FK guard `!product.id.startsWith('build-')` in cart and order providers) |
+| BUG-018 | Notification screen dependent on hardcoded mock data | `NotificationProvider` returned static mock notifications unrelated to actual user activity | Resolved (Rewrote to generate notifications dynamically from orders, products, and user data) |
+| BUG-019 | Membership screen shows hardcoded tier data | Tier thresholds, discounts, and benefits were static constants instead of DB-driven | Resolved (Reads dynamically from `membership_tiers` table with local fallback) |
+| BUG-020 | PC builds not persisted to database | PC Builder confirmation only added items to cart without saving the build configuration | Resolved (Saves complete build record to `pc_builds` table via `toSupabaseMap()`) |
+
+---
+
+## Version 1.0.8-beta Changelog
+
+### New Features
+1. **Full Database Schema Synchronization:** Aligned all Flutter models and providers with the latest PostgreSQL schema — added `sku`, `brand_code`, and `subtype` fields to `ProductModel` and `PcPartModel`; created new `BrandModel` and `ProductSubtypeModel` for the `brands` and `product_subtypes` lookup tables.
+2. **100% Database-Driven Data:** Removed the entire `lib/data/mock/` directory (`mock_categories.dart`, `mock_products.dart`, `mock_pc_parts.dart`). All product, category, and PC part data is now sourced exclusively from Supabase.
+3. **Dynamic Notification System:** Rewrote `NotificationProvider` to generate notifications from real database activity (recent orders, new products, membership changes) instead of static mock data. Registered as `ChangeNotifierProxyProvider` keyed to the authenticated user ID.
+4. **Sticky Pinned Search Bar:** Home dashboard search bar remains fixed at the top of the screen when scrolling, ensuring product search is always accessible.
+5. **Draggable Floating AI Assistant:** Replaced the static bottom-bar AI button with a draggable floating action button ("Tanya Dokter AI") that can be repositioned anywhere on screen.
+6. **Database-Driven Membership Tiers:** `MembershipScreen` now reads tier definitions (thresholds, discounts, benefits) from the `membership_tiers` table with graceful local fallback.
+7. **PC Build Persistence:** Complete PC build configurations (CPU, GPU, motherboard, RAM, storage, PSU, case, cooler, service tier, pricing) are saved to the `pc_builds` table.
+8. **Migration SQL Script:** Added `supabase/migrations/20261022_schema_sync_latest.sql` to provision `brands`, `product_subtypes`, and all new columns.
+
+### Bug Fixes
+1. **Cart Upsert Fix (BUG-015):** Replaced broken `.upsert(onConflict:)` with select-then-insert/update pattern since `cart_items` lacks a unique constraint on `(user_id, product_id)`.
+2. **Review Schema Fix (BUG-016):** Created `toSupabaseMap()` for `ReviewModel` that excludes client-only fields (`media_urls`) not present in the database schema.
+3. **Order Items FK Guard (BUG-017):** Added guard to skip `build-` prefixed product IDs when inserting order items to prevent foreign key violations.
+4. **Notification Mock Removal (BUG-018):** Eliminated all hardcoded notification data; notifications are now generated from real order/product/user activity.
+5. **Membership Data Fix (BUG-019):** Tier definitions are now fetched from `membership_tiers` table instead of hardcoded constants.
+6. **PC Build Persistence Fix (BUG-020):** Build configurations are now properly saved to the `pc_builds` table on confirmation.
 
 ---
 

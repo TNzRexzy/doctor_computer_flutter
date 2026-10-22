@@ -7,6 +7,7 @@ import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/providers/pc_builder_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/pc_builder/part_slot_card.dart';
 import 'package:doctor_computer/widgets/pc_builder/price_summary_card.dart';
@@ -247,6 +248,11 @@ class PcBuilderScreen extends StatelessWidget {
                                   isOnSale: false,
                                 );
                                 cart.addToCart(serviceProduct);
+                              }
+
+                              final user = context.read<AuthProvider>().currentUser;
+                              if (user != null && user.id.isNotEmpty && user.id != 'guest') {
+                                provider.saveBuildToDatabase(user.id);
                               }
                               
                               showDialog(

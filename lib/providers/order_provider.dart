@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
-import 'package:doctor_computer/data/models/cart_item_model.dart';
-import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderProvider extends ChangeNotifier {
@@ -27,93 +25,6 @@ class OrderProvider extends ChangeNotifier {
     if (_userId == id && _orders.isNotEmpty) return;
     _userId = id;
     _loadOrders();
-  }
-
-  /// Initial placeholder orders for guest preview only
-  List<OrderModel> _getDefaultMockOrders() {
-    return [
-      OrderModel(
-        id: 'ORD-1001',
-        items: [
-          CartItemModel(product: mockProducts[0], quantity: 1),
-        ],
-        totalPrice: 15500000,
-        status: OrderStatus.processing,
-        orderDate: DateTime.now().subtract(const Duration(hours: 4)),
-        shippingAddress: 'Jl. Merdeka No 1, Jakarta Pusat',
-        paymentMethod: 'Transfer Bank BCA',
-        trackingNumber: 'JNE-DC98124982',
-        courier: 'JNE Reguler',
-        serialNumber: 'SN-TUF-2026-98124',
-        warrantyDurationMonths: 24,
-      ),
-      OrderModel(
-        id: 'ORD-1002',
-        items: [
-          CartItemModel(product: mockProducts[1], quantity: 1),
-        ],
-        totalPrice: 9499000,
-        status: OrderStatus.shipped,
-        orderDate: DateTime.now().subtract(const Duration(days: 2)),
-        shippingAddress: 'Jl. Sudirman No 10, Bandung',
-        paymentMethod: 'GoPay',
-        trackingNumber: 'SICEPAT-DC458291',
-        courier: 'SiCepat BEST',
-        serialNumber: 'SN-LNV-2026-45829',
-        warrantyDurationMonths: 12,
-      ),
-      OrderModel(
-        id: 'ORD-1003',
-        items: [
-          CartItemModel(product: mockProducts[2], quantity: 1),
-        ],
-        totalPrice: 18999000,
-        status: OrderStatus.delivered,
-        orderDate: DateTime.now().subtract(const Duration(days: 8)),
-        shippingAddress: 'Jl. Diponegoro No 45, Surabaya',
-        paymentMethod: 'Transfer Bank Mandiri',
-        trackingNumber: 'JNT-DC7718293',
-        courier: 'J&T Express',
-        serialNumber: 'SN-APP-2026-77182',
-        warrantyDurationMonths: 12,
-      ),
-      OrderModel(
-        id: 'ORD-1004',
-        items: [
-          CartItemModel(product: mockProducts[3], quantity: 1),
-        ],
-        totalPrice: 13499000,
-        status: OrderStatus.delivered,
-        orderDate: DateTime.now().subtract(const Duration(days: 15)),
-        shippingAddress: 'Jl. Gatot Subroto No 88, Semarang',
-        paymentMethod: 'OVO',
-        trackingNumber: 'JNE-DC5529184',
-        courier: 'JNE YES',
-        serialNumber: 'SN-MSI-2026-55291',
-        warrantyDurationMonths: 24,
-        rating: 5.0,
-        reviewComment: 'Performa sangat dingin dan build quality solid! Pelayanan Doctor Computer luar biasa ramah.',
-        ratedAt: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-      OrderModel(
-        id: 'ORD-1005',
-        items: [
-          CartItemModel(product: mockProducts[4], quantity: 2),
-        ],
-        totalPrice: 4200000,
-        status: OrderStatus.delivered,
-        orderDate: DateTime.now().subtract(const Duration(days: 45)),
-        shippingAddress: 'Jl. Malioboro No 20, Yogyakarta',
-        paymentMethod: 'Dana',
-        trackingNumber: 'POS-DC1182743',
-        courier: 'Pos Indonesia Kilat',
-        serialNumber: 'SN-SAM-2026-11827',
-        warrantyDurationMonths: 36,
-        rating: 4.0,
-        reviewComment: 'Kecepatan baca tulis sesuai spesifikasi, packaging bubble wrap tebal.',
-        ratedAt: DateTime.now().subtract(const Duration(days: 12)),
-      ),
-    ];
   }
 
   List<OrderModel> _orders = [];
@@ -148,9 +59,8 @@ class OrderProvider extends ChangeNotifier {
         } catch (e) {
           debugPrint('Error decoding cached orders: $e');
         }
-      } else if (_userId == null) {
-        // Only use mock orders for fresh guest sessions
-        _orders = _getDefaultMockOrders();
+      } else {
+        _orders = [];
         notifyListeners();
       }
 
@@ -377,8 +287,9 @@ class OrderProvider extends ChangeNotifier {
         }
       }
 
-      // 2. Also try inserting into order_items table
+      // 2. Also try inserting into order_items table (only for catalog products with valid FK)
       for (final item in newOrder.items) {
+        if (item.product.id.startsWith('build-')) continue;
         try {
           await supabase.from('order_items').insert({
             'order_id': newOrder.id,

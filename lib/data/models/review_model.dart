@@ -70,6 +70,22 @@ class ReviewModel {
     };
   }
 
+  /// Map matching exactly the Supabase reviews table schema
+  Map<String, dynamic> toSupabaseMap() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'user_name': userName,
+      'product_id': productId,
+      'rating': rating,
+      'comment': comment,
+      'date': date.toIso8601String(),
+      'reply': reply,
+      'reply_role': replyRole,
+      if (replyDate != null) 'reply_date': replyDate!.toIso8601String(),
+    };
+  }
+
   factory ReviewModel.fromMap(Map<String, dynamic> map) {
     List<String> parsedMedia = [];
     if (map['media_urls'] is List) {

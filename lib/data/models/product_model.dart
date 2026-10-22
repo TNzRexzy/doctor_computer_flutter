@@ -15,6 +15,11 @@ class ProductModel {
   final int stock;
   final bool isNew;
   final bool isOnSale;
+  final String? sku;
+  final String? brandCode;
+  final String? subtype;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const ProductModel({
     required this.id,
@@ -32,6 +37,11 @@ class ProductModel {
     required this.stock,
     required this.isNew,
     required this.isOnSale,
+    this.sku,
+    this.brandCode,
+    this.subtype,
+    this.createdAt,
+    this.updatedAt,
   });
 
   bool get hasDiscount => originalPrice != null && originalPrice! > price;
@@ -54,6 +64,11 @@ class ProductModel {
     int? stock,
     bool? isNew,
     bool? isOnSale,
+    String? sku,
+    String? brandCode,
+    String? subtype,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return ProductModel(
       id: id ?? this.id,
@@ -71,6 +86,11 @@ class ProductModel {
       stock: stock ?? this.stock,
       isNew: isNew ?? this.isNew,
       isOnSale: isOnSale ?? this.isOnSale,
+      sku: sku ?? this.sku,
+      brandCode: brandCode ?? this.brandCode,
+      subtype: subtype ?? this.subtype,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -91,6 +111,11 @@ class ProductModel {
       'stock': stock,
       'is_new': isNew,
       'is_on_sale': isOnSale,
+      if (sku != null) 'sku': sku,
+      if (brandCode != null) 'brand_code': brandCode,
+      if (subtype != null) 'subtype': subtype,
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+      if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
     };
   }
 
@@ -128,6 +153,11 @@ class ProductModel {
       stock: (map['stock'] as num?)?.toInt() ?? 10,
       isNew: map['is_new'] as bool? ?? false,
       isOnSale: map['is_on_sale'] as bool? ?? (origPrice != null && origPrice > price),
+      sku: map['sku']?.toString(),
+      brandCode: map['brand_code']?.toString(),
+      subtype: map['subtype']?.toString(),
+      createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
+      updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) : null,
     );
   }
 }

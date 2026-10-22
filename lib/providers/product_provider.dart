@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/category_model.dart';
-import 'package:doctor_computer/data/mock/mock_categories.dart';
-import 'package:doctor_computer/data/mock/mock_products.dart';
+import 'package:doctor_computer/data/models/brand_model.dart';
+import 'package:doctor_computer/data/models/product_subtype_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
 
@@ -24,6 +24,8 @@ class ProductProvider extends ChangeNotifier {
 
   List<CategoryModel> _categories = [];
   List<ProductModel> _allProducts = [];
+  List<BrandModel> _brands = [];
+  List<ProductSubtypeModel> _subtypes = [];
 
   DateTime _flashSaleEndTime = DateTime.now().add(const Duration(hours: 8));
   bool _isFlashSaleActive = true;
@@ -34,8 +36,10 @@ class ProductProvider extends ChangeNotifier {
     _loadData();
   }
 
-  List<CategoryModel> get categories => _categories.isNotEmpty ? _categories : mockCategories;
-  List<ProductModel> get allProducts => _allProducts.isNotEmpty ? _allProducts : mockProducts;
+  List<CategoryModel> get categories => _categories;
+  List<ProductModel> get allProducts => _allProducts;
+  List<BrandModel> get brands => _brands;
+  List<ProductSubtypeModel> get subtypes => _subtypes;
   String get searchQuery => _searchQuery;
   String get sortBy => _sortBy;
   bool get isLoading => _isLoading;
@@ -147,7 +151,27 @@ class ProductProvider extends ChangeNotifier {
           );
         }).toList();
       } else {
-        _categories = List.from(mockCategories);
+        _categories = [];
+      }
+
+      // Fetch brands from Supabase
+      try {
+        final List brandsRes = await supabase.from('brands').select();
+        if (brandsRes.isNotEmpty) {
+          _brands = brandsRes.map((b) => BrandModel.fromMap(b as Map<String, dynamic>)).toList();
+        }
+      } catch (e) {
+        debugPrint('Notice loading brands: $e');
+      }
+
+      // Fetch product subtypes from Supabase
+      try {
+        final List subtypesRes = await supabase.from('product_subtypes').select();
+        if (subtypesRes.isNotEmpty) {
+          _subtypes = subtypesRes.map((s) => ProductSubtypeModel.fromMap(s as Map<String, dynamic>)).toList();
+        }
+      } catch (e) {
+        debugPrint('Notice loading product_subtypes: $e');
       }
 
       final Map<String, ProductModel> productMap = {};
@@ -189,11 +213,12 @@ class ProductProvider extends ChangeNotifier {
             stock: (p['stock'] as num?)?.toInt() ?? 10,
             isNew: p['is_new'] as bool? ?? false,
             isOnSale: p['is_on_sale'] as bool? ?? (origPrice != null && origPrice > price),
+            sku: p['sku']?.toString(),
+            brandCode: p['brand_code']?.toString(),
+            subtype: p['subtype']?.toString(),
+            createdAt: p['created_at'] != null ? DateTime.tryParse(p['created_at'].toString()) : null,
+            updatedAt: p['updated_at'] != null ? DateTime.tryParse(p['updated_at'].toString()) : null,
           );
-        }
-      } else {
-        for (final p in mockProducts) {
-          productMap[p.id] = p;
         }
       }
 
@@ -260,8 +285,6 @@ class ProductProvider extends ChangeNotifier {
       _allProducts = productMap.values.toList();
     } catch (e) {
       debugPrint('Error loading Supabase products: $e');
-      if (_categories.isEmpty) _categories = List.from(mockCategories);
-      if (_allProducts.isEmpty) _allProducts = List.from(mockProducts);
     } finally {
       _isLoading = false;
       notifyListeners();

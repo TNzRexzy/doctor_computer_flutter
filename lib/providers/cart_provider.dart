@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
-import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -104,13 +103,7 @@ class CartProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching product from Supabase: $e');
     }
-
-    // Fallback to mock product
-    try {
-      return mockProducts.firstWhere((p) => p.id == productId);
-    } catch (_) {
-      return null;
-    }
+    return null;
   }
 
   Future<void> addToCart(ProductModel product, {int quantity = 1}) async {
@@ -124,13 +117,29 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
     _saveCartToCache();
 
-    if (_userId != null) {
+    if (_userId != null && !product.id.startsWith('build-')) {
       try {
-        await supabase.from('cart_items').upsert({
-          'user_id': _userId!,
-          'product_id': product.id,
-          'quantity': existingIndex >= 0 ? _items[existingIndex].quantity : quantity,
-        }, onConflict: 'user_id,product_id');
+        final newQty = existingIndex >= 0 ? _items[existingIndex].quantity : quantity;
+        final List existingRows = await supabase
+            .from('cart_items')
+            .select('id')
+            .eq('user_id', _userId!)
+            .eq('product_id', product.id)
+            .limit(1);
+
+        if (existingRows.isNotEmpty) {
+          final rowId = existingRows.first['id'];
+          await supabase
+              .from('cart_items')
+              .update({'quantity': newQty})
+              .eq('id', rowId);
+        } else {
+          await supabase.from('cart_items').insert({
+            'user_id': _userId!,
+            'product_id': product.id,
+            'quantity': newQty,
+          });
+        }
       } catch (e) {
         debugPrint('Error persisting cart item to db: $e');
       }
