@@ -97,3 +97,19 @@ UPDATE public.products p
  WHERE p.id = l.id;
 -- Sisa produk dengan is_on_sale = true tanpa harga coret hanya dimatikan flag-nya
 UPDATE public.products SET is_on_sale = false WHERE is_on_sale = true;
+
+-- ------------------------------------------------------------
+-- Kolom pelengkap tabel orders + tabel order_items
+-- (dipakai checkout; sebelumnya tidak ada di skema terbaru).
+-- Tanpa kolom ini pesanan hanya tersimpan dengan kolom dasar.
+-- ------------------------------------------------------------
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS tracking_number varchar(100),
+  ADD COLUMN IF NOT EXISTS courier varchar(100),
+  ADD COLUMN IF NOT EXISTS serial_number varchar(100),
+  ADD COLUMN IF NOT EXISTS warranty_months integer DEFAULT 24,
+  ADD COLUMN IF NOT EXISTS rating numeric(3,2),
+  ADD COLUMN IF NOT EXISTS review_comment text,
+  ADD COLUMN IF NOT EXISTS rated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS review_media_urls text[],
+  ADD COLUMN IF NOT EXISTS items_summary jsonb DEFAULT '[]'::jsonb;

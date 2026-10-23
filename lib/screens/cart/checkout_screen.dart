@@ -122,7 +122,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       serialNumber: serial,
       warrantyDurationMonths: 24,
     );
-    context.read<OrderProvider>().addOrder(newOrder);
+    await context.read<OrderProvider>().addOrder(newOrder);
+    if (!mounted) return;
 
     // Decrement stock for each purchased item
     final productProvider = context.read<ProductProvider>();
