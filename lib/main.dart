@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/providers/security_provider.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/pc_builder_provider.dart';
@@ -64,21 +65,65 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => PcBuilderProvider()),
         ChangeNotifierProvider(create: (_) => WishlistProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, SecurityProvider>(
+          create: (_) {
+            final sp = SecurityProvider();
+            if (authProvider.currentUser?.id != null) {
+              sp.loadSettings(authProvider.currentUser!.id);
+            }
+            return sp;
+          },
+          update: (_, auth, secProvider) {
+            final sp = secProvider ?? SecurityProvider();
+            if (auth.currentUser?.id != null) {
+              if (sp.settings.userId != auth.currentUser!.id) {
+                sp.loadSettings(auth.currentUser!.id);
+              }
+            } else if (sp.settings.userId.isNotEmpty) {
+              sp.reset();
+            }
+            return sp;
+          },
+        ),
         ChangeNotifierProxyProvider<AuthProvider, BlockchainProvider>(
           create: (_) {
             final bp = BlockchainProvider();
             if (authProvider.currentUser != null) {
               final u = authProvider.currentUser!;
-              bp.initWallet(u.id, u.fullName, isAdmin: u.role == UserRole.admin);
+              bp.initWallet(
+                u.id,
+                u.fullName,
+                isAdmin: u.role == UserRole.admin,
+                initialExp: u.points,
+                initialTierName: u.membershipTier.name,
+              );
             }
             return bp;
           },
           update: (_, auth, blockchainProvider) {
             final bp = blockchainProvider ?? BlockchainProvider();
+            
+            // Bridge: whenever blockchain wallet syncs or changes, update AuthProvider
+            bp.onWalletSynced = (exp, tierName) {
+              if (auth.currentUser != null && auth.currentUser!.id == bp.wallet.userId) {
+                final tierEnum = auth.parseMembershipTier(tierName);
+                if (exp > auth.currentUser!.points ||
+                    (auth.currentUser!.points == exp && auth.currentUser!.membershipTier != tierEnum)) {
+                  auth.updatePointsAndTier(exp, tierEnum);
+                }
+              }
+            };
+
             if (auth.currentUser != null) {
               final u = auth.currentUser!;
               if (bp.wallet.userId != u.id) {
-                bp.initWallet(u.id, u.fullName, isAdmin: u.role == UserRole.admin);
+                bp.initWallet(
+                  u.id,
+                  u.fullName,
+                  isAdmin: u.role == UserRole.admin,
+                  initialExp: u.points,
+                  initialTierName: u.membershipTier.name,
+                );
               }
             } else if (bp.wallet.userId != 'guest') {
               bp.initWallet('guest', 'Pengguna Baru');

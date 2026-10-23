@@ -63,8 +63,33 @@ class AuthProvider extends ChangeNotifier {
 
           if (res.isNotEmpty) {
             _currentUser = _mapToUserModel(res.first as Map<String, dynamic>);
+            
+            // Check blockchain_blocks to ensure points and tier are up-to-date
+            try {
+              final List blocksRes = await supabase
+                  .from('blockchain_blocks')
+                  .select('exp_earned')
+                  .eq('user_id', _currentUser!.id);
+              if (blocksRes.isNotEmpty) {
+                int expSum = 0;
+                for (final b in blocksRes) {
+                  expSum += (b['exp_earned'] as num? ?? 0).toInt();
+                }
+                if (expSum > _currentUser!.points) {
+                  _currentUser = _currentUser!.copyWith(
+                    points: expSum,
+                    membershipTier: tierFromExp(expSum),
+                  );
+                }
+              }
+            } catch (_) {}
+
             _isLoggedIn = true;
             await _saveSessionToPrefs(_currentUser!);
+      try {
+        final p = await SharedPreferences.getInstance();
+        await p.setString('last_known_user', jsonEncode(_currentUser!.toMap()));
+      } catch (_) {}
             notifyListeners();
           }
         } catch (e) {
@@ -209,6 +234,26 @@ class AuthProvider extends ChangeNotifier {
         );
       } else {
         _currentUser = _mapToUserModel(data);
+
+        // Check blockchain_blocks in Supabase to restore verified tier and EXP
+        try {
+          final List blocksRes = await supabase
+              .from('blockchain_blocks')
+              .select('exp_earned')
+              .eq('user_id', _currentUser!.id);
+          if (blocksRes.isNotEmpty) {
+            int expSum = 0;
+            for (final b in blocksRes) {
+              expSum += (b['exp_earned'] as num? ?? 0).toInt();
+            }
+            if (expSum > _currentUser!.points) {
+              _currentUser = _currentUser!.copyWith(
+                points: expSum,
+                membershipTier: tierFromExp(expSum),
+              );
+            }
+          }
+        } catch (_) {}
       }
 
       _isLoggedIn = true;
@@ -218,7 +263,12 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         final walletKey = 'blockchain_wallet_$userId';
         if (!prefs.containsKey(walletKey)) {
-          final initialWallet = UserWallet(userId: userId, userName: _currentUser?.fullName ?? 'User');
+          final initialWallet = UserWallet(
+            userId: userId,
+            userName: _currentUser?.fullName ?? 'User',
+            totalExp: _currentUser?.points ?? 0,
+            currentTier: MemberTier.fromExp(_currentUser?.points ?? 0),
+          );
           await prefs.setString(walletKey, jsonEncode(initialWallet.toMap()));
         }
       } catch (e) {
@@ -244,6 +294,89 @@ class AuthProvider extends ChangeNotifier {
   // ============================================
   // REGISTER
   // ============================================
+  
+  // ============================================
+  // BIOMETRIC LOGIN
+  // ============================================
+  Future<bool> loginWithBiometrics() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? userJson = prefs.getString('saved_biometric_user');
+      userJson ??= prefs.getString('last_known_user');
+      userJson ??= prefs.getString('cached_active_user');
+
+      if (userJson == null || userJson.isEmpty) {
+        _errorMessage = 'Belum ada akun yang didaftarkan untuk login biometrik pada perangkat ini.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final Map<String, dynamic> userMap = jsonDecode(userJson);
+      _currentUser = UserModel.fromMap(userMap);
+
+      // Refresh latest points & tier from Supabase if online
+      try {
+        final List res = await supabase
+            .from('users')
+            .select()
+            .eq('id', _currentUser!.id)
+            .limit(1);
+        if (res.isNotEmpty) {
+          _currentUser = _mapToUserModel(res.first as Map<String, dynamic>);
+        }
+
+        final List blocksRes = await supabase
+            .from('blockchain_blocks')
+            .select('exp_earned')
+            .eq('user_id', _currentUser!.id);
+        if (blocksRes.isNotEmpty) {
+          int expSum = 0;
+          for (final b in blocksRes) {
+            expSum += (b['exp_earned'] as num? ?? 0).toInt();
+          }
+          if (expSum > _currentUser!.points) {
+            _currentUser = _currentUser!.copyWith(
+              points: expSum,
+              membershipTier: tierFromExp(expSum),
+            );
+          }
+        }
+      } catch (syncErr) {
+        debugPrint('Biometric login sync notice: $syncErr');
+      }
+
+      _isLoggedIn = true;
+      await _saveSessionToPrefs(_currentUser!);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Gagal login biometrik: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<String?> getBiometricEnrolledUserName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('saved_biometric_user') ??
+                       prefs.getString('last_known_user') ??
+                       prefs.getString('cached_active_user');
+      if (userJson != null) {
+        final Map<String, dynamic> map = jsonDecode(userJson);
+        return map['full_name']?.toString() ?? map['email']?.toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<bool> register(
     String name,
     String email,
@@ -607,4 +740,49 @@ class AuthProvider extends ChangeNotifier {
     }
     return UserRole.user;
   }
+
+  MembershipTier parseMembershipTier(String? tierName) {
+    if (tierName == null) return MembershipTier.bronze;
+    switch (tierName.toLowerCase()) {
+      case 'silver': return MembershipTier.silver;
+      case 'gold': return MembershipTier.gold;
+      case 'platinum': return MembershipTier.platinum;
+      default: return MembershipTier.bronze;
+    }
+  }
+
+  MembershipTier tierFromExp(int exp) {
+    if (exp >= 1200) return MembershipTier.platinum;
+    if (exp >= 600) return MembershipTier.gold;
+    if (exp >= 300) return MembershipTier.silver;
+    return MembershipTier.bronze;
+  }
+
+  /// Updates user points and tier in local state, local cache, and syncs to Supabase users table
+  Future<void> updatePointsAndTier(int newPoints, MembershipTier newTier) async {
+    if (_currentUser == null) return;
+    if (_currentUser!.points == newPoints && _currentUser!.membershipTier == newTier) return;
+
+    _currentUser = _currentUser?.copyWith(
+      points: newPoints,
+      membershipTier: newTier,
+    );
+    notifyListeners();
+
+    if (_currentUser != null) {
+      await _saveSessionToPrefs(_currentUser!);
+
+      try {
+        await supabase.from('users').update({
+          'points': newPoints,
+          'membership_tier': newTier.name,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', _currentUser!.id);
+        debugPrint('[AuthProvider] Synced points ($newPoints) & tier (${newTier.name}) to Supabase users table.');
+      } catch (e) {
+        debugPrint('Notice updating user points in users table: $e');
+      }
+    }
+  }
+
 }

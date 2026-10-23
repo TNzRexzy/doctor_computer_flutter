@@ -23,8 +23,13 @@ class MemberScreen extends StatelessWidget {
     final user = context.watch<AuthProvider>().currentUser;
     final isAdmin = user?.role == UserRole.admin;
 
-    final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
-    final totalExp = isAdmin ? 999999 : blockchain.totalExp;
+    final effectiveExp = isAdmin
+        ? 999999
+        : (blockchain.totalExp >= (user?.points ?? 0) ? blockchain.totalExp : (user?.points ?? 0));
+    final currentTier = isAdmin
+        ? MemberTier.platinum
+        : MemberTier.fromExp(effectiveExp);
+    final totalExp = effectiveExp;
     final nextTier = isAdmin ? null : currentTier.getNextTier();
 
     final progress = isAdmin

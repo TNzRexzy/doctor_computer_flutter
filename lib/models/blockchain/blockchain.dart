@@ -45,7 +45,7 @@ enum MemberTier {
 class Block {
   final int index;
   final int timestamp;
-  final String blockType; // 'genesis', 'minigame', 'shopping'
+  final String blockType; // 'genesis', 'minigame', 'shopping', 'admin_adjustment'
   final String title;
   final Map<String, dynamic> data;
   final String previousHash;
@@ -78,6 +78,7 @@ class Block {
     return sha256.convert(utf8.encode(input)).toString();
   }
 
+  /// Local cache map (SharedPreferences)
   Map<String, dynamic> toMap() => {
         'index': index,
         'timestamp': timestamp,
@@ -90,19 +91,44 @@ class Block {
         'upgradeTier': upgradeTier,
       };
 
+  /// Database-safe map matching Supabase `blockchain_blocks` table schema
+  Map<String, dynamic> toDbMap(String userId) => {
+        'user_id': userId,
+        'block_index': index,
+        'block_type': blockType,
+        'title': title,
+        'data': data,
+        'previous_hash': previousHash,
+        'hash': hash,
+        'exp_earned': expEarned,
+        'upgrade_tier': upgradeTier,
+        'timestamp': timestamp,
+      };
+
+  /// Deserializer supporting both local camelCase cache and Supabase snake_case rows
   factory Block.fromMap(Map<String, dynamic> map) {
+    final rawIndex = map['index'] ?? map['block_index'];
+    final rawType = map['blockType'] ?? map['block_type'];
+    final rawPrevHash = map['previousHash'] ?? map['previous_hash'];
+    final rawExp = map['expEarned'] ?? map['exp_earned'];
+    final rawTier = map['upgradeTier'] ?? map['upgrade_tier'];
+    final rawTimestamp = map['timestamp'];
+
     return Block(
-      index: map['index'] as int,
-      blockType: map['blockType'] as String? ?? 'generic',
-      title: map['title'] as String? ?? 'Block #${map['index']}',
-      data: Map<String, dynamic>.from(map['data'] as Map),
-      previousHash: map['previousHash'] as String,
-      initialHash: map['hash'] as String,
-      expEarned: map['expEarned'] as int? ?? 0,
-      upgradeTier: map['upgradeTier'] as String?,
-      customTimestamp: map['timestamp'] as int?,
+      index: (rawIndex as num?)?.toInt() ?? 0,
+      blockType: rawType as String? ?? 'generic',
+      title: map['title'] as String? ?? 'Block #$rawIndex',
+      data: Map<String, dynamic>.from(map['data'] as Map? ?? {}),
+      previousHash: rawPrevHash as String? ?? '0000000000000000',
+      initialHash: map['hash'] as String? ?? '',
+      expEarned: (rawExp as num?)?.toInt() ?? 0,
+      upgradeTier: rawTier as String?,
+      customTimestamp: (rawTimestamp as num?)?.toInt(),
     );
   }
+
+  /// Explicit factory from Supabase `blockchain_blocks` table
+  factory Block.fromDbMap(Map<String, dynamic> map) => Block.fromMap(map);
 }
 
 /// User Wallet and Blockchain state
@@ -315,16 +341,20 @@ class UserWallet {
   factory UserWallet.fromMap(Map<String, dynamic> map) {
     final rawBlocks = map['blockchain'] as List? ?? [];
     final blocks = rawBlocks.map((b) => Block.fromMap(Map<String, dynamic>.from(b as Map))).toList();
-    final tierName = map['currentTier'] as String? ?? 'bronze';
-    final tier = MemberTier.values.firstWhere(
-      (t) => t.name.toLowerCase() == tierName.toLowerCase(),
-      orElse: () => MemberTier.bronze,
-    );
+    
+    int blockExp = 0;
+    for (final b in blocks) {
+      blockExp += b.expEarned;
+    }
+
+    final cachedExp = (map['totalExp'] as num?)?.toInt() ?? 0;
+    final effectiveExp = blockExp > cachedExp ? blockExp : cachedExp;
+    final tier = MemberTier.fromExp(effectiveExp);
 
     return UserWallet(
       userId: map['userId'] as String? ?? 'guest',
       userName: map['userName'] as String? ?? 'User',
-      totalExp: map['totalExp'] as int? ?? 0,
+      totalExp: effectiveExp,
       currentTier: tier,
       existingBlocks: blocks,
     );

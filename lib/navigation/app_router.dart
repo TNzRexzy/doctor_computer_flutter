@@ -18,6 +18,7 @@ import 'package:doctor_computer/screens/cart/checkout_screen.dart';
 import 'package:doctor_computer/screens/profile/profile_screen.dart';
 import 'package:doctor_computer/screens/profile/edit_profile_screen.dart';
 import 'package:doctor_computer/screens/profile/order_history_screen.dart';
+import 'package:doctor_computer/screens/profile/security_settings_screen.dart';
 import 'package:doctor_computer/screens/wishlist/wishlist_screen.dart';
 import 'package:doctor_computer/screens/member/member_screen.dart';
 import 'package:doctor_computer/screens/member/blockchain_ledger_screen.dart';
@@ -43,6 +44,7 @@ class AppRouter {
   static const String checkout = '/checkout';
   static const String profile = '/profile';
   static const String editProfile = '/edit-profile';
+  static const String securitySettings = '/security-settings';
   static const String membership = '/membership';
   static const String orderHistory = '/order-history';
   static const String wishlist = '/wishlist';
@@ -89,6 +91,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const ProfileScreen(), settings: settings);
       case editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfileScreen(), settings: settings);
+      case securitySettings:
+        return MaterialPageRoute(builder: (_) => const SecuritySettingsScreen(), settings: settings);
       case membership:
         return MaterialPageRoute(builder: (_) => const MemberScreen(), settings: settings);
       case orderHistory:

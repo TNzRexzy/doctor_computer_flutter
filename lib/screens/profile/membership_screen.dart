@@ -1,3 +1,4 @@
+import 'package:doctor_computer/providers/blockchain_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -47,9 +48,19 @@ class _MembershipScreenState extends State<MembershipScreen> {
     final user = context.watch<AuthProvider>().currentUser;
     if (user == null) return const Scaffold();
 
+    final blockchain = context.watch<BlockchainProvider>();
     final isAdmin = user.role == UserRole.admin;
-    final tierName = isAdmin ? 'Platinum' : user.membershipTier.name;
-    final pointsText = isAdmin ? '999,999 Points (MAX)' : '${user.points} Points';
+
+    // Use highest synced tier between user profile and blockchain
+    final activeTierName = isAdmin
+        ? 'platinum'
+        : (blockchain.totalExp >= user.points ? blockchain.currentTier.name : user.membershipTier.name);
+    final activePoints = isAdmin
+        ? 999999
+        : (blockchain.totalExp >= user.points ? blockchain.totalExp : user.points);
+
+    final tierName = isAdmin ? 'Platinum' : (activeTierName[0].toUpperCase() + activeTierName.substring(1));
+    final pointsText = isAdmin ? '999,999 Points (MAX)' : '$activePoints Points';
 
     // Find active tier from DB if available
     MembershipModel? currentDbTier;
@@ -125,11 +136,11 @@ class _MembershipScreenState extends State<MembershipScreen> {
                   children: [
                     _buildTierCircle('Bronze', AppColors.bronze, true),
                     Expanded(child: Container(height: 2, color: AppColors.silver)),
-                    _buildTierCircle('Silver', AppColors.silver, isAdmin || user.points >= (_getRequiredPoints('silver') ?? 100)),
+                    _buildTierCircle('Silver', AppColors.silver, isAdmin || activePoints >= (_getRequiredPoints('silver') ?? 300)),
                     Expanded(child: Container(height: 2, color: AppColors.surface)),
-                    _buildTierCircle('Gold', AppColors.gold, isAdmin || user.points >= (_getRequiredPoints('gold') ?? 500)),
+                    _buildTierCircle('Gold', AppColors.gold, isAdmin || activePoints >= (_getRequiredPoints('gold') ?? 600)),
                     Expanded(child: Container(height: 2, color: AppColors.surface)),
-                    _buildTierCircle('Platinum', AppColors.platinum, isAdmin || user.points >= (_getRequiredPoints('platinum') ?? 1000)),
+                    _buildTierCircle('Platinum', AppColors.platinum, isAdmin || activePoints >= (_getRequiredPoints('platinum') ?? 1200)),
                   ],
                 ),
                 const SizedBox(height: 24),

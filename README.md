@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.8-beta
+* **Release Version:** 1.0.9-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -161,6 +161,42 @@ The system implements strict role-based authorization to divide administrative f
 
 ---
 
+## Version 1.0.8-beta Changelog (Supabase Production Database & Blockchain Integration)
+
+1. **Sinkronisasi Katalog Produk & Komponen PC (`products` & `pc_parts`):**
+   - Menambahkan dukungan atribut skema terbaru: `sku`, `brand_code`, dan `subtype` pada `ProductModel` dan `PcPartModel`.
+   - Mengintegrasikan mapping serialisasi (`toMap`, `fromMap`, `copyWith`) pada seluruh alur katalog, admin CRUD, SharedPreferences cache, dan PostgREST remote persistence.
+2. **Arsitektur Relasional Pesanan (`orders` & `order_items`):**
+   - Menyelaraskan tabel `orders` dengan kolom schema database: `id`, `user_id`, `total_price`, `status`, `order_date`, `shipping_address`, `payment_method`, `created_at`, `updated_at`.
+   - Menghubungkan penyimpanan detail barang belanjaan secara langsung ke tabel relasi `order_items` (`id`, `order_id`, `product_id`, `quantity`, `unit_price`).
+   - Saat memuat pesanan dari Supabase, item direkonstruksi melalui query ke `order_items` dan digabungkan secara transparan ke `OrderModel`.
+   - Fitur penilaian/ulasan pesanan lokal dan serial garansi dipertahankan dengan mekanisme caching offline-first SharedPreferences tanpa menimbulkan kegagalan PostgREST.
+3. **Persistensi Rakitan PC (`pc_builds`):**
+   - Menambahkan pemetaan lengkap pada `PcBuildModel` untuk tabel `pc_builds`, mencakup relasi foreign key per komponen (`cpu_id`, `gpu_id`, `motherboard_id`, `ram_id`, `storage_id`, `psu_id`, `case_id`, `cooler_id`), `service_tier`, rincian biaya (`total_parts_price`, `build_fee`, `grand_total`), serta flag `is_complete`.
+   - Mengimplementasikan method `saveBuild(userId)` dan `loadBuild(userId)` pada `PcBuilderProvider` untuk menyimpan dan memulihkan rancangan rakitan PC ke/dari Supabase.
+4. **Entitas Membership & Kategori (`membership_tiers` & `categories`):**
+   - Menambahkan deserializer `fromMap` dan serializer `toMap` pada `MembershipModel` yang selaras dengan `membership_tiers` (`tier`, `name`, `required_points`, `discount_percent`, `benefits`).
+   - Menyediakan `CategoryModel.fromMap` dengan parser dinamis icon string ke `IconData` Material UI.
+5. **Sanitasi Query Ulasan (`reviews`):**
+   - Menambahkan method `toDbMap()` pada `ReviewModel` yang secara presisi hanya menyertakan kolom yang terdefinisi di Supabase (`id`, `user_id`, `product_id`, `rating`, `comment`, `date`, `user_name`, `reply`, `reply_role`, `reply_date`).
+   - Menghindari pengiriman kolom non-DB (`media_urls`) ke Supabase sekaligus tetap menjamin penyimpanan media ulasan pada cache lokal.
+6. **Master Brand & Subtipe Produk (`brands` & `product_subtypes`):**
+   - Menambahkan model `BrandModel` dan `ProductSubtypeModel` untuk mendukung struktur referensi master data produk.
+7. **Role-Based Provisioning Penyesuaian Auth:**
+   - Memperbarui inisialisasi akun bawaan di `AuthProvider.ensureAdminAccount()` dengan kolom `role` yang secara eksplisit bernilai `'admin'` dan `'cashier'`.
+8. **Optimalisasi Konektivitas Database & Stabilisasi Storage Bucket Supabase (`assets`):**
+   - **Eliminasi Defek 403 Forbidden:** Memperbaiki konfigurasi `SUPABASE_STORAGE_URL` dari gateway S3 (`/storage/v1/s3`) ke direct public object endpoint (`/storage/v1/object/public`) pada `.env`, `EnvConfig`, dan `AppImages`.
+   - **Pemberantasan Masalah Gambar Hilang-Muncul (Flickering):** Menambahkan normalisasi URL dan encoding spasi otomatis di `AppImageView` untuk menghindari loop error-shimmer berulang saat scrolling list.
+   - **Pemetaan Gambar Otomatis & Cerdas:** Menyediakan getter `displayImageUrl` pada `ProductModel` serta mekanisme auto-resolving di `ProductModel.fromMap` dan `PcPartModel.fromMap` yang memetakan seluruh kategori perangkat keras ke 11 aset riil yang terverifikasi di bucket Supabase.
+   - **Standardisasi Widget:** Mengganti pemanggilan `Image.network` mentah di seluruh layar dengan komponen `AppImageView`.
+9. **Integrasi Penuh Blockchain Ledger ke Supabase (`blockchain_blocks`):**
+   - **Persistensi Multi-Perangkat:** Buku besar kriptografis blockchain (Genesis, Minigame, Shopping, Admin Adjustment) disinkronkan langsung ke tabel `blockchain_blocks` di Supabase dengan strategi offline-first cache SharedPreferences.
+   - **Pemetaan Snake_case & CamelCase:** Menyediakan `toDbMap(userId)` dan `fromDbMap()` pada `Block` yang kompatibel dengan kolom database Supabase.
+   - **Pull-to-Refresh Ledger Screen:** Menambahkan `RefreshIndicator` pada `BlockchainLedgerScreen` agar pengguna dapat memverifikasi dan menyegarkan rantai blok langsung dari cloud.
+   - **Pencegahan Duplikasi:** Menggunakan constraint `UNIQUE(user_id, block_index)` dan operasi `upsert` pada `BlockchainProvider._syncBlockToDb`.
+
+---
+
 ## Version 1.0.4-beta Changelog
 
 1. **Admin Product Management:** Full CRUD operations for products in the admin/cashier dashboard -- add new products, edit name/brand/price/stock/description, and delete products with Supabase sync and local cache fallback.
@@ -181,34 +217,227 @@ The system implements strict role-based authorization to divide administrative f
 
 ---
 
-## Database Schema & Migration Reference
+## Database Schema Reference (Supabase Production)
 
-To synchronize remote Supabase databases with the application schema, execute the following Data Definition Language (DDL) statements within the Supabase SQL Editor:
+Skema database PostgreSQL Supabase terkini yang diintegrasikan secara penuh pada Doctor Computer:
 
 ```sql
--- Extend public.users table with metadata columns
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_image_url TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
-
--- Ensure public.orders transaction table exists
-CREATE TABLE IF NOT EXISTS public.orders (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    total_price DOUBLE PRECISION,
-    status TEXT DEFAULT 'processing',
-    order_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    shipping_address TEXT,
-    payment_method TEXT,
-    tracking_number TEXT,
-    courier TEXT,
-    serial_number TEXT,
-    warranty_months INTEGER DEFAULT 12,
-    rating DOUBLE PRECISION,
-    review_comment TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- 1. Tingkatan Member
+CREATE TABLE public.membership_tiers (
+  tier character varying NOT NULL,
+  name character varying NOT NULL,
+  required_points integer NOT NULL DEFAULT 0,
+  discount_percent numeric NOT NULL DEFAULT 0.00,
+  benefits ARRAY NOT NULL DEFAULT '{}'::text[],
+  CONSTRAINT membership_tiers_pkey PRIMARY KEY (tier)
 );
+
+-- 2. Kategori Produk
+CREATE TABLE public.categories (
+  id character varying NOT NULL,
+  name character varying NOT NULL,
+  name_id character varying,
+  icon character varying NOT NULL,
+  product_count integer NOT NULL DEFAULT 0,
+  CONSTRAINT categories_pkey PRIMARY KEY (id)
+);
+
+-- 3. Katalog Produk
+CREATE TABLE public.products (
+  id character varying NOT NULL,
+  name character varying NOT NULL,
+  description text NOT NULL,
+  description_id text,
+  price numeric NOT NULL,
+  original_price numeric,
+  category_id character varying,
+  brand character varying NOT NULL,
+  image_url ARRAY,
+  specs jsonb NOT NULL DEFAULT '{}'::jsonb,
+  rating numeric NOT NULL DEFAULT 0.00,
+  review_count integer NOT NULL DEFAULT 0,
+  stock integer NOT NULL DEFAULT 0,
+  is_new boolean NOT NULL DEFAULT false,
+  is_on_sale boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  sku character varying,
+  brand_code character varying,
+  subtype character varying,
+  CONSTRAINT products_pkey PRIMARY KEY (id),
+  CONSTRAINT products_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
+);
+
+-- 4. Pengguna & Autentikasi
+CREATE TABLE public.users (
+  id character varying NOT NULL,
+  full_name character varying NOT NULL,
+  email character varying NOT NULL UNIQUE,
+  phone character varying,
+  avatar_url character varying,
+  address text,
+  city character varying,
+  membership_tier character varying NOT NULL DEFAULT 'bronze'::character varying,
+  points integer NOT NULL DEFAULT 0,
+  join_date timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  role text DEFAULT 'user'::text,
+  profile_image_url text,
+  latitude double precision,
+  longitude double precision,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+
+-- 5. Keranjang Belanja
+CREATE TABLE public.cart_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id character varying,
+  product_id character varying,
+  quantity integer NOT NULL DEFAULT 1,
+  added_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT cart_items_pkey PRIMARY KEY (id),
+  CONSTRAINT cart_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT cart_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+
+-- 6. Transaksi Pesanan
+CREATE TABLE public.orders (
+  id character varying NOT NULL,
+  user_id character varying,
+  total_price numeric NOT NULL,
+  status character varying NOT NULL DEFAULT 'processing'::character varying,
+  order_date timestamp with time zone NOT NULL DEFAULT now(),
+  shipping_address text NOT NULL,
+  payment_method character varying NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  CONSTRAINT orders_pkey PRIMARY KEY (id),
+  CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+
+-- 7. Detail Item Pesanan (Relational Order Items)
+CREATE TABLE public.order_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id character varying,
+  product_id character varying,
+  quantity integer NOT NULL DEFAULT 1,
+  unit_price numeric NOT NULL,
+  CONSTRAINT order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+
+-- 8. Wishlist
+CREATE TABLE public.wishlist (
+  user_id character varying NOT NULL,
+  product_id character varying NOT NULL,
+  added_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT wishlist_pkey PRIMARY KEY (user_id, product_id),
+  CONSTRAINT wishlist_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT wishlist_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+
+-- 9. Komponen Rakit PC
+CREATE TABLE public.pc_parts (
+  id character varying NOT NULL,
+  name character varying NOT NULL,
+  category character varying NOT NULL,
+  brand character varying NOT NULL,
+  price numeric NOT NULL,
+  specs jsonb NOT NULL DEFAULT '{}'::jsonb,
+  image_url character varying,
+  compatibility_tags ARRAY NOT NULL DEFAULT '{}'::text[],
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  sku character varying,
+  brand_code character varying,
+  subtype character varying,
+  CONSTRAINT pc_parts_pkey PRIMARY KEY (id)
+);
+
+-- 10. Konfigurasi Rakitan PC
+CREATE TABLE public.pc_builds (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id character varying,
+  cpu_id character varying,
+  gpu_id character varying,
+  motherboard_id character varying,
+  ram_id character varying,
+  storage_id character varying,
+  psu_id character varying,
+  case_id character varying,
+  cooler_id character varying,
+  service_tier character varying NOT NULL DEFAULT 'standard'::character varying,
+  total_parts_price numeric NOT NULL DEFAULT 0.00,
+  build_fee numeric NOT NULL DEFAULT 0.00,
+  grand_total numeric NOT NULL DEFAULT 0.00,
+  is_complete boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone,
+  CONSTRAINT pc_builds_pkey PRIMARY KEY (id),
+  CONSTRAINT pc_builds_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT pc_builds_cpu_id_fkey FOREIGN KEY (cpu_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_gpu_id_fkey FOREIGN KEY (gpu_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_motherboard_id_fkey FOREIGN KEY (motherboard_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_ram_id_fkey FOREIGN KEY (ram_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_storage_id_fkey FOREIGN KEY (storage_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_psu_id_fkey FOREIGN KEY (psu_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.pc_parts(id),
+  CONSTRAINT pc_builds_cooler_id_fkey FOREIGN KEY (cooler_id) REFERENCES public.pc_parts(id)
+);
+
+-- 11. Ulasan Produk
+CREATE TABLE public.reviews (
+  id character varying NOT NULL,
+  user_id character varying,
+  product_id character varying,
+  rating numeric NOT NULL,
+  comment text NOT NULL,
+  date timestamp with time zone NOT NULL DEFAULT now(),
+  reply text,
+  reply_role character varying,
+  reply_date timestamp with time zone,
+  user_name character varying,
+  CONSTRAINT reviews_pkey PRIMARY KEY (id),
+  CONSTRAINT reviews_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT reviews_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+
+-- 12. Master Brand & Subtipe Produk
+CREATE TABLE public.brands (
+  code character varying NOT NULL,
+  name character varying NOT NULL,
+  CONSTRAINT brands_pkey PRIMARY KEY (code)
+);
+
+CREATE TABLE public.product_subtypes (
+  code character varying NOT NULL,
+  name character varying NOT NULL,
+  CONSTRAINT product_subtypes_pkey PRIMARY KEY (code)
+);
+
+-- 13. Buku Besar Kriptografis Blockchain (Gamifikasi & Poin EXP)
+CREATE TABLE public.blockchain_blocks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id character varying NOT NULL,
+  block_index integer NOT NULL DEFAULT 0,
+  block_type character varying NOT NULL DEFAULT 'generic',
+  title character varying NOT NULL,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  previous_hash character varying NOT NULL,
+  hash character varying NOT NULL,
+  exp_earned integer NOT NULL DEFAULT 0,
+  upgrade_tier character varying,
+  timestamp bigint NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT blockchain_blocks_pkey PRIMARY KEY (id),
+  CONSTRAINT blockchain_blocks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+  CONSTRAINT blockchain_blocks_user_index_unique UNIQUE (user_id, block_index)
+);
+
+CREATE INDEX idx_blockchain_blocks_user_id ON public.blockchain_blocks(user_id);
+CREATE INDEX idx_blockchain_blocks_hash ON public.blockchain_blocks(hash);
+CREATE INDEX idx_blockchain_blocks_prev_hash ON public.blockchain_blocks(previous_hash);
 ```
 
 ---
@@ -241,3 +470,16 @@ CREATE TABLE IF NOT EXISTS public.orders (
    ```bash
    flutter run
    ```
+
+
+
+### 4. Advanced Security & Real Biometric Hardware System (v1.0.9-beta)
+* **Real Hardware Biometric Authentication:** Terintegrasi langsung dengan sensor fisik sidik jari perangkat melalui `local_auth` (Android `FlutterFragmentActivity` & `USE_BIOMETRIC`/`USE_FINGERPRINT` OS prompt).
+* **Face ID Front-Camera Capture:** Integrasi kamera depan perangkat melalui `image_picker` untuk pendaftaran dan verifikasi wajah secara nyata.
+* **Biometric Sign-In Quick Access:** Ikon sensor biometrik pada halaman Sign In yang membuka dialog sensor perangkat atau kamera depan, memverifikasi sensor, dan langsung login tanpa memasukkan kata sandi.
+* **PIN Keamanan 6 Digit:** Proteksi transaksi dan akun menggunakan PIN 6 digit yang di-hash dengan enkripsi **SHA-256** (PIN plaintext tidak pernah disimpan).
+* **Payment Security Shield:** Proteksi verifikasi ganda (Biometrik / PIN) wajib sebelum konfirmasi pembayaran dan checkout pesanan.
+* **Keamanan Tambahan:** Pengaturan Autentikasi 2 Langkah (2FA Email/SMS), Auto-Lock berjangka (1 s/d 30 menit), dan notifikasi aktivitas login.
+* **Database Persistensi Supabase:**
+  - Tabel `user_security_settings`: Menyimpan preferensi keamanan, status PIN hash, 2FA, auto-lock, dan proteksi pembayaran.
+  - Tabel `user_biometrics`: Menyimpan kredensial sensor terdaftar (`fingerprint` / `face_id`, nama credential, token SHA-256, device model, dan status aktif) dengan integritas Row Level Security (RLS).

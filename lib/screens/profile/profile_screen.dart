@@ -69,8 +69,13 @@ class ProfileScreen extends StatelessWidget {
                 blockchain.syncWithUser(user.id, user.fullName, true);
               }
 
-              final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
-              final totalExp = isAdmin ? 999999 : blockchain.totalExp;
+              final effectiveExp = isAdmin
+                  ? 999999
+                  : (blockchain.totalExp >= user.points ? blockchain.totalExp : user.points);
+              final currentTier = isAdmin
+                  ? MemberTier.platinum
+                  : MemberTier.fromExp(effectiveExp);
+              final totalExp = effectiveExp;
               final nextTier = isAdmin ? null : currentTier.getNextTier();
 
               final progress = isAdmin
@@ -198,6 +203,7 @@ class ProfileScreen extends StatelessWidget {
                         backgroundColor: AppColors.warning,
                       ),
                     ),
+                  _buildMenuItem(context, Icons.security, 'Keamanan & Privasi', () => Navigator.pushNamed(context, AppRouter.securitySettings)),
                   _buildMenuItem(context, Icons.edit, 'Edit Profil', () => Navigator.pushNamed(context, AppRouter.editProfile)),
                   _buildMenuItem(
                     context, 
