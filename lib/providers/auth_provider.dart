@@ -76,27 +76,34 @@ class AuthProvider extends ChangeNotifier {
               .limit(1);
 
           if (res.isNotEmpty) {
-            _currentUser = _mapToUserModel(res.first as Map<String, dynamic>);
+            final dbUser = _mapToUserModel(res.first as Map<String, dynamic>);
             
             // Check blockchain_blocks to ensure points and tier are up-to-date
+            int expSum = 0;
             try {
               final List blocksRes = await supabase
                   .from('blockchain_blocks')
                   .select('exp_earned')
-                  .eq('user_id', _currentUser!.id);
+                  .eq('user_id', dbUser.id);
               if (blocksRes.isNotEmpty) {
-                int expSum = 0;
                 for (final b in blocksRes) {
                   expSum += (b['exp_earned'] as num? ?? 0).toInt();
                 }
-                if (expSum > _currentUser!.points) {
-                  _currentUser = _currentUser!.copyWith(
-                    points: expSum,
-                    membershipTier: tierFromExp(expSum),
-                  );
-                }
               }
             } catch (_) {}
+
+            int finalPoints = dbUser.points;
+            if (expSum > finalPoints) {
+              finalPoints = expSum;
+            }
+            if (_currentUser != null && _currentUser!.id == dbUser.id && _currentUser!.points > finalPoints) {
+              finalPoints = _currentUser!.points;
+            }
+
+            _currentUser = dbUser.copyWith(
+              points: finalPoints,
+              membershipTier: tierFromExp(finalPoints),
+            );
 
             _isLoggedIn = true;
             await _saveSessionToPrefs(_currentUser!);
@@ -140,7 +147,7 @@ class AuthProvider extends ChangeNotifier {
         // Special fallback for Admin and Cashier accounts if Supabase Auth fails
         if (_isFallbackAdmin(email, password)) {
           _currentUser = UserModel(
-            id: 'admin-master-id',
+            id: 'admin-dc-001',
             fullName: 'Administrator Doctor Computer',
             email: 'admin@doctorcomputer.id',
             phone: '081234567890',
@@ -161,7 +168,7 @@ class AuthProvider extends ChangeNotifier {
 
         if (_isFallbackCashier(email, password)) {
           _currentUser = UserModel(
-            id: 'cashier-master-id',
+            id: 'cashier-dc-001',
             fullName: 'Kasir Toko Doctor Computer',
             email: 'cashier@doctorcomputer.id',
             phone: '081234567891',
@@ -507,6 +514,14 @@ class AuthProvider extends ChangeNotifier {
         final walletKey = 'blockchain_wallet_$userId';
         final initialWallet = UserWallet(userId: userId, userName: name);
         await prefs.setString(walletKey, jsonEncode(initialWallet.toMap()));
+        
+        // Also persist genesis block to Supabase blockchain_blocks table
+        try {
+          final genesisBlock = initialWallet.blockchain.first;
+          await supabase.from('blockchain_blocks').insert(genesisBlock.toDbMap(userId));
+        } catch (e) {
+          debugPrint('Notice inserting genesis block to DB on register: $e');
+        }
       } catch (e) {
         debugPrint('Error creating genesis block: $e');
       }

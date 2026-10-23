@@ -250,12 +250,19 @@ class MemberScreen extends StatelessWidget {
                     expEarned: 500,
                   );
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: AppColors.success,
-                        content: Text('Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
-                      ),
-                    );
+                    final auth = context.read<AuthProvider>();
+                    if (auth.currentUser != null) {
+                      final tierEnum = auth.parseMembershipTier(blockchain.currentTier.name);
+                      await auth.updatePointsAndTier(blockchain.totalExp, tierEnum);
+                    }
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: AppColors.success,
+                          content: Text('Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
+                        ),
+                      );
+                    }
                   }
                 },
               ),

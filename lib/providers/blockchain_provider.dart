@@ -20,9 +20,12 @@ class BlockchainProvider extends ChangeNotifier {
     initWallet('guest', 'Pengguna Baru');
   }
 
-  /// Initializes the user wallet.
-  /// First restores instantly from local SharedPreferences cache (offline-first),
-  /// then synchronizes asynchronously with Supabase `blockchain_blocks` table.
+  /// Initializes the user wallet with bidirectional synchronization.
+  /// 1. Instantly restores from local cache (offline-first).
+  /// 2. Fetches remote blocks from Supabase `blockchain_blocks`.
+  /// 3. Reconciles: any unsynced local blocks are pushed to Supabase;
+  ///    remote blocks are incorporated into the local chain without data loss.
+  /// 4. Synchronizes verified EXP and tier to Supabase `users` table.
   Future<void> initWallet(
     String userId, 
     String userName, {
@@ -34,20 +37,7 @@ class BlockchainProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (isAdmin) {
-        _wallet = UserWallet(
-          userId: userId,
-          userName: userName,
-          totalExp: 999999,
-          currentTier: MemberTier.platinum,
-        );
-        await _saveWallet();
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
-      if (userId == 'guest') {
+      if (userId == 'guest' || userId.isEmpty) {
         _wallet = UserWallet(
           userId: 'guest',
           userName: 'Pengguna Baru',
@@ -59,15 +49,17 @@ class BlockchainProvider extends ChangeNotifier {
         return;
       }
 
-      // 1. Instant local restore from SharedPreferences
+      // 1. Instant local restore from SharedPreferences (offline-first)
       final prefs = await SharedPreferences.getInstance();
       final key = 'blockchain_wallet_$userId';
       final jsonString = prefs.getString(key);
 
+      List<Block> localBlocks = [];
       if (jsonString != null && jsonString.isNotEmpty) {
         try {
           final map = jsonDecode(jsonString) as Map<String, dynamic>;
           _wallet = UserWallet.fromMap(map);
+          localBlocks = List<Block>.from(_wallet.blockchain);
           if (initialExp > _wallet.totalExp) {
             _wallet.totalExp = initialExp;
             _wallet.currentTier = MemberTier.fromExp(initialExp);
@@ -83,11 +75,12 @@ class BlockchainProvider extends ChangeNotifier {
           totalExp: initialExp,
           currentTier: MemberTier.fromExp(initialExp),
         );
+        localBlocks = List<Block>.from(_wallet.blockchain);
         await _saveWallet();
         notifyListeners();
       }
 
-      // 2. Sync with Supabase blockchain_blocks table
+      // 2. Bidirectional sync with Supabase blockchain_blocks table
       try {
         final List res = await supabase
             .from('blockchain_blocks')
@@ -95,98 +88,106 @@ class BlockchainProvider extends ChangeNotifier {
             .eq('user_id', userId)
             .order('block_index', ascending: true);
 
-        if (res.isNotEmpty) {
-          final List<Block> remoteBlocks = res
-              .map((row) => Block.fromDbMap(row as Map<String, dynamic>))
-              .toList();
+        final List<Block> remoteBlocks = res.isNotEmpty
+            ? res.map((row) => Block.fromDbMap(row as Map<String, dynamic>)).toList()
+            : [];
 
-          int accumulatedExp = 0;
-          for (final b in remoteBlocks) {
-            accumulatedExp += b.expEarned;
-          }
-
-          if (initialExp > accumulatedExp) {
-            final diff = initialExp - accumulatedExp;
-            final prevHash = remoteBlocks.isNotEmpty ? remoteBlocks.last.hash : 'A1B2';
-            final newIndex = remoteBlocks.length;
-            final now = DateTime.now().millisecondsSinceEpoch;
-            final blockPayload = {
-              'User': userName,
-              'Exp': initialExp,
-              'Tier': MemberTier.fromExp(initialExp).name,
-              'Tambahan Exp': '+$diff EXP',
-              'Note': 'Sinkronisasi riwayat akumulasi EXP akun',
-              'Previous Hash': prevHash,
-              'Timestamp': DateTime.fromMillisecondsSinceEpoch(now).toIso8601String(),
-            };
-            final newHash = Block.calculateHash(
-              index: newIndex,
-              timestamp: now,
-              data: blockPayload,
-              previousHash: prevHash,
-            );
-            final recoveryBlock = Block(
-              index: newIndex,
-              blockType: 'shopping',
-              title: 'Blok $newIndex: Sinkronisasi Akumulasi Poin',
-              data: blockPayload,
-              previousHash: prevHash,
-              initialHash: newHash,
-              expEarned: diff,
-              upgradeTier: MemberTier.fromExp(initialExp).name,
-              customTimestamp: now,
-            );
-            try {
-              await supabase.from('blockchain_blocks').upsert(
-                recoveryBlock.toDbMap(userId),
-                onConflict: 'user_id,block_index',
-              );
-              remoteBlocks.add(recoveryBlock);
-              accumulatedExp = initialExp;
-            } catch (e) {
-              debugPrint('Error inserting recovery block: $e');
-            }
-          }
-
-          final calculatedTier = MemberTier.fromExp(accumulatedExp);
-
-          _wallet = UserWallet(
-            userId: userId,
-            userName: userName,
-            totalExp: accumulatedExp,
-            currentTier: calculatedTier,
-            existingBlocks: remoteBlocks,
-          );
-
-          await _saveWallet();
-          notifyListeners();
-          onWalletSynced?.call(accumulatedExp, calculatedTier.name);
-        } else {
-          if (_wallet.blockchain.isEmpty) {
-            _wallet = UserWallet(
-              userId: userId,
-              userName: userName,
-              totalExp: initialExp,
-              currentTier: MemberTier.fromExp(initialExp),
-            );
-          }
-
-          if (initialExp > 0 && _wallet.blockchain.length <= 1) {
-            final b = _wallet.mineShoppingBlock(
-              itemName: 'Akumulasi Poin Akun Member',
-              additionalExp: initialExp,
-            );
-            await _syncBlockToDb(b, userId);
-          } else {
-            for (final block in _wallet.blockchain) {
-              await _syncBlockToDb(block, userId);
-            }
-          }
-
-          await _saveWallet();
-          notifyListeners();
-          onWalletSynced?.call(_wallet.totalExp, _wallet.currentTier.name);
+        // Build index lookup map with remote blocks
+        final Map<int, Block> mergedMap = {};
+        for (final b in remoteBlocks) {
+          mergedMap[b.index] = b;
         }
+
+        // Push any local blocks that are missing from remote Supabase
+        for (final lb in localBlocks) {
+          if (!mergedMap.containsKey(lb.index)) {
+            await _syncBlockToDb(lb, userId);
+            mergedMap[lb.index] = lb;
+          }
+        }
+
+        // Ensure Genesis block (block_index: 0) exists
+        if (!mergedMap.containsKey(0)) {
+          final genesisWallet = UserWallet(userId: userId, userName: userName);
+          final genesisBlock = genesisWallet.blockchain.first;
+          await _syncBlockToDb(genesisBlock, userId);
+          mergedMap[0] = genesisBlock;
+        }
+
+        final sortedIndices = mergedMap.keys.toList()..sort();
+        final List<Block> finalBlocks = sortedIndices.map((i) => mergedMap[i]!).toList();
+
+        int accumulatedExp = 0;
+        for (final b in finalBlocks) {
+          accumulatedExp += b.expEarned;
+        }
+
+        // Reconcile: If initial points in users table exceed blockchain sum (e.g. legacy/admin seed),
+        // mine a reconciliation block so the blockchain ledger perfectly matches.
+        final targetPoints = initialExp > accumulatedExp ? initialExp : accumulatedExp;
+        if (targetPoints > accumulatedExp && !isAdmin) {
+          final diff = targetPoints - accumulatedExp;
+          final prevHash = finalBlocks.isNotEmpty ? finalBlocks.last.hash : 'A1B2';
+          final newIndex = finalBlocks.length;
+          final now = DateTime.now().millisecondsSinceEpoch;
+          final blockPayload = {
+            'User': userName.isNotEmpty ? userName : userId,
+            'Exp': targetPoints,
+            'Tier': MemberTier.fromExp(targetPoints).name,
+            'Tambahan Exp': '+$diff EXP',
+            'Note': 'Sinkronisasi riwayat akumulasi EXP akun',
+            'Previous Hash': prevHash,
+            'Timestamp': DateTime.fromMillisecondsSinceEpoch(now).toIso8601String(),
+          };
+          final newHash = Block.calculateHash(
+            index: newIndex,
+            timestamp: now,
+            data: blockPayload,
+            previousHash: prevHash,
+          );
+          blockPayload['New Hash'] = newHash;
+          final recoveryBlock = Block(
+            index: newIndex,
+            blockType: 'shopping',
+            title: 'Blok $newIndex: Sinkronisasi Akumulasi Poin',
+            data: blockPayload,
+            previousHash: prevHash,
+            initialHash: newHash,
+            expEarned: diff,
+            upgradeTier: MemberTier.fromExp(targetPoints).name,
+            customTimestamp: now,
+          );
+          await _syncBlockToDb(recoveryBlock, userId);
+          finalBlocks.add(recoveryBlock);
+          accumulatedExp = targetPoints;
+        }
+
+        final effectiveExp = isAdmin ? (accumulatedExp < 999999 ? 999999 : accumulatedExp) : accumulatedExp;
+        final calculatedTier = isAdmin ? MemberTier.platinum : MemberTier.fromExp(effectiveExp);
+
+        _wallet = UserWallet(
+          userId: userId,
+          userName: userName,
+          totalExp: effectiveExp,
+          currentTier: calculatedTier,
+          existingBlocks: finalBlocks,
+        );
+
+        await _saveWallet();
+        notifyListeners();
+
+        // 3. Synchronize points and tier directly to `users` table
+        try {
+          await supabase.from('users').update({
+            'points': effectiveExp,
+            'membership_tier': calculatedTier.name.toLowerCase(),
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', userId);
+        } catch (e) {
+          debugPrint('Notice updating users table from initWallet: $e');
+        }
+
+        onWalletSynced?.call(effectiveExp, calculatedTier.name);
       } catch (e) {
         debugPrint('Notice syncing blockchain from Supabase: $e');
       }
@@ -212,6 +213,7 @@ class BlockchainProvider extends ChangeNotifier {
         userName: userName,
         totalExp: 999999,
         currentTier: MemberTier.platinum,
+        existingBlocks: _wallet.blockchain,
       );
       _saveWallet();
       notifyListeners();
@@ -237,19 +239,28 @@ class BlockchainProvider extends ChangeNotifier {
     }
   }
 
-  /// Persists a mined block to Supabase `blockchain_blocks` table with onConflict handling
-  Future<void> _syncBlockToDb(Block block, String userId) async {
-    if (userId == 'guest' || userId.isEmpty) return;
+  /// Persists a mined block to Supabase `blockchain_blocks` table and updates `users` table
+  Future<bool> _syncBlockToDb(Block block, String userId) async {
+    if (userId == 'guest' || userId.isEmpty) return false;
 
-    // 1. Upsert block to blockchain_blocks table
+    bool synced = false;
+    // 1. Try insert first (standard for newly mined blocks)
     try {
-      await supabase.from('blockchain_blocks').upsert(
-            block.toDbMap(userId),
-            onConflict: 'user_id,block_index',
-          );
-      debugPrint('[Blockchain] Mined block #${block.index} (${block.blockType}) synced to Supabase.');
-    } catch (e) {
-      debugPrint('[Blockchain] Notice syncing block #${block.index} to Supabase: $e');
+      await supabase.from('blockchain_blocks').insert(block.toDbMap(userId));
+      synced = true;
+      debugPrint('[Blockchain] Mined block #${block.index} (${block.blockType}) inserted into Supabase.');
+    } catch (insertError) {
+      // If insert fails (e.g. duplicate key), fallback to upsert
+      try {
+        await supabase.from('blockchain_blocks').upsert(
+              block.toDbMap(userId),
+              onConflict: 'user_id,block_index',
+            );
+        synced = true;
+        debugPrint('[Blockchain] Mined block #${block.index} (${block.blockType}) upserted into Supabase.');
+      } catch (upsertError) {
+        debugPrint('[Blockchain] Notice syncing block #${block.index} to Supabase: $upsertError');
+      }
     }
 
     // 2. Synchronize points and tier directly to `users` table in Supabase
@@ -267,6 +278,8 @@ class BlockchainProvider extends ChangeNotifier {
 
     // 3. Notify listener callback (e.g. AuthProvider)
     onWalletSynced?.call(_wallet.totalExp, _wallet.currentTier.name);
+
+    return synced;
   }
 
   /// Mines Block 1: Minigame reward (+EXP)
@@ -281,7 +294,7 @@ class BlockchainProvider extends ChangeNotifier {
     await _saveWallet();
     notifyListeners();
 
-    // Sync to Supabase
+    // Persist and sync to Supabase
     await _syncBlockToDb(block, _wallet.userId);
 
     return block;
@@ -299,7 +312,7 @@ class BlockchainProvider extends ChangeNotifier {
     await _saveWallet();
     notifyListeners();
 
-    // Sync to Supabase
+    // Persist and sync to Supabase
     await _syncBlockToDb(block, _wallet.userId);
 
     return block;
@@ -343,12 +356,39 @@ class BlockchainProvider extends ChangeNotifier {
     String adminNote = 'Penyesuaian poin oleh admin',
   }) async {
     try {
+      // Fetch latest blocks from Supabase for target user to maintain cryptographic chain
+      List<Block> targetBlocks = [];
+      try {
+        final List res = await supabase
+            .from('blockchain_blocks')
+            .select()
+            .eq('user_id', userId)
+            .order('block_index', ascending: true);
+        if (res.isNotEmpty) {
+          targetBlocks = res.map((r) => Block.fromDbMap(r as Map<String, dynamic>)).toList();
+        }
+      } catch (e) {
+        debugPrint('Notice fetching remote blocks for admin adjustment: $e');
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final key = 'blockchain_wallet_$userId';
       final jsonString = prefs.getString(key);
 
       UserWallet targetWallet;
-      if (jsonString != null) {
+      if (targetBlocks.isNotEmpty) {
+        int currentExp = 0;
+        for (final b in targetBlocks) {
+          currentExp += b.expEarned;
+        }
+        targetWallet = UserWallet(
+          userId: userId,
+          userName: userName,
+          totalExp: currentExp,
+          currentTier: MemberTier.fromExp(currentExp),
+          existingBlocks: targetBlocks,
+        );
+      } else if (jsonString != null) {
         targetWallet = UserWallet.fromMap(jsonDecode(jsonString) as Map<String, dynamic>);
       } else {
         targetWallet = UserWallet(userId: userId, userName: userName);
@@ -369,6 +409,15 @@ class BlockchainProvider extends ChangeNotifier {
 
       // Sync the adjustment block to Supabase
       await _syncBlockToDb(block, userId);
+
+      // Also ensure users table is updated
+      try {
+        await supabase.from('users').update({
+          'points': newExp,
+          'membership_tier': newTier.name.toLowerCase(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', userId);
+      } catch (_) {}
 
       return true;
     } catch (e) {

@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 - **Application Name:** Doctor Computer
-- **Release Version:** 1.0.11-beta
+- **Release Version:** 1.0.13-beta
 - **Target Platforms:** Android, iOS, Windows, Web
 - **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -126,6 +126,38 @@ _Note: All newly registered accounts default automatically to the Customer (`use
 | BUG-021   | Fingerprint button on the login screen signs in as a previously enrolled account (e.g. Admin) after switching users | Single global `saved_biometric_user` slot that was never cleared, plus fallbacks to `last_known_user` / `cached_active_user`                                     | Resolved (Per-account enrollment; button follows the last logged-in account and is hidden if that account has no fingerprint) |
 | BUG-022   | Biometric enrollment remained after biometrics were disabled or the last fingerprint was deleted                    | `setBiometricEnabled(false)` and `deleteBiometricCredential` never cleared the stored account                                                                    | Resolved (Enrollment of that account is removed from secure storage and preferences)                                          |
 | BUG-023   | Biometric login produced no Supabase session and trusted the role from local JSON                                   | Session was rebuilt from cached profile instead of re-authenticating                                                                                             | Resolved (Credentials from secure storage are used to call `login()` again; role comes from the database)                     |
+
+---
+
+## Version 1.0.13-beta Changelog (Blockchain & Membership Database Synchronization Fix)
+
+Resolved critical blockchain persistence and membership synchronization defects where loyalty EXP and mined blockchain blocks from minigames and shopping purchases were lost upon application exit.
+
+### Root Cause Analysis & Architecture Fixes
+
+1. **Foreign Key Constraint Violations on Fallback Accounts:**
+   - **Defect:** Built-in fallback accounts previously used arbitrary strings (`admin-master-id` and `cashier-master-id`) which did not exist in the Supabase `users` table.
+   - **Impact:** Any attempt to insert mined blocks into `blockchain_blocks` resulted in PostgreSQL foreign key violation `23503 (blockchain_blocks_user_id_fkey)`.
+   - **Resolution:** Corrected fallback IDs in `AuthProvider` to use the valid database keys (`admin-dc-001` and `cashier-dc-001`).
+
+2. **Destructive Overwrite in `initWallet` (Data Loss on Restart):**
+   - **Defect:** When `initWallet()` loaded remote blocks from Supabase, it completely replaced `_wallet.blockchain` with remote blocks, discarding any locally cached blocks that had not yet synchronized over the network.
+   - **Impact:** Any minigame EXP or shopping reward earned offline or during pending network requests was wiped upon application restart.
+   - **Resolution:** Implemented robust two-way bidirectional reconciliation:
+     - Local blocks missing from Supabase are detected and immediately pushed to `blockchain_blocks`.
+     - Remote blocks not in local cache are merged into the chain.
+     - Genesis block (`block_index: 0`) is guaranteed to exist and persist to Supabase on first run or registration.
+     - Total EXP is verified against the unified cryptographic chain and synced to `users.points` and `users.membership_tier`.
+
+3. **Insertion & Upsert Hardening:**
+   - Standardized block synchronization strategy in `BlockchainProvider._syncBlockToDb`: attempts standard `insert()` first for newly mined blocks, with deterministic fallback to `upsert(onConflict: 'user_id,block_index')`.
+   - Updates `users` table points and membership tier concurrently upon mining every block.
+
+4. **Cryptographic Chain Integrity in Admin Adjustments:**
+   - `adminSetUserPoints()` now queries the user's latest remote blocks from Supabase before mining the adjustment block, ensuring correct index sequencing and previous block hash matching.
+
+5. **Direct Point-Tier Synchronization Across All Minigame and Demo Entry Points:**
+   - Added immediate `AuthProvider.updatePointsAndTier()` calls across all minigame cards and demo buttons (`MemoryMatchGame`, `PcQuizGame`, `SpeedRepairGame`, `MinigameCard`, `MemberScreen` shopping demo).
 
 ---
 
