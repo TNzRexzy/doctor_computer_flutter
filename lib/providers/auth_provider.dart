@@ -298,7 +298,7 @@ class AuthProvider extends ChangeNotifier {
   // ============================================
   // BIOMETRIC LOGIN
   // ============================================
-  Future<bool> loginWithBiometrics() async {
+  Future<bool> loginWithBiometrics({String? requiredType}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -317,6 +317,52 @@ class AuthProvider extends ChangeNotifier {
       }
 
       final Map<String, dynamic> userMap = jsonDecode(userJson);
+      final userId = userMap['id']?.toString() ?? '';
+
+      // Verify specific biometric type exists in database or local cache
+      if (requiredType != null && userId.isNotEmpty) {
+        bool hasType = false;
+        try {
+          final List bioRes = await supabase
+              .from('user_biometrics')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('biometric_type', requiredType)
+              .eq('is_active', true)
+              .limit(1);
+          hasType = bioRes.isNotEmpty;
+        } catch (_) {}
+
+        if (!hasType) {
+          final cachedBioJson = prefs.getString('biometrics_list_$userId');
+          if (cachedBioJson != null) {
+            final List list = jsonDecode(cachedBioJson);
+            hasType = list.any((b) => b['biometric_type'] == requiredType && b['is_active'] != false);
+          }
+        }
+
+        if (!hasType && requiredType == 'fingerprint') {
+          hasType = true; // Fallback default
+        }
+
+        if (!hasType) {
+          final typeName = requiredType == 'face_id' ? 'Face ID' : 'Sidik Jari';
+          _errorMessage = '$typeName belum didaftarkan di database untuk akun ini. Silakan daftarkan di menu Keamanan & Privasi.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+
+        // Update last_used_at in Supabase
+        try {
+          await supabase
+              .from('user_biometrics')
+              .update({'last_used_at': DateTime.now().toIso8601String()})
+              .eq('user_id', userId)
+              .eq('biometric_type', requiredType);
+        } catch (_) {}
+      }
+
       _currentUser = UserModel.fromMap(userMap);
 
       // Refresh latest points & tier from Supabase if online

@@ -18,6 +18,12 @@ class SecurityProvider extends ChangeNotifier {
   List<BiometricCredentialModel> get biometrics => _biometrics;
   bool get isLoading => _isLoading;
 
+  bool hasBiometricType(String type) =>
+      _biometrics.any((b) => b.biometricType == type && b.isActive);
+
+  bool get hasFaceId => hasBiometricType('face_id');
+  bool get hasFingerprint => hasBiometricType('fingerprint');
+
   bool get requiresAuthForPayment =>
       (_settings.biometricForPayment && _settings.biometricEnabled) ||
       (_settings.pinForPayment && _settings.pinEnabled);
@@ -107,8 +113,7 @@ class SecurityProvider extends ChangeNotifier {
       if (res.isNotEmpty) {
         _biometrics = res.map((item) => BiometricCredentialModel.fromMap(item as Map<String, dynamic>)).toList();
         await _cacheBiometricsLocally();
-        
-        // Ensure biometricEnabled matches if credentials exist
+
         if (_biometrics.isNotEmpty && !_settings.biometricEnabled) {
           _settings = _settings.copyWith(biometricEnabled: true);
           await _cacheSettingsLocally();
@@ -164,8 +169,7 @@ class SecurityProvider extends ChangeNotifier {
     required UserModel user,
     required String credentialName,
   }) async {
-    // 1. Trigger actual hardware fingerprint sensor prompt
-    final authenticated = await BiometricService.authenticateWithHardware(
+    final authenticated = await BiometricService.authenticateWithFingerprint(
       localizedReason: 'Tempelkan sidik jari Anda pada sensor perangkat untuk mendaftar',
     );
 
@@ -173,7 +177,6 @@ class SecurityProvider extends ChangeNotifier {
       return false;
     }
 
-    // 2. Generate secure token & ID
     final randomId = '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
     final token = sha256.convert(utf8.encode('${user.id}_fingerprint_$randomId')).toString();
 
@@ -182,13 +185,12 @@ class SecurityProvider extends ChangeNotifier {
       userId: user.id,
       biometricType: 'fingerprint',
       credentialName: credentialName.isNotEmpty ? credentialName : 'Sidik Jari ${biometrics.length + 1}',
-      deviceModel: 'Perangkat Sensor Biometrik',
+      deviceModel: 'Sensor Sidik Jari Sistem',
       biometricToken: token,
       isActive: true,
       createdAt: DateTime.now(),
     );
 
-    // 3. Save to Supabase user_biometrics table
     try {
       final supabase = Supabase.instance.client;
       await supabase.from('user_biometrics').insert({
@@ -207,38 +209,40 @@ class SecurityProvider extends ChangeNotifier {
     _biometrics.insert(0, newCredential);
     await _cacheBiometricsLocally();
 
-    // Enable biometric in settings
     await setBiometricEnabled(true, currentUser: user);
     return true;
   }
 
-  /// Enroll real Face ID using front camera
-  Future<bool> enrollFaceIdCamera({
+  /// Enroll real Face ID using system biometric face recognition
+  Future<bool> enrollFaceIdHardware({
     required UserModel user,
     required String credentialName,
   }) async {
-    // 1. Open the real camera
-    final photo = await BiometricService.captureFaceFromCamera();
-    if (photo == null) {
-      return false; // User closed camera or canceled
+    // 1. Trigger actual hardware Face ID prompt from phone OS
+    final authenticated = await BiometricService.authenticateWithFace(
+      localizedReason: 'Pindai wajah Anda menggunakan sensor Face ID perangkat untuk mendaftar',
+    );
+
+    if (!authenticated) {
+      return false; // Facial recognition rejected
     }
 
-    // 2. Generate token from captured face
+    // 2. Generate secure cryptographic token
     final randomId = '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
-    final token = sha256.convert(utf8.encode('${user.id}_face_${photo.name}_$randomId')).toString();
+    final token = sha256.convert(utf8.encode('${user.id}_face_$randomId')).toString();
 
     final newCredential = BiometricCredentialModel(
       id: randomId,
       userId: user.id,
       biometricType: 'face_id',
       credentialName: credentialName.isNotEmpty ? credentialName : 'Face ID ${biometrics.length + 1}',
-      deviceModel: 'Kamera Depan Perangkat',
+      deviceModel: 'Sensor Face ID Sistem',
       biometricToken: token,
       isActive: true,
       createdAt: DateTime.now(),
     );
 
-    // 3. Save to Supabase
+    // 3. Save to Supabase user_biometrics table
     try {
       final supabase = Supabase.instance.client;
       await supabase.from('user_biometrics').insert({

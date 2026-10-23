@@ -152,13 +152,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppColors.accent.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.camera_alt, color: AppColors.accent, size: 28),
+                  child: Icon(Icons.face, color: AppColors.accent, size: 28),
                 ),
-                title: const Text('Face ID (Buka Kamera Depan)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Buka kamera depan untuk memindai wajah'),
+                title: const Text('Face ID (Sensor Wajah Perangkat)', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Pindai wajah dengan sistem pengenalan wajah perangkat'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await _authenticateWithRealFaceCamera();
+                  await _authenticateWithRealFaceId();
                 },
               ),
               const SizedBox(height: 16),
@@ -176,66 +176,68 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _authenticateWithRealFingerprint() async {
     final auth = context.read<AuthProvider>();
 
-    // Trigger phone physical hardware sensor prompt
-    final bool didAuthenticate = await BiometricService.authenticateWithHardware(
+    // Trigger phone physical hardware fingerprint sensor prompt
+    final bool didAuthenticate = await BiometricService.authenticateWithFingerprint(
       localizedReason: 'Pindai sidik jari Anda pada sensor HP untuk masuk ke Doctor Computer',
     );
 
     if (!mounted) return;
 
     if (didAuthenticate) {
-      final success = await auth.loginWithBiometrics();
+      final success = await auth.loginWithBiometrics(requiredType: 'fingerprint');
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppColors.success,
-            content: const Text('Sidik jari terverifikasi sensor! Berhasil masuk.'),
+            content: const Text('Sidik jari terverifikasi sensor HP! Berhasil masuk.'),
           ),
         );
         Navigator.pushReplacementNamed(context, AppRouter.mainNav);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(auth.errorMessage ?? 'Gagal memulihkan sesi biometrik')),
+          SnackBar(content: Text(auth.errorMessage ?? 'Gagal memulihkan sesi sidik jari')),
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Verifikasi sensor sidik jari HP dibatalkan atau tidak cocok.'),
+          content: Text('Verifikasi sensor sidik jari HP dibatalkan atau sidik jari tidak cocok.'),
         ),
       );
     }
   }
 
-  Future<void> _authenticateWithRealFaceCamera() async {
+  Future<void> _authenticateWithRealFaceId() async {
     final auth = context.read<AuthProvider>();
 
-    // Open actual front camera via image_picker
-    final photo = await BiometricService.captureFaceFromCamera();
+    // Trigger phone system Face Recognition / Face ID sensor prompt
+    final bool didAuthenticate = await BiometricService.authenticateWithFace(
+      localizedReason: 'Arahkan wajah Anda ke sensor Face ID perangkat untuk masuk ke Doctor Computer',
+    );
 
     if (!mounted) return;
 
-    if (photo != null) {
-      final success = await auth.loginWithBiometrics();
+    if (didAuthenticate) {
+      final success = await auth.loginWithBiometrics(requiredType: 'face_id');
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppColors.success,
-            content: const Text('Wajah terverifikasi kamera! Berhasil masuk.'),
+            content: const Text('Wajah cocok dan terverifikasi oleh Face ID perangkat! Berhasil masuk.'),
           ),
         );
         Navigator.pushReplacementNamed(context, AppRouter.mainNav);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(auth.errorMessage ?? 'Gagal login Face ID')),
+          SnackBar(content: Text(auth.errorMessage ?? 'Gagal memverifikasi data Face ID di database')),
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Pemindaian wajah dibatalkan.'),
+          content: Text('Wajah tidak dikenali sistem atau verifikasi Face ID dibatalkan.'),
         ),
       );
     }

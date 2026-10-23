@@ -1,11 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:image_picker/image_picker.dart';
 
 class BiometricService {
   static final LocalAuthentication _auth = LocalAuthentication();
-  static final ImagePicker _imagePicker = ImagePicker();
 
   /// Check if the physical device has biometric hardware (Fingerprint / Face)
   static Future<bool> isBiometricHardwareAvailable() async {
@@ -29,8 +27,28 @@ class BiometricService {
     }
   }
 
+  /// Check if Face ID / Face Recognition is supported/enrolled in phone system
+  static Future<bool> hasFaceHardwareEnrolled() async {
+    try {
+      final biometrics = await _auth.getAvailableBiometrics();
+      return biometrics.contains(BiometricType.face);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Check if Fingerprint is supported/enrolled in phone system
+  static Future<bool> hasFingerprintHardwareEnrolled() async {
+    try {
+      final biometrics = await _auth.getAvailableBiometrics();
+      return biometrics.contains(BiometricType.fingerprint) || biometrics.contains(BiometricType.strong);
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Authenticate using actual physical device sensor (Fingerprint hardware prompt)
-  static Future<bool> authenticateWithHardware({
+  static Future<bool> authenticateWithFingerprint({
     String localizedReason = 'Pindai sidik jari Anda pada sensor perangkat untuk verifikasi',
   }) async {
     try {
@@ -41,27 +59,31 @@ class BiometricService {
       );
       return didAuthenticate;
     } on PlatformException catch (e) {
-      debugPrint('[BiometricService] PlatformException on authenticate: ${e.code} - ${e.message}');
+      debugPrint('[BiometricService] PlatformException on fingerprint: ${e.code} - ${e.message}');
       return false;
     } catch (e) {
-      debugPrint('[BiometricService] Error authenticating: $e');
+      debugPrint('[BiometricService] Error authenticating fingerprint: $e');
       return false;
     }
   }
 
-  /// Capture face verification by opening the actual front camera
-  static Future<XFile?> captureFaceFromCamera() async {
+  /// Authenticate using actual physical device Face ID / Face Recognition sensor
+  static Future<bool> authenticateWithFace({
+    String localizedReason = 'Arahkan wajah Anda ke sensor Face ID perangkat untuk verifikasi',
+  }) async {
     try {
-      final XFile? photo = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-        imageQuality: 70,
-        maxWidth: 600,
+      final bool didAuthenticate = await _auth.authenticate(
+        localizedReason: localizedReason,
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
       );
-      return photo;
+      return didAuthenticate;
+    } on PlatformException catch (e) {
+      debugPrint('[BiometricService] PlatformException on Face ID: ${e.code} - ${e.message}');
+      return false;
     } catch (e) {
-      debugPrint('[BiometricService] Camera capture error: $e');
-      return null;
+      debugPrint('[BiometricService] Error authenticating Face ID: $e');
+      return false;
     }
   }
 }

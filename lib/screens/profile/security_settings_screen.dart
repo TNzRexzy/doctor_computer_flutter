@@ -407,14 +407,14 @@ class SecuritySettingsScreen extends StatelessWidget {
                     color: AppColors.accent.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.camera_alt_outlined, color: AppColors.accent),
+                  child: Icon(Icons.face, color: AppColors.accent),
                 ),
                 title: const Text('Face ID Kamera (Pengenalan Wajah)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Membuka kamera depan HP untuk memindai wajah Anda'),
+                subtitle: const Text('Pindai wajah dengan sensor biometrik Face ID sistem perangkat'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  _startRealCameraFaceEnrollment(context, secProvider, authProvider);
+                  _startRealFaceIdEnrollment(context, secProvider, authProvider);
                 },
               ),
             ],
@@ -496,7 +496,7 @@ class SecuritySettingsScreen extends StatelessWidget {
     }
   }
 
-  void _startRealCameraFaceEnrollment(
+  void _startRealFaceIdEnrollment(
     BuildContext context,
     SecurityProvider secProvider,
     AuthProvider authProvider,
@@ -510,9 +510,9 @@ class SecuritySettingsScreen extends StatelessWidget {
       builder: (dlgCtx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.camera_alt, color: AppColors.accent),
+            Icon(Icons.face, color: AppColors.accent),
             const SizedBox(width: 8),
-            const Text('Buka Kamera Wajah'),
+            const Text('Scan Face ID Perangkat'),
           ],
         ),
         content: Column(
@@ -520,7 +520,7 @@ class SecuritySettingsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Aplikasi akan membuka kamera depan HP untuk memindai dan memverifikasi wajah Anda.',
+              'Aplikasi akan memicu sensor pengenalan wajah sistem HP Anda. Pastikan wajah Anda menghadap ke sensor saat pemindaian sistem dimulai.',
             ),
             const SizedBox(height: 16),
             TextField(
@@ -537,7 +537,7 @@ class SecuritySettingsScreen extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
             onPressed: () => Navigator.pop(dlgCtx, true),
-            child: const Text('Buka Kamera', style: TextStyle(color: Colors.white)),
+            child: const Text('Mulai Scan Wajah', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -545,7 +545,7 @@ class SecuritySettingsScreen extends StatelessWidget {
 
     if (proceed != true || !context.mounted) return;
 
-    final success = await secProvider.enrollFaceIdCamera(
+    final success = await secProvider.enrollFaceIdHardware(
       user: authProvider.currentUser!,
       credentialName: nameController.text.trim(),
     );
@@ -556,13 +556,13 @@ class SecuritySettingsScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.success,
-          content: Text('Face ID "${nameController.text.trim()}" berhasil dipindai via kamera dan disimpan ke database!'),
+          content: Text('Face ID "${nameController.text.trim()}" berhasil diverifikasi oleh sensor sistem dan disimpan ke database!'),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Pemindaian kamera wajah dibatalkan.'),
+          content: Text('Wajah tidak cocok, tidak dikenali, atau pemindaian Face ID dibatalkan.'),
         ),
       );
     }
