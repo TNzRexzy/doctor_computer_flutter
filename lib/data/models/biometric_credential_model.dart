@@ -1,7 +1,7 @@
 class BiometricCredentialModel {
   final String id;
   final String userId;
-  final String biometricType; // 'fingerprint' or 'face_id'
+  final String biometricType; // 'fingerprint'
   final String credentialName;
   final String? deviceModel;
   final String biometricToken;

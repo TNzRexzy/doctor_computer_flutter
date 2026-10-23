@@ -346,7 +346,7 @@ class AuthProvider extends ChangeNotifier {
         }
 
         if (!hasType) {
-          final typeName = requiredType == 'face_id' ? 'Face ID' : 'Sidik Jari';
+          final typeName = 'Sidik Jari';
           _errorMessage = '$typeName belum didaftarkan di database untuk akun ini. Silakan daftarkan di menu Keamanan & Privasi.';
           _isLoading = false;
           notifyListeners();

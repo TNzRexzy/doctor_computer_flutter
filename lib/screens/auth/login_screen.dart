@@ -140,27 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   await _authenticateWithRealFingerprint();
                 },
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: AppColors.accent.withValues(alpha: 0.4)),
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.face, color: AppColors.accent, size: 28),
-                ),
-                title: const Text('Face ID (Sensor Wajah Perangkat)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Pindai wajah dengan sistem pengenalan wajah perangkat'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _authenticateWithRealFaceId();
-                },
-              ),
+
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -208,40 +188,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _authenticateWithRealFaceId() async {
-    final auth = context.read<AuthProvider>();
-
-    // Trigger phone system Face Recognition / Face ID sensor prompt
-    final bool didAuthenticate = await BiometricService.authenticateWithFace(
-      localizedReason: 'Arahkan wajah Anda ke sensor Face ID perangkat untuk masuk ke Doctor Computer',
-    );
-
-    if (!mounted) return;
-
-    if (didAuthenticate) {
-      final success = await auth.loginWithBiometrics(requiredType: 'face_id');
-      if (!mounted) return;
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.success,
-            content: const Text('Wajah cocok dan terverifikasi oleh Face ID perangkat! Berhasil masuk.'),
-          ),
-        );
-        Navigator.pushReplacementNamed(context, AppRouter.mainNav);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(auth.errorMessage ?? 'Gagal memverifikasi data Face ID di database')),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Wajah tidak dikenali sistem atau verifikasi Face ID dibatalkan.'),
-        ),
-      );
-    }
-  }
 
   void _login() async {
     if (_formKey.currentState?.validate() ?? false) {

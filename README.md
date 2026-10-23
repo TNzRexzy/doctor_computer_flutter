@@ -475,11 +475,10 @@ CREATE INDEX idx_blockchain_blocks_prev_hash ON public.blockchain_blocks(previou
 
 ### 4. Advanced Security & Real Biometric Hardware System (v1.0.9-beta)
 * **Real Hardware Biometric Authentication:** Terintegrasi langsung dengan sensor fisik sidik jari perangkat melalui `local_auth` (Android `FlutterFragmentActivity` & `USE_BIOMETRIC`/`USE_FINGERPRINT` OS prompt).
-* **Face ID Front-Camera Capture:** Integrasi kamera depan perangkat melalui `image_picker` untuk pendaftaran dan verifikasi wajah secara nyata.
-* **Biometric Sign-In Quick Access:** Ikon sensor biometrik pada halaman Sign In yang membuka dialog sensor perangkat atau kamera depan, memverifikasi sensor, dan langsung login tanpa memasukkan kata sandi.
+* **Biometric Sign-In Quick Access:** Ikon sensor biometrik pada halaman Sign In yang membuka dialog sensor fisik sidik jari perangkat, memverifikasi sidik jari, dan langsung login tanpa memasukkan kata sandi.
 * **PIN Keamanan 6 Digit:** Proteksi transaksi dan akun menggunakan PIN 6 digit yang di-hash dengan enkripsi **SHA-256** (PIN plaintext tidak pernah disimpan).
 * **Payment Security Shield:** Proteksi verifikasi ganda (Biometrik / PIN) wajib sebelum konfirmasi pembayaran dan checkout pesanan.
 * **Keamanan Tambahan:** Pengaturan Autentikasi 2 Langkah (2FA Email/SMS), Auto-Lock berjangka (1 s/d 30 menit), dan notifikasi aktivitas login.
 * **Database Persistensi Supabase:**
   - Tabel `user_security_settings`: Menyimpan preferensi keamanan, status PIN hash, 2FA, auto-lock, dan proteksi pembayaran.
-  - Tabel `user_biometrics`: Menyimpan kredensial sensor terdaftar (`fingerprint` / `face_id`, nama credential, token SHA-256, device model, dan status aktif) dengan integritas Row Level Security (RLS).
+  - Tabel `user_biometrics`: Menyimpan kredensial sensor terdaftar (`fingerprint`, nama credential, token SHA-256, device model, dan status aktif) dengan integritas Row Level Security (RLS).

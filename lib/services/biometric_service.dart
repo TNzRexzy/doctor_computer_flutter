@@ -27,16 +27,6 @@ class BiometricService {
     }
   }
 
-  /// Check if Face ID / Face Recognition is supported/enrolled in phone system
-  static Future<bool> hasFaceHardwareEnrolled() async {
-    try {
-      final biometrics = await _auth.getAvailableBiometrics();
-      return biometrics.contains(BiometricType.face);
-    } catch (e) {
-      return false;
-    }
-  }
-
   /// Check if Fingerprint is supported/enrolled in phone system
   static Future<bool> hasFingerprintHardwareEnrolled() async {
     try {
@@ -67,23 +57,5 @@ class BiometricService {
     }
   }
 
-  /// Authenticate using actual physical device Face ID / Face Recognition sensor
-  static Future<bool> authenticateWithFace({
-    String localizedReason = 'Arahkan wajah Anda ke sensor Face ID perangkat untuk verifikasi',
-  }) async {
-    try {
-      final bool didAuthenticate = await _auth.authenticate(
-        localizedReason: localizedReason,
-        biometricOnly: true,
-        persistAcrossBackgrounding: true,
-      );
-      return didAuthenticate;
-    } on PlatformException catch (e) {
-      debugPrint('[BiometricService] PlatformException on Face ID: ${e.code} - ${e.message}');
-      return false;
-    } catch (e) {
-      debugPrint('[BiometricService] Error authenticating Face ID: $e');
-      return false;
-    }
-  }
+
 }

@@ -42,7 +42,7 @@ class SecuritySettingsScreen extends StatelessWidget {
                         secondary: Icon(Icons.fingerprint, color: AppColors.primary),
                         title: Text('Login dengan Biometrik', style: AppTextStyles.bodyMedium),
                         subtitle: Text(
-                          'Masuk ke akun menggunakan sensor sidik jari atau Face ID perangkat',
+                          'Masuk ke akun menggunakan sensor sidik jari perangkat',
                           style: AppTextStyles.caption,
                         ),
                         value: settings.biometricEnabled,
@@ -86,7 +86,7 @@ class SecuritySettingsScreen extends StatelessWidget {
                       ListTile(
                         leading: Icon(Icons.add_circle_outline, color: AppColors.primary),
                         title: Text('Daftarkan Sensor Biometrik Baru', style: AppTextStyles.bodyMedium),
-                        subtitle: Text('Scan sidik jari di sensor fisik atau buka kamera untuk Face ID', style: AppTextStyles.caption),
+                        subtitle: Text('Scan sidik jari pada sensor fisik perangkat', style: AppTextStyles.caption),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _showAddBiometricSheet(context, secProvider, authProvider),
                       ),
@@ -103,7 +103,7 @@ class SecuritySettingsScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               ...biometrics.map((bio) {
-                                final isFace = bio.biometricType == 'face_id';
+                                
                                 return Container(
                                   margin: const EdgeInsets.only(bottom: 6),
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -115,7 +115,7 @@ class SecuritySettingsScreen extends StatelessWidget {
                                   child: Row(
                                     children: [
                                       Icon(
-                                        isFace ? Icons.face : Icons.fingerprint,
+                                        Icons.fingerprint,
                                         color: AppColors.primary,
                                         size: 24,
                                       ),
@@ -126,7 +126,7 @@ class SecuritySettingsScreen extends StatelessWidget {
                                           children: [
                                             Text(bio.credentialName, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
                                             Text(
-                                              bio.deviceModel ?? (isFace ? 'Kamera Depan' : 'Sensor Sidik Jari'),
+                                              bio.deviceModel ?? 'Sensor Sidik Jari',
                                               style: AppTextStyles.caption.copyWith(fontSize: 11),
                                             ),
                                           ],
@@ -373,12 +373,12 @@ class SecuritySettingsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Pilih Metode Sensor Nyata',
+                'Daftarkan Sidik Jari',
                 style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                'Sambungkan ke sensor fisik HP Anda atau buka kamera untuk Face ID:',
+                'Sambungkan ke sensor sidik jari fisik HP Anda:',
                 style: AppTextStyles.caption,
               ),
               const SizedBox(height: 20),
@@ -397,24 +397,6 @@ class SecuritySettingsScreen extends StatelessWidget {
                 onTap: () async {
                   Navigator.pop(ctx);
                   _startRealFingerprintEnrollment(context, secProvider, authProvider);
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.face, color: AppColors.accent),
-                ),
-                title: const Text('Face ID Kamera (Pengenalan Wajah)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Pindai wajah dengan sensor biometrik Face ID sistem perangkat'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  _startRealFaceIdEnrollment(context, secProvider, authProvider);
                 },
               ),
             ],
@@ -496,77 +478,6 @@ class SecuritySettingsScreen extends StatelessWidget {
     }
   }
 
-  void _startRealFaceIdEnrollment(
-    BuildContext context,
-    SecurityProvider secProvider,
-    AuthProvider authProvider,
-  ) async {
-    final nameController = TextEditingController(
-      text: 'Face ID ${secProvider.biometrics.length + 1}',
-    );
-
-    final bool? proceed = await showDialog<bool>(
-      context: context,
-      builder: (dlgCtx) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.face, color: AppColors.accent),
-            const SizedBox(width: 8),
-            const Text('Scan Face ID Perangkat'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Aplikasi akan memicu sensor pengenalan wajah sistem HP Anda. Pastikan wajah Anda menghadap ke sensor saat pemindaian sistem dimulai.',
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Label Face ID',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Batal')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
-            onPressed: () => Navigator.pop(dlgCtx, true),
-            child: const Text('Mulai Scan Wajah', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (proceed != true || !context.mounted) return;
-
-    final success = await secProvider.enrollFaceIdHardware(
-      user: authProvider.currentUser!,
-      credentialName: nameController.text.trim(),
-    );
-
-    if (!context.mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.success,
-          content: Text('Face ID "${nameController.text.trim()}" berhasil diverifikasi oleh sensor sistem dan disimpan ke database!'),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Wajah tidak cocok, tidak dikenali, atau pemindaian Face ID dibatalkan.'),
-        ),
-      );
-    }
-  }
 
   void _showPinSetupDialog(BuildContext context, SecurityProvider secProvider, {bool isChange = false}) {
     final pinController = TextEditingController();

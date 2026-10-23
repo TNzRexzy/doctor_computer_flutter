@@ -21,7 +21,6 @@ class SecurityProvider extends ChangeNotifier {
   bool hasBiometricType(String type) =>
       _biometrics.any((b) => b.biometricType == type && b.isActive);
 
-  bool get hasFaceId => hasBiometricType('face_id');
   bool get hasFingerprint => hasBiometricType('fingerprint');
 
   bool get requiresAuthForPayment =>
@@ -209,59 +208,6 @@ class SecurityProvider extends ChangeNotifier {
     _biometrics.insert(0, newCredential);
     await _cacheBiometricsLocally();
 
-    await setBiometricEnabled(true, currentUser: user);
-    return true;
-  }
-
-  /// Enroll real Face ID using system biometric face recognition
-  Future<bool> enrollFaceIdHardware({
-    required UserModel user,
-    required String credentialName,
-  }) async {
-    // 1. Trigger actual hardware Face ID prompt from phone OS
-    final authenticated = await BiometricService.authenticateWithFace(
-      localizedReason: 'Pindai wajah Anda menggunakan sensor Face ID perangkat untuk mendaftar',
-    );
-
-    if (!authenticated) {
-      return false; // Facial recognition rejected
-    }
-
-    // 2. Generate secure cryptographic token
-    final randomId = '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
-    final token = sha256.convert(utf8.encode('${user.id}_face_$randomId')).toString();
-
-    final newCredential = BiometricCredentialModel(
-      id: randomId,
-      userId: user.id,
-      biometricType: 'face_id',
-      credentialName: credentialName.isNotEmpty ? credentialName : 'Face ID ${biometrics.length + 1}',
-      deviceModel: 'Sensor Face ID Sistem',
-      biometricToken: token,
-      isActive: true,
-      createdAt: DateTime.now(),
-    );
-
-    // 3. Save to Supabase user_biometrics table
-    try {
-      final supabase = Supabase.instance.client;
-      await supabase.from('user_biometrics').insert({
-        'user_id': user.id,
-        'biometric_type': 'face_id',
-        'credential_name': newCredential.credentialName,
-        'device_model': newCredential.deviceModel,
-        'biometric_token': newCredential.biometricToken,
-        'is_active': true,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('[SecurityProvider] Notice inserting face to user_biometrics: $e');
-    }
-
-    _biometrics.insert(0, newCredential);
-    await _cacheBiometricsLocally();
-
-    // Enable biometric in settings
     await setBiometricEnabled(true, currentUser: user);
     return true;
   }
