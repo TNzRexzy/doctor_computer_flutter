@@ -255,17 +255,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           },
                         ),
                         const SizedBox(height: 24),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: [
-                              Text('Flash Sale', style: AppTextStyles.titleMedium),
-                              const SizedBox(width: 8),
-                              const FlashDealTimer(),
-                            ],
-                          ),
+                        Consumer<ProductProvider>(
+                          builder: (context, pp, _) => pp.flashDeals.isEmpty
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                  child: Row(
+                                    children: [
+                                      Text('Flash Sale', style: AppTextStyles.titleMedium),
+                                      const SizedBox(width: 8),
+                                      const FlashDealTimer(),
+                                    ],
+                                  ),
+                                ),
                         ),
-                        const SizedBox(height: 12),
                         Consumer2<ProductProvider, WishlistProvider>(
                           builder: (context, productProvider, wishlistProvider, child) {
                             final deals = productProvider.flashDeals;

@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail and interactive PC configurator system built with Flutter, Provider architecture, Supabase backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 - **Application Name:** Doctor Computer
-- **Release Version:** 1.0.10-beta
+- **Release Version:** 1.0.11-beta
 - **Target Platforms:** Android, iOS, Windows, Web
 - **Engine:** Flutter 3.47+ / Dart 3.13+
 
@@ -126,6 +126,49 @@ _Note: All newly registered accounts default automatically to the Customer (`use
 | BUG-021   | Fingerprint button on the login screen signs in as a previously enrolled account (e.g. Admin) after switching users | Single global `saved_biometric_user` slot that was never cleared, plus fallbacks to `last_known_user` / `cached_active_user`                                     | Resolved (Per-account enrollment; button follows the last logged-in account and is hidden if that account has no fingerprint) |
 | BUG-022   | Biometric enrollment remained after biometrics were disabled or the last fingerprint was deleted                    | `setBiometricEnabled(false)` and `deleteBiometricCredential` never cleared the stored account                                                                    | Resolved (Enrollment of that account is removed from secure storage and preferences)                                          |
 | BUG-023   | Biometric login produced no Supabase session and trusted the role from local JSON                                   | Session was rebuilt from cached profile instead of re-authenticating                                                                                             | Resolved (Credentials from secure storage are used to call `login()` again; role comes from the database)                     |
+
+---
+
+## Version 1.0.11-beta Changelog (Flash Sale Database Integration)
+
+Admin and cashier now manage flash sales through a dedicated `flash_sales` table in Supabase. Flash sale state is no longer kept in `SharedPreferences` or baked into `products.price`.
+
+### How it works
+
+1. Admin/cashier opens **Dashboard -> Flash Sale -> Tambah Flash Sale** (or *Jadikan Flash Sale* from the product list).
+2. They pick a product that already exists in the `products` table, then set the flash price (discount slider or manual price), the quota, and the start/end schedule.
+3. The row is saved to `flash_sales`. `products.price` stays the normal price; the app merges the running flash price into the product at load time (strike-through normal price, badge, countdown).
+4. Customers see the flash price on Home, catalog, product detail, cart, and checkout while the sale is running. When it ends (or the quota is sold out) the normal price returns automatically, with no edit to `products`.
+
+### Flash sale rules (enforced by DB constraints and the app)
+
+- Flash price must be greater than 0 and lower than the normal price.
+- Quota must be at least 1 and cannot exceed the product stock; it cannot be lowered below units already sold.
+- End time must be after start time and in the future. A sale can be scheduled to start later.
+- One active flash sale per product (partial unique index).
+- Each checkout of a flash-sale product increments `sold_count` through the `increment_flash_sale_sold` RPC; a sold-out sale stops applying the flash price.
+- Only `admin` and `cashier` roles can create, edit, end, or delete flash sales (RLS). Everyone can read them.
+
+### Database setup (required)
+
+Run `supabase/migrations/20261023_flash_sales.sql` in the Supabase SQL Editor, after `20261022_schema_sync_latest.sql`. It creates `flash_sales`, RLS policies, and the `increment_flash_sale_sold` function. It also moves any legacy flash sale (products with `is_on_sale = true`) into `flash_sales` for 7 days and restores the normal price in `products`. The script is safe to re-run.
+
+### Code changes
+
+| File | Change |
+| ---- | ------ |
+| `supabase/migrations/20261023_flash_sales.sql` | New table, constraints, RLS, RPC, legacy data migration |
+| `lib/data/models/flash_sale_model.dart` | New `FlashSaleModel` and `FlashSaleStatus` |
+| `lib/data/models/product_model.dart` | Runtime flash fields, `withFlash()` / `withoutFlash()`; `toMap()` never writes flash prices to `products` |
+| `lib/providers/product_provider.dart` | Loads `flash_sales`, `saveFlashSale` / `endFlashSale` / `deleteFlashSale`, auto start/end timers, 60 s refresh, quota counting; removed local flash timer and `toggleFlashSale` |
+| `lib/providers/cart_provider.dart` | Cart items reloaded from the database get the running flash price |
+| `lib/screens/admin/admin_dashboard_screen.dart` | New Flash Sale tab and form (product picker, price, quota, schedule), error messages from the database; removed the inline flash switch in *Add Product* |
+| `lib/screens/home/home_screen.dart` | Flash Sale header hidden when no sale is running |
+
+### Notes
+
+- Flash sale writes need a real Supabase session. The built-in fallback `admin` / `cashier` logins (used when Supabase Auth is unreachable) have no session, so the app shows a "login again" message instead of saving locally.
+- If `flash_sales` does not exist yet, the app still runs with no flash sales and logs a hint in debug output.
 
 ---
 

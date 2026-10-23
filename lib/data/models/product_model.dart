@@ -1,3 +1,5 @@
+import 'package:doctor_computer/data/models/flash_sale_model.dart';
+
 /// Represents a product in the store.
 class ProductModel {
   final String id;
@@ -21,6 +23,13 @@ class ProductModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  // Runtime-only flash sale info (merged from the `flash_sales` table).
+  // Never written to `products`.
+  final String? flashSaleId;
+  final DateTime? flashSaleEndsAt;
+  final int? flashStockLeft;
+  final double? normalOriginalPrice; // product's own strike price before flash
+
   const ProductModel({
     required this.id,
     required this.name,
@@ -42,7 +51,74 @@ class ProductModel {
     this.subtype,
     this.createdAt,
     this.updatedAt,
+    this.flashSaleId,
+    this.flashSaleEndsAt,
+    this.flashStockLeft,
+    this.normalOriginalPrice,
   });
+
+  bool get isFlashSale => flashSaleId != null;
+
+  /// Price stored in `products` (the normal price, ignoring flash sale).
+  double get basePrice => isFlashSale ? (originalPrice ?? price) : price;
+
+  /// Returns this product with the given flash sale applied.
+  ProductModel withFlash(FlashSaleModel sale) {
+    final base = withoutFlash();
+    return ProductModel(
+      id: base.id,
+      name: base.name,
+      description: base.description,
+      descriptionId: base.descriptionId,
+      price: sale.flashPrice,
+      originalPrice: base.price,
+      categoryId: base.categoryId,
+      brand: base.brand,
+      images: base.images,
+      specs: base.specs,
+      rating: base.rating,
+      reviewCount: base.reviewCount,
+      stock: base.stock,
+      isNew: base.isNew,
+      isOnSale: true,
+      sku: base.sku,
+      brandCode: base.brandCode,
+      subtype: base.subtype,
+      createdAt: base.createdAt,
+      updatedAt: base.updatedAt,
+      flashSaleId: sale.id,
+      flashSaleEndsAt: sale.endsAt,
+      flashStockLeft: sale.stockLeft,
+      normalOriginalPrice: base.originalPrice,
+    );
+  }
+
+  /// Returns this product at its normal price (flash sale removed).
+  ProductModel withoutFlash() {
+    if (!isFlashSale) return this;
+    return ProductModel(
+      id: id,
+      name: name,
+      description: description,
+      descriptionId: descriptionId,
+      price: originalPrice ?? price,
+      originalPrice: normalOriginalPrice,
+      categoryId: categoryId,
+      brand: brand,
+      images: images,
+      specs: specs,
+      rating: rating,
+      reviewCount: reviewCount,
+      stock: stock,
+      isNew: isNew,
+      isOnSale: false,
+      sku: sku,
+      brandCode: brandCode,
+      subtype: subtype,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
 
   bool get hasDiscount => originalPrice != null && originalPrice! > price;
   double get discountPercentage =>
@@ -91,10 +167,16 @@ class ProductModel {
       subtype: subtype ?? this.subtype,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      flashSaleId: flashSaleId,
+      flashSaleEndsAt: flashSaleEndsAt,
+      flashStockLeft: flashStockLeft,
+      normalOriginalPrice: normalOriginalPrice,
     );
   }
 
   Map<String, dynamic> toMap() {
+    // Flash prices must never leak into the `products` table.
+    if (isFlashSale) return withoutFlash().toMap();
     return {
       'id': id,
       'name': name,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
+import 'package:doctor_computer/data/models/flash_sale_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -82,7 +83,7 @@ class CartProvider extends ChangeNotifier {
           images = [rawImages];
         }
 
-        return ProductModel(
+        final base = ProductModel(
           id: data['id']?.toString() ?? productId,
           name: data['name']?.toString() ?? '',
           description: data['description']?.toString() ?? '',
@@ -97,8 +98,28 @@ class CartProvider extends ChangeNotifier {
           reviewCount: (data['review_count'] as num?)?.toInt() ?? 10,
           stock: (data['stock'] as num?)?.toInt() ?? 10,
           isNew: data['is_new'] as bool? ?? false,
-          isOnSale: data['is_on_sale'] as bool? ?? false,
+          isOnSale: false,
         );
+
+        // Apply the running flash sale (if any) so the cart shows the flash price.
+        try {
+          final nowIso = DateTime.now().toUtc().toIso8601String();
+          final sale = await supabase
+              .from('flash_sales')
+              .select()
+              .eq('product_id', productId)
+              .eq('is_active', true)
+              .lte('starts_at', nowIso)
+              .gt('ends_at', nowIso)
+              .maybeSingle();
+          if (sale != null) {
+            final fs = FlashSaleModel.fromMap(Map<String, dynamic>.from(sale));
+            if (!fs.isSoldOut && fs.flashPrice < base.price) return base.withFlash(fs);
+          }
+        } catch (e) {
+          debugPrint('Flash sale lookup for cart notice: $e');
+        }
+        return base;
       }
     } catch (e) {
       debugPrint('Error fetching product from Supabase: $e');
