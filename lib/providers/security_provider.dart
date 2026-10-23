@@ -8,6 +8,7 @@ import 'package:doctor_computer/data/models/security_settings_model.dart';
 import 'package:doctor_computer/data/models/biometric_credential_model.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/services/biometric_service.dart';
+import 'package:doctor_computer/services/biometric_credential_store.dart';
 
 class SecurityProvider extends ChangeNotifier {
   SecuritySettingsModel _settings = SecuritySettingsModel.defaultSettings('');
@@ -163,10 +164,15 @@ class SecurityProvider extends ChangeNotifier {
     }
   }
 
-  /// Enroll real physical fingerprint hardware
+  /// Enroll real physical fingerprint hardware.
+  ///
+  /// [password] HARUS sudah diverifikasi oleh pemanggil
+  /// (AuthProvider.verifyCurrentPassword). Password disimpan terenkripsi di
+  /// secure storage dan dipakai untuk login ulang saat login biometrik.
   Future<bool> enrollFingerprintHardware({
     required UserModel user,
     required String credentialName,
+    required String password,
   }) async {
     final authenticated = await BiometricService.authenticateWithFingerprint(
       localizedReason: 'Tempelkan sidik jari Anda pada sensor perangkat untuk mendaftar',
@@ -175,6 +181,9 @@ class SecurityProvider extends ChangeNotifier {
     if (!authenticated) {
       return false;
     }
+
+    // Daftarkan akun ini untuk login biometrik di perangkat ini
+    await BiometricCredentialStore.enrollAccount(user: user, password: password);
 
     final randomId = '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
     final token = sha256.convert(utf8.encode('${user.id}_fingerprint_$randomId')).toString();
@@ -208,7 +217,24 @@ class SecurityProvider extends ChangeNotifier {
     _biometrics.insert(0, newCredential);
     await _cacheBiometricsLocally();
 
-    await setBiometricEnabled(true, currentUser: user);
+    await setBiometricEnabled(true);
+    return true;
+  }
+
+  /// Aktifkan login biometrik di perangkat ini untuk akun yang sudah punya
+  /// sidik jari terdaftar (mis. setelah dimatikan lalu dinyalakan lagi).
+  /// [password] HARUS sudah diverifikasi oleh pemanggil.
+  Future<bool> enableBiometricLogin({
+    required UserModel user,
+    required String password,
+  }) async {
+    final authenticated = await BiometricService.authenticateWithFingerprint(
+      localizedReason: 'Tempelkan sidik jari Anda pada sensor perangkat untuk mengaktifkan login biometrik',
+    );
+    if (!authenticated) return false;
+
+    await BiometricCredentialStore.enrollAccount(user: user, password: password);
+    await setBiometricEnabled(true);
     return true;
   }
 
@@ -234,27 +260,20 @@ class SecurityProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> setBiometricEnabled(bool value, {UserModel? currentUser}) async {
+  Future<bool> setBiometricEnabled(bool value) async {
     final updated = _settings.copyWith(
       biometricEnabled: value,
       biometricForPayment: value ? _settings.biometricForPayment : false,
       updatedAt: DateTime.now(),
     );
 
-    if (value && currentUser != null) {
-      await saveBiometricUser(currentUser);
+    if (!value) {
+      // Matikan biometrik = hapus pendaftaran akun INI dari perangkat.
+      // Pendaftaran akun lain (jika ada) tidak disentuh.
+      await BiometricCredentialStore.clearIfOwnedBy(_settings.userId);
     }
 
     return _persistSettings(updated);
-  }
-
-  Future<void> saveBiometricUser(UserModel user) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_biometric_user', jsonEncode(user.toMap()));
-    } catch (e) {
-      debugPrint('[SecurityProvider] Error saving biometric user: $e');
-    }
   }
 
   Future<bool> setBiometricForPayment(bool value) async {

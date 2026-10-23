@@ -25,10 +25,34 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberEmail = false;
 
+  /// Nama akun yang terdaftar biometrik di perangkat ini.
+  /// null = tidak ada -> tombol fingerprint disembunyikan.
+  String? _enrolledName;
+
   @override
   void initState() {
     super.initState();
     _loadSavedEmail();
+    _loadEnrolledBiometric();
+  }
+
+  Future<void> _loadEnrolledBiometric() async {
+    final auth = context.read<AuthProvider>();
+    final name = await auth.getBiometricEnrolledUserName();
+    if (!mounted) return;
+    setState(() => _enrolledName = name);
+  }
+
+  Future<void> _clearEnrolledBiometric() async {
+    final auth = context.read<AuthProvider>();
+    await auth.clearBiometricUser();
+    if (!mounted) return;
+    setState(() => _enrolledName = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Login sidik jari dihapus dari perangkat ini. Masuk dengan password lalu daftarkan ulang jika diperlukan.'),
+      ),
+    );
   }
 
   Future<void> _loadSavedEmail() async {
@@ -58,6 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final enrolledName = await auth.getBiometricEnrolledUserName();
 
     if (!mounted) return;
+    setState(() => _enrolledName = enrolledName);
 
     if (enrolledName == null) {
       showDialog(
@@ -178,6 +203,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(auth.errorMessage ?? 'Gagal memulihkan sesi sidik jari')),
         );
+        // Data biometrik bisa saja sudah dibersihkan karena tidak valid
+        await _loadEnrolledBiometric();
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -354,30 +381,61 @@ class _LoginScreenState extends State<LoginScreen> {
                               isLoading: isLoading,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: isLoading ? null : _loginWithBiometric,
-                            child: Container(
-                              height: 50,
-                              width: 52,
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(alpha: 0.6),
-                                  width: 1.5,
+                          // Tombol fingerprint hanya tampil jika ada akun terdaftar
+                          if (_enrolledName != null) ...[
+                            const SizedBox(width: 12),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: isLoading ? null : _loginWithBiometric,
+                              child: Container(
+                                height: 50,
+                                width: 52,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(alpha: 0.6),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.fingerprint,
+                                  color: AppColors.primary,
+                                  size: 30,
                                 ),
                               ),
-                              child: Icon(
-                                Icons.fingerprint,
-                                color: AppColors.primary,
-                                size: 30,
-                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
+                      if (_enrolledName != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Sidik jari: $_enrolledName',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: isLoading ? null : _clearEnrolledBiometric,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: const Size(0, 32),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Hapus dari HP ini',
+                                style: AppTextStyles.caption.copyWith(color: AppColors.accent),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

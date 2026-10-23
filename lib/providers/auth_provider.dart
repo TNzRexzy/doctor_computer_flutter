@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/models/blockchain/blockchain.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doctor_computer/services/biometric_credential_store.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserModel? _currentUser;
@@ -18,6 +19,17 @@ class AuthProvider extends ChangeNotifier {
 
   final supabase = Supabase.instance.client;
 
+  static const String _kInvalidCredentialsMsg = 'Email atau password salah';
+
+  // Akun fallback lokal (dipakai jika Supabase Auth menolak).
+  bool _isFallbackAdmin(String email, String password) =>
+      email.toLowerCase() == 'admin@doctorcomputer.id' &&
+      (password == 'admin123' || password == 'Admin@DC2026!');
+
+  bool _isFallbackCashier(String email, String password) =>
+      email.toLowerCase() == 'cashier@doctorcomputer.id' &&
+      (password == 'cashier123' || password == 'Cashier@DC2026!');
+
   AuthProvider();
 
   // ============================================
@@ -28,6 +40,8 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('cached_active_user', jsonEncode(user.toMap()));
       await prefs.setBool('is_logged_in', true);
+      // Tombol biometrik di halaman login mengikuti akun yang terakhir login
+      await BiometricCredentialStore.setLastLoginUser(user.id);
     } catch (e) {
       debugPrint('Error caching user session: $e');
     }
@@ -86,10 +100,6 @@ class AuthProvider extends ChangeNotifier {
 
             _isLoggedIn = true;
             await _saveSessionToPrefs(_currentUser!);
-      try {
-        final p = await SharedPreferences.getInstance();
-        await p.setString('last_known_user', jsonEncode(_currentUser!.toMap()));
-      } catch (_) {}
             notifyListeners();
           }
         } catch (e) {
@@ -128,8 +138,7 @@ class AuthProvider extends ChangeNotifier {
       } on AuthException catch (e) {
         debugPrint('Supabase AuthException: ${e.message}');
         // Special fallback for Admin and Cashier accounts if Supabase Auth fails
-        if (email.toLowerCase() == 'admin@doctorcomputer.id' &&
-            (password == 'admin123' || password == 'Admin@DC2026!')) {
+        if (_isFallbackAdmin(email, password)) {
           _currentUser = UserModel(
             id: 'admin-master-id',
             fullName: 'Administrator Doctor Computer',
@@ -150,8 +159,7 @@ class AuthProvider extends ChangeNotifier {
           return true;
         }
 
-        if (email.toLowerCase() == 'cashier@doctorcomputer.id' &&
-            (password == 'cashier123' || password == 'Cashier@DC2026!')) {
+        if (_isFallbackCashier(email, password)) {
           _currentUser = UserModel(
             id: 'cashier-master-id',
             fullName: 'Kasir Toko Doctor Computer',
@@ -171,7 +179,7 @@ class AuthProvider extends ChangeNotifier {
           return true;
         }
 
-        _errorMessage = 'Email atau password salah';
+        _errorMessage = _kInvalidCredentialsMsg;
         return false;
       }
 
@@ -298,129 +306,142 @@ class AuthProvider extends ChangeNotifier {
   // ============================================
   // BIOMETRIC LOGIN
   // ============================================
-  Future<bool> loginWithBiometrics({String? requiredType}) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  //
+  // Aturan:
+  // - Tombol biometrik di halaman login hanya untuk akun yang TERAKHIR
+  //   login di perangkat ini dan sudah mendaftarkan sidik jari
+  //   (lihat BiometricCredentialStore).
+  // - Login biometrik TIDAK lagi memulihkan sesi dari JSON profil lokal.
+  //   Kredensial akun yang terdaftar dibuka dari secure storage, lalu
+  //   login() dipanggil ulang sehingga sesi Supabase asli terbentuk dan
+  //   role selalu berasal dari database.
+  // - Tidak ada fallback ke last_known_user / cached_active_user.
+
+  /// Verifikasi password akun yang sedang login (dipakai sebelum
+  /// mendaftarkan sidik jari). Tidak mengubah state login.
+  Future<bool> verifyCurrentPassword(String password) async {
+    final user = _currentUser;
+    if (user == null || password.isEmpty) return false;
+    final email = user.email;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      String? userJson = prefs.getString('saved_biometric_user');
-      userJson ??= prefs.getString('last_known_user');
-      userJson ??= prefs.getString('cached_active_user');
-
-      if (userJson == null || userJson.isEmpty) {
-        _errorMessage = 'Belum ada akun yang didaftarkan untuk login biometrik pada perangkat ini.';
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
-
-      final Map<String, dynamic> userMap = jsonDecode(userJson);
-      final userId = userMap['id']?.toString() ?? '';
-
-      // Verify specific biometric type exists in database or local cache
-      if (requiredType != null && userId.isNotEmpty) {
-        bool hasType = false;
-        try {
-          final List bioRes = await supabase
-              .from('user_biometrics')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('biometric_type', requiredType)
-              .eq('is_active', true)
-              .limit(1);
-          hasType = bioRes.isNotEmpty;
-        } catch (_) {}
-
-        if (!hasType) {
-          final cachedBioJson = prefs.getString('biometrics_list_$userId');
-          if (cachedBioJson != null) {
-            final List list = jsonDecode(cachedBioJson);
-            hasType = list.any((b) => b['biometric_type'] == requiredType && b['is_active'] != false);
-          }
-        }
-
-        if (!hasType && requiredType == 'fingerprint') {
-          hasType = true; // Fallback default
-        }
-
-        if (!hasType) {
-          final typeName = 'Sidik Jari';
-          _errorMessage = '$typeName belum didaftarkan di database untuk akun ini. Silakan daftarkan di menu Keamanan & Privasi.';
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        }
-
-        // Update last_used_at in Supabase
-        try {
-          await supabase
-              .from('user_biometrics')
-              .update({'last_used_at': DateTime.now().toIso8601String()})
-              .eq('user_id', userId)
-              .eq('biometric_type', requiredType);
-        } catch (_) {}
-      }
-
-      _currentUser = UserModel.fromMap(userMap);
-
-      // Refresh latest points & tier from Supabase if online
-      try {
-        final List res = await supabase
-            .from('users')
-            .select()
-            .eq('id', _currentUser!.id)
-            .limit(1);
-        if (res.isNotEmpty) {
-          _currentUser = _mapToUserModel(res.first as Map<String, dynamic>);
-        }
-
-        final List blocksRes = await supabase
-            .from('blockchain_blocks')
-            .select('exp_earned')
-            .eq('user_id', _currentUser!.id);
-        if (blocksRes.isNotEmpty) {
-          int expSum = 0;
-          for (final b in blocksRes) {
-            expSum += (b['exp_earned'] as num? ?? 0).toInt();
-          }
-          if (expSum > _currentUser!.points) {
-            _currentUser = _currentUser!.copyWith(
-              points: expSum,
-              membershipTier: tierFromExp(expSum),
-            );
-          }
-        }
-      } catch (syncErr) {
-        debugPrint('Biometric login sync notice: $syncErr');
-      }
-
-      _isLoggedIn = true;
-      await _saveSessionToPrefs(_currentUser!);
-      _isLoading = false;
-      notifyListeners();
-      return true;
+      final res = await supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      return res.user != null;
+    } on AuthException {
+      // Akun fallback lokal (tanpa akun Supabase Auth)
+      return _isFallbackAdmin(email, password) ||
+          _isFallbackCashier(email, password);
     } catch (e) {
-      _errorMessage = 'Gagal login biometrik: $e';
-      _isLoading = false;
-      notifyListeners();
+      debugPrint('verifyCurrentPassword error: $e');
       return false;
     }
   }
 
-  Future<String?> getBiometricEnrolledUserName() async {
+  Future<bool> loginWithBiometrics({String? requiredType}) async {
+    final type = requiredType ?? 'fingerprint';
+    _errorMessage = null;
+
+    final enrolled = await BiometricCredentialStore.getEnrolledUser();
+    if (enrolled == null) {
+      _errorMessage =
+          'Belum ada akun yang didaftarkan untuk login biometrik pada perangkat ini.';
+      notifyListeners();
+      return false;
+    }
+
+    final enrolledId = enrolled['id']?.toString() ?? '';
+    final creds = await BiometricCredentialStore.readCredentials(enrolledId);
+    if (creds == null) {
+      await BiometricCredentialStore.clear();
+      _errorMessage =
+          'Data biometrik tidak valid. Silakan login dengan password lalu daftarkan ulang sidik jari.';
+      notifyListeners();
+      return false;
+    }
+
+    // Login ulang lewat jalur normal -> sesi Supabase asli + role dari DB
+    final ok = await login(creds.email, creds.password);
+    if (!ok) {
+      if (_errorMessage == _kInvalidCredentialsMsg) {
+        // Password akun sudah berubah -> data biometrik basi
+        await BiometricCredentialStore.clearIfOwnedBy(enrolledId);
+        _errorMessage =
+            'Data biometrik tidak valid. Silakan login dengan password lalu daftarkan ulang sidik jari.';
+        notifyListeners();
+      }
+      return false;
+    }
+
+    // Pastikan sidik jari akun ini masih terdaftar (DB, lalu cache lokal).
+    // Tidak ada lagi fallback "pasti lolos".
+    final userId = _currentUser?.id ?? enrolledId;
+    final stillRegistered = await _hasActiveBiometric(userId, type);
+    if (!stillRegistered) {
+      await logout();
+      await BiometricCredentialStore.clearIfOwnedBy(enrolledId);
+      _errorMessage =
+          'Sidik jari untuk akun ini sudah tidak terdaftar. Silakan daftarkan ulang di menu Keamanan & Privasi.';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      await supabase
+          .from('user_biometrics')
+          .update({'last_used_at': DateTime.now().toIso8601String()})
+          .eq('user_id', userId)
+          .eq('biometric_type', type);
+    } catch (_) {}
+
+    return true;
+  }
+
+  Future<bool> _hasActiveBiometric(String userId, String type) async {
+    if (userId.isEmpty) return false;
+
+    try {
+      final List bioRes = await supabase
+          .from('user_biometrics')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('biometric_type', type)
+          .eq('is_active', true)
+          .limit(1);
+      if (bioRes.isNotEmpty) return true;
+    } catch (_) {}
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('saved_biometric_user') ??
-                       prefs.getString('last_known_user') ??
-                       prefs.getString('cached_active_user');
-      if (userJson != null) {
-        final Map<String, dynamic> map = jsonDecode(userJson);
-        return map['full_name']?.toString() ?? map['email']?.toString();
+      final cachedBioJson = prefs.getString('biometrics_list_$userId');
+      if (cachedBioJson != null) {
+        final List list = jsonDecode(cachedBioJson);
+        return list.any(
+          (b) => b['biometric_type'] == type && b['is_active'] != false,
+        );
       }
     } catch (_) {}
-    return null;
+
+    return false;
+  }
+
+  /// Nama akun yang terdaftar biometrik di perangkat ini.
+  /// Null jika tidak ada (login screen harus menyembunyikan tombol fingerprint).
+  Future<String?> getBiometricEnrolledUserName() async {
+    final enrolled = await BiometricCredentialStore.getEnrolledUser();
+    if (enrolled == null) return null;
+    final name = enrolled['full_name']?.toString() ?? '';
+    if (name.isNotEmpty) return name;
+    final email = enrolled['email']?.toString() ?? '';
+    return email.isNotEmpty ? email : null;
+  }
+
+  /// Hapus pendaftaran biometrik akun yang sedang ditampilkan di halaman login.
+  Future<void> clearBiometricUser() async {
+    await BiometricCredentialStore.clear();
+    notifyListeners();
   }
 
   Future<bool> register(
@@ -746,6 +767,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('cached_active_user');
+      await prefs.remove('last_known_user'); // sisa versi lama
       await prefs.setBool('is_logged_in', false);
     } catch (_) {}
 

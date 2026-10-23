@@ -51,15 +51,17 @@ class SecuritySettingsScreen extends StatelessWidget {
                           if (val && biometrics.isEmpty) {
                             // If no biometrics registered yet, guide to register first
                             _showAddBiometricSheet(context, secProvider, authProvider);
+                          } else if (val) {
+                            // Sudah punya sidik jari terdaftar: aktifkan lagi di perangkat ini
+                            // (wajib verifikasi password + scan sensor)
+                            await _enableBiometricWithPassword(context, secProvider, authProvider);
                           } else {
-                            await secProvider.setBiometricEnabled(val, currentUser: authProvider.currentUser);
+                            await secProvider.setBiometricEnabled(false);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    val ? 'Biometrik diaktifkan' : 'Biometrik dinonaktifkan',
-                                  ),
-                                  duration: const Duration(seconds: 1),
+                                const SnackBar(
+                                  content: Text('Biometrik dinonaktifkan'),
+                                  duration: Duration(seconds: 1),
                                 ),
                               );
                             }
@@ -414,6 +416,7 @@ class SecuritySettingsScreen extends StatelessWidget {
     final nameController = TextEditingController(
       text: 'Sidik Jari ${secProvider.biometrics.length + 1}',
     );
+    final passwordController = TextEditingController();
 
     final bool? proceed = await showDialog<bool>(
       context: context,
@@ -425,22 +428,34 @@ class SecuritySettingsScreen extends StatelessWidget {
             const Text('Scan Sensor HP'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Aplikasi akan memicu sensor sidik jari perangkat HP Anda. Pastikan jari Anda ditempelkan ke sensor fisik saat dialog muncul.',
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nama Label Sidik Jari',
-                border: OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Aplikasi akan memicu sensor sidik jari perangkat HP Anda. Pastikan jari Anda ditempelkan ke sensor fisik saat dialog muncul.',
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Label Sidik Jari',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password akun Anda',
+                  helperText: 'Diperlukan untuk memverifikasi bahwa ini akun Anda',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Batal')),
@@ -455,9 +470,31 @@ class SecuritySettingsScreen extends StatelessWidget {
 
     if (proceed != true || !context.mounted) return;
 
+    final user = authProvider.currentUser;
+    if (user == null) return;
+
+    final password = passwordController.text;
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password wajib diisi untuk mendaftarkan sidik jari')),
+      );
+      return;
+    }
+
+    // Verifikasi password akun SEBELUM memicu sensor
+    final verified = await authProvider.verifyCurrentPassword(password);
+    if (!context.mounted) return;
+    if (!verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password salah. Pendaftaran sidik jari dibatalkan.')),
+      );
+      return;
+    }
+
     final success = await secProvider.enrollFingerprintHardware(
-      user: authProvider.currentUser!,
+      user: user,
       credentialName: nameController.text.trim(),
+      password: password,
     );
 
     if (!context.mounted) return;
@@ -478,6 +515,79 @@ class SecuritySettingsScreen extends StatelessWidget {
     }
   }
 
+
+  /// Dialog input password. Mengembalikan null jika dibatalkan.
+  Future<String?> _askPassword(BuildContext context, {required String message}) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        title: const Text('Verifikasi Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Password akun Anda',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dlgCtx), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.pop(dlgCtx, controller.text),
+            child: const Text('Lanjut', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Mengaktifkan kembali login biometrik untuk akun yang sudah punya
+  /// sidik jari terdaftar: verifikasi password -> scan sensor -> simpan kredensial.
+  Future<void> _enableBiometricWithPassword(
+    BuildContext context,
+    SecurityProvider secProvider,
+    AuthProvider authProvider,
+  ) async {
+    final user = authProvider.currentUser;
+    if (user == null) return;
+
+    final password = await _askPassword(
+      context,
+      message: 'Masukkan password akun Anda untuk mengaktifkan login sidik jari di perangkat ini.',
+    );
+    if (password == null || password.isEmpty || !context.mounted) return;
+
+    final verified = await authProvider.verifyCurrentPassword(password);
+    if (!context.mounted) return;
+    if (!verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password salah.')),
+      );
+      return;
+    }
+
+    final ok = await secProvider.enableBiometricLogin(user: user, password: password);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Biometrik diaktifkan' : 'Pemindaian sidik jari dibatalkan',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
 
   void _showPinSetupDialog(BuildContext context, SecurityProvider secProvider, {bool isChange = false}) {
     final pinController = TextEditingController();
