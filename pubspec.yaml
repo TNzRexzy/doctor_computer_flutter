@@ -2,7 +2,7 @@ name: doctor_computer
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.11-beta+12
+version: 1.0.12-beta+13
 
 environment:
   sdk: ^3.13.2
@@ -27,6 +27,7 @@ dependencies:
   flutter_dotenv: ^6.0.1
   local_auth: ^3.0.2
   flutter_secure_storage: ^11.2.0
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:

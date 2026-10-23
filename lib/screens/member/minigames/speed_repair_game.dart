@@ -1,3 +1,4 @@
+import 'package:doctor_computer/providers/auth_provider.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -68,6 +69,15 @@ class _SpeedRepairGameState extends State<SpeedRepairGame> {
         expEarned: widget.expReward,
       );
       final newTier = blockchainProvider.currentTier;
+
+      // Immediately persist and sync EXP and Tier to AuthProvider and Supabase users table
+      if (mounted) {
+        final authProvider = context.read<AuthProvider>();
+        if (authProvider.currentUser != null) {
+          final tierEnum = authProvider.parseMembershipTier(newTier.name);
+          await authProvider.updatePointsAndTier(blockchainProvider.totalExp, tierEnum);
+        }
+      }
 
       if (mounted) {
         context.read<NotificationProvider>().addNotification(

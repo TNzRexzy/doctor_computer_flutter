@@ -1,3 +1,4 @@
+import 'package:doctor_computer/core/utils/image_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/providers/theme_provider.dart';
@@ -91,9 +92,7 @@ class ProfileScreen extends StatelessWidget {
                     child: CircleAvatar(
                       radius: 45,
                       backgroundColor: AppColors.surface,
-                      backgroundImage: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
-                          ? NetworkImage(user.profileImageUrl!)
-                          : null,
+                      backgroundImage: AppImageHelper.getImageProvider(user.profileImageUrl),
                       child: user.profileImageUrl == null || user.profileImageUrl!.isEmpty
                           ? Text(initials, style: AppTextStyles.heading2.copyWith(color: AppColors.primary))
                           : null,

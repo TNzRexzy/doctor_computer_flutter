@@ -141,6 +141,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
     final newTier = blockchain.currentTier;
 
+    // Immediately persist and sync EXP and Tier to AuthProvider and Supabase users table
+    if (mounted) {
+      final authProvider = context.read<AuthProvider>();
+      if (authProvider.currentUser != null) {
+        final tierEnum = authProvider.parseMembershipTier(newTier.name);
+        await authProvider.updatePointsAndTier(blockchain.totalExp, tierEnum);
+      }
+    }
+
     // 3. Add mobile notifications
     if (mounted) {
       context.read<NotificationProvider>().addNotification(

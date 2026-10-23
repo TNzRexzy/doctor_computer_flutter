@@ -1,3 +1,6 @@
+import 'package:doctor_computer/providers/review_provider.dart';
+import 'package:doctor_computer/data/models/review_model.dart';
+import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
@@ -16,6 +19,114 @@ import 'package:doctor_computer/navigation/app_router.dart';
 
 class PcBuilderScreen extends StatelessWidget {
   const PcBuilderScreen({super.key});
+
+  void _showServiceReviewDialog(BuildContext context) {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silakan login terlebih dahulu untuk memberikan ulasan jasa rakit.')),
+      );
+      return;
+    }
+
+    double selectedRating = 5.0;
+    final commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: Text('Ulasan Jasa Rakit PC', style: AppTextStyles.titleMedium),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Rating Kepuasan Perakitan:', style: AppTextStyles.bodyMedium),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final starVal = (index + 1).toDouble();
+                    return IconButton(
+                      icon: Icon(
+                        starVal <= selectedRating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 32,
+                      ),
+                      onPressed: () {
+                        setDialogState(() {
+                          selectedRating = starVal;
+                        });
+                      },
+                    );
+                  }),
+                ),
+                Center(
+                  child: Text(
+                    '${selectedRating.toInt()} dari 5 Bintang',
+                    style: AppTextStyles.caption.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: commentController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Ulasan Jasa / Teknisi',
+                    hintText: 'Tulis pengalaman Anda mengenai kerapihan cable management, kecepatan, dan pengujian QC perakitan...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () async {
+                final comment = commentController.text.trim();
+                if (comment.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mohon isi ulasan jasa rakit terlebih dahulu')),
+                  );
+                  return;
+                }
+
+                final newReview = ReviewModel(
+                  id: 'rev-service-${DateTime.now().millisecondsSinceEpoch}',
+                  userId: user.id,
+                  productId: 'build-service-fee',
+                  userName: user.fullName,
+                  rating: selectedRating,
+                  comment: comment,
+                  date: DateTime.now(),
+                );
+
+                final nav = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+                final success = await context.read<ReviewProvider>().addReview(newReview);
+                nav.pop();
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'Ulasan jasa rakit berhasil dikirim!' : 'Gagal mengirim ulasan'),
+                    backgroundColor: success ? AppColors.success : AppColors.error,
+                  ),
+                );
+              },
+              child: const Text('Kirim Ulasan Jasa'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +300,88 @@ class PcBuilderScreen extends StatelessWidget {
                             },
                           ),
                           const SizedBox(height: 16),
+                          // Service Reviews Section
+                          Consumer<ReviewProvider>(
+                            builder: (context, reviewProv, _) {
+                              final serviceReviews = reviewProv.getReviewsForProduct('build-service-fee');
+                              return GlassCard(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.handyman_outlined, size: 20, color: AppColors.primary),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Ulasan Jasa Rakit (${serviceReviews.length})',
+                                              style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                        TextButton.icon(
+                                          icon: const Icon(Icons.rate_review_outlined, size: 14),
+                                          label: const Text('Beri Ulasan Jasa', style: TextStyle(fontSize: 12)),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: AppColors.primary,
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          ),
+                                          onPressed: () => _showServiceReviewDialog(context),
+                                        ),
+                                      ],
+                                    ),
+                                    if (serviceReviews.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        child: Text(
+                                          'Belum ada ulasan untuk jasa perakitan PC Doctor Computer.',
+                                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textTertiary),
+                                        ),
+                                      )
+                                    else
+                                      ...serviceReviews.take(3).map((r) => Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.surface,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: AppColors.surfaceLight),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(r.userName, style: AppTextStyles.titleSmall.copyWith(fontSize: 12)),
+                                                  const Spacer(),
+                                                  Row(
+                                                    children: List.generate(
+                                                      5,
+                                                      (index) => Icon(
+                                                        index < r.rating ? Icons.star : Icons.star_border,
+                                                        color: Colors.amber,
+                                                        size: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(r.comment, style: AppTextStyles.bodySmall),
+                                            ],
+                                          ),
+                                        ),
+                                      )),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
                           GradientButton(
                             label: 'Tambah ke Keranjang',
                             icon: Icons.shopping_cart,
@@ -206,7 +399,7 @@ class PcBuilderScreen extends StatelessWidget {
                                 if (entry.value != null) {
                                   final part = entry.value!;
                                   final product = ProductModel(
-                                    id: 'build-${part.id}',
+                                    id: part.id,
                                     name: '${part.name} (Rakit PC)',
                                     description: 'Komponen rakit PC - ${entry.key.displayNameId}',
                                     descriptionId: 'Komponen rakit PC - ${entry.key.displayNameId}',

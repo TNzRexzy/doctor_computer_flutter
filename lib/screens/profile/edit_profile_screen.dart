@@ -1,3 +1,5 @@
+import 'package:image_picker/image_picker.dart';
+import 'package:doctor_computer/core/utils/image_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
@@ -44,6 +46,83 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _addressController.dispose();
     _cityController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImageFromFile(ImageSource source) async {
+    final base64Image = await AppImageHelper.pickImageAsBase64(source: source);
+    if (base64Image != null && mounted) {
+      final auth = context.read<AuthProvider>();
+      final messenger = ScaffoldMessenger.of(context);
+      final success = await auth.updateProfileImage(base64Image);
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? 'Foto profil berhasil diperbarui dari file'
+                  : 'Gagal memperbarui foto profil',
+            ),
+            backgroundColor: success ? AppColors.success : AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Pilih Sumber Foto Profil', style: AppTextStyles.titleMedium),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: const Icon(Icons.photo_library, color: Colors.white),
+                ),
+                title: const Text('Pilih dari Galeri (File)'),
+                subtitle: const Text('Format file JPG / PNG'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImageFromFile(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primaryDark,
+                  child: const Icon(Icons.camera_alt, color: Colors.white),
+                ),
+                title: const Text('Ambil Foto (Kamera)'),
+                subtitle: const Text('Foto langsung menggunakan kamera hp'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImageFromFile(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.accent,
+                  child: const Icon(Icons.link, color: Colors.white),
+                ),
+                title: const Text('Gunakan URL / Avatar Cepat'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showImageUrlDialog();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showImageUrlDialog() {
@@ -199,9 +278,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       CircleAvatar(
                         radius: 50,
                         backgroundColor: AppColors.surface,
-                        backgroundImage: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
-                            ? NetworkImage(user.profileImageUrl!)
-                            : null,
+                        backgroundImage: AppImageHelper.getImageProvider(user.profileImageUrl),
                         child: user.profileImageUrl == null || user.profileImageUrl!.isEmpty
                             ? Text(initials, style: AppTextStyles.heading2)
                             : null,
@@ -210,7 +287,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         bottom: 0,
                         right: 0,
                         child: GestureDetector(
-                          onTap: () => _showImageUrlDialog(),
+                          onTap: () => _showImageSourcePicker(),
                           child: CircleAvatar(
                             radius: 16,
                             backgroundColor: AppColors.primary,

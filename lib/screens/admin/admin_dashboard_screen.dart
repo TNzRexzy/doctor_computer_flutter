@@ -1,3 +1,6 @@
+import 'package:image_picker/image_picker.dart';
+import 'package:doctor_computer/core/utils/image_helper.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -1615,14 +1618,70 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: imageUrlC,
-                    decoration: const InputDecoration(
-                      labelText: 'URL Gambar (opsional)',
-                      hintText: 'https://...',
-                      border: OutlineInputBorder(),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: imageUrlC,
+                          decoration: const InputDecoration(
+                            labelText: 'Gambar Produk (URL / File)',
+                            hintText: 'Pilih file atau isi URL gambar',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                        icon: const Icon(Icons.attach_file),
+                        tooltip: 'Pilih File Gambar dari Galeri',
+                        onPressed: () async {
+                          final base64Img = await AppImageHelper.pickImageAsBase64(
+                            source: ImageSource.gallery,
+                          );
+                          if (base64Img != null) {
+                            setDialogState(() {
+                              imageUrlC.text = base64Img;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        style: IconButton.styleFrom(backgroundColor: AppColors.primaryDark, foregroundColor: Colors.white),
+                        icon: const Icon(Icons.camera_alt),
+                        tooltip: 'Ambil Foto Produk dengan Kamera',
+                        onPressed: () async {
+                          final base64Img = await AppImageHelper.pickImageAsBase64(
+                            source: ImageSource.camera,
+                          );
+                          if (base64Img != null) {
+                            setDialogState(() {
+                              imageUrlC.text = base64Img;
+                            });
+                          }
+                        },
+                      ),
+                    ],
                   ),
+                  if (imageUrlC.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 80,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: AppImageView(
+                          imageUrl: imageUrlC.text,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1695,10 +1754,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         TextEditingController(text: product['brand']?.toString() ?? '');
     final descController =
         TextEditingController(text: product['description']?.toString() ?? '');
+    String initialImg = '';
+    final rawImgs = product['image_url'];
+    if (rawImgs is List && rawImgs.isNotEmpty) {
+      initialImg = rawImgs.first.toString();
+    } else if (rawImgs != null) {
+      initialImg = rawImgs.toString();
+    }
+    final imageController = TextEditingController(text: initialImg);
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
         title: Text('Edit Produk', style: AppTextStyles.titleMedium),
         content: SizedBox(
           width: 480,
@@ -1733,6 +1801,71 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   maxLines: 3,
                   decoration: const InputDecoration(labelText: 'Deskripsi', border: OutlineInputBorder()),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: imageController,
+                        decoration: const InputDecoration(
+                          labelText: 'Gambar Produk (URL / File)',
+                          hintText: 'Pilih file atau isi URL gambar',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      icon: const Icon(Icons.attach_file),
+                      tooltip: 'Pilih File Gambar dari Galeri',
+                      onPressed: () async {
+                        final base64Img = await AppImageHelper.pickImageAsBase64(
+                          source: ImageSource.gallery,
+                        );
+                        if (base64Img != null) {
+                          setDialogState(() {
+                            imageController.text = base64Img;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      style: IconButton.styleFrom(backgroundColor: AppColors.primaryDark, foregroundColor: Colors.white),
+                      icon: const Icon(Icons.camera_alt),
+                      tooltip: 'Ambil Foto Produk dengan Kamera',
+                      onPressed: () async {
+                        final base64Img = await AppImageHelper.pickImageAsBase64(
+                          source: ImageSource.camera,
+                        );
+                        if (base64Img != null) {
+                          setDialogState(() {
+                            imageController.text = base64Img;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                if (imageController.text.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 80,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: AppImageView(
+                        imageUrl: imageController.text,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1750,12 +1883,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               final productProvider = context.read<ProductProvider>();
 
               try {
+                final imgVal = imageController.text.trim();
                 final updateData = {
                   'name': nameController.text.trim(),
                   'brand': brandController.text.trim(),
                   'price': _parseDouble(priceController.text.trim()),
                   'stock': _parseInt(stockController.text.trim()),
                   'description': descController.text.trim(),
+                  if (imgVal.isNotEmpty) 'image_url': [imgVal],
                 };
 
                 await supabase.from('products').update(updateData).eq('id', product['id']);
@@ -1770,6 +1905,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       stock: (updateData['stock'] as num?)?.toInt(),
                       description: updateData['description']?.toString(),
                       descriptionId: updateData['description']?.toString(),
+                      images: imgVal.isNotEmpty ? [imgVal] : null,
                     ));
                   }
                 } catch (_) {}
@@ -1787,6 +1923,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         ],
       ),
+    ),
     );
   }
 

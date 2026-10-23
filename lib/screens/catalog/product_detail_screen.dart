@@ -1,3 +1,5 @@
+import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/data/models/review_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
@@ -16,6 +18,114 @@ class ProductDetailScreen extends StatelessWidget {
   final ProductModel product;
 
   const ProductDetailScreen({super.key, required this.product});
+
+  void _showAddReviewDialog(BuildContext context, String productId) {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silakan login terlebih dahulu untuk memberikan ulasan.')),
+      );
+      return;
+    }
+
+    double selectedRating = 5.0;
+    final commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: Text('Beri Ulasan Produk', style: AppTextStyles.titleMedium),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Rating Kepuasan:', style: AppTextStyles.bodyMedium),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final starVal = (index + 1).toDouble();
+                    return IconButton(
+                      icon: Icon(
+                        starVal <= selectedRating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 32,
+                      ),
+                      onPressed: () {
+                        setDialogState(() {
+                          selectedRating = starVal;
+                        });
+                      },
+                    );
+                  }),
+                ),
+                Center(
+                  child: Text(
+                    '${selectedRating.toInt()} dari 5 Bintang',
+                    style: AppTextStyles.caption.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: commentController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Pengalaman / Ulasan Anda',
+                    hintText: 'Tulis ulasan mengenai performa, kualitas, kemasan produk...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () async {
+                final comment = commentController.text.trim();
+                if (comment.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mohon isi ulasan terlebih dahulu')),
+                  );
+                  return;
+                }
+
+                final newReview = ReviewModel(
+                  id: 'rev-${DateTime.now().millisecondsSinceEpoch}',
+                  userId: user.id,
+                  productId: productId,
+                  userName: user.fullName,
+                  rating: selectedRating,
+                  comment: comment,
+                  date: DateTime.now(),
+                );
+
+                final nav = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+                final success = await context.read<ReviewProvider>().addReview(newReview);
+                nav.pop();
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'Ulasan Anda berhasil dikirim!' : 'Gagal mengirim ulasan'),
+                    backgroundColor: success ? AppColors.success : AppColors.error,
+                  ),
+                );
+              },
+              child: const Text('Kirim Ulasan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +289,21 @@ class ProductDetailScreen extends StatelessWidget {
                         SizedBox(height: 8),
                         Text(product.descriptionId, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
                         SizedBox(height: 16),
-                        Text('Ulasan (${reviews.length})', style: AppTextStyles.titleMedium),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Ulasan (${reviews.length})', style: AppTextStyles.titleMedium),
+                            TextButton.icon(
+                              icon: const Icon(Icons.rate_review_outlined, size: 16),
+                              label: const Text('Tulis Ulasan'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
+                              onPressed: () => _showAddReviewDialog(context, product.id),
+                            ),
+                          ],
+                        ),
                         SizedBox(height: 8),
                         if (reviews.isEmpty)
                           Padding(

@@ -1,3 +1,4 @@
+import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
@@ -121,6 +122,15 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
       expEarned: widget.expReward,
     );
     final newTier = blockchainProvider.currentTier;
+
+    // Immediately persist and sync EXP and Tier to AuthProvider and Supabase users table
+    if (mounted) {
+      final authProvider = context.read<AuthProvider>();
+      if (authProvider.currentUser != null) {
+        final tierEnum = authProvider.parseMembershipTier(newTier.name);
+        await authProvider.updatePointsAndTier(blockchainProvider.totalExp, tierEnum);
+      }
+    }
 
     // Send notification
     if (mounted) {

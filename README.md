@@ -572,3 +572,18 @@ CREATE INDEX idx_blockchain_blocks_prev_hash ON public.blockchain_blocks(previou
 - **Database Persistensi Supabase:**
   - Tabel `user_security_settings`: Menyimpan preferensi keamanan, status PIN hash, 2FA, auto-lock, dan proteksi pembayaran.
   - Tabel `user_biometrics`: Menyimpan kredensial sensor terdaftar (`fingerprint`, nama credential, token SHA-256, device model, dan status aktif) dengan integritas Row Level Security (RLS).
+
+### 5. Stock Visibility, Reviews, File Image Picker & Membership Sync (v1.0.12-beta)
+
+- **Stock Visibility per Item:**
+  - Ditampilkan indikator stok real-time pada kartu produk di Home/Katalog (`Stok: X` / `Habis`) dan detail produk (`Stok: X` badge dengan styling status warna dinamis hijau/merah).
+- **Sistem Ulasan Produk & Jasa:**
+  - Pengguna dapat memberikan ulasan dan rating 1-5 bintang untuk setiap produk fisik secara spesifik (`reviews` table di Supabase).
+  - Khusus fitur **Rakit PC**, disediakan bagian ulasan jasa perakitan komputer (`Ulasan Jasa Rakit` untuk `build-service-fee`), sehingga evaluasi teknisi/jasa terpisah dari komponen fisik.
+- **File Image Picker (Kamera & Galeri):**
+  - Menggantikan input URL manual. Admin & Kasir dapat mengunggah gambar produk langsung dari file galeri atau kamera HP dalam format base64 Data URI yang dirender oleh `AppImageView` dan disimpan di database Supabase.
+  - Pengguna dapat mengganti foto profil akun dengan memilih file foto dari galeri atau kamera secara langsung.
+- **Pengurangan Stok Komponen Rakit PC:**
+  - Komponen rakit PC yang dimasukkan ke keranjang dan dibeli saat checkout otomatis mengurangi stok masing-masing komponen di tabel database Supabase (`decrementStock`).
+- **Persistensi EXP & Membership Tier:**
+  - EXP yang didapatkan dari minigames (Memory Match, Speed Repair, PC Quiz), transaksi belanja, maupun sinkronisasi blockchain otomatis disinkronkan dan disimpan secara persisten ke kolom `points` dan `membership_tier` di tabel `users` Supabase serta SharedPreferences lokal. Progres membership tidak akan hilang saat keluar atau me-restart aplikasi.
