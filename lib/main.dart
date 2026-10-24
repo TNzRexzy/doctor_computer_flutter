@@ -19,13 +19,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // Load environment variables from .env
-    await EnvConfig.init();
-  } catch (e) {
-    debugPrint('EnvConfig init notice: $e');
-  }
-
-  try {
     await Supabase.initialize(
       url: EnvConfig.supabaseUrl,
       anonKey: EnvConfig.supabaseAnonKey,
@@ -37,7 +30,6 @@ Future<void> main() async {
   // Restore authenticated user session before UI build
   final authProvider = AuthProvider();
   await authProvider.restoreSession();
-  authProvider.ensureAdminAccount();
 
   runApp(
     MultiProvider(
@@ -69,7 +61,11 @@ Future<void> main() async {
             final bp = BlockchainProvider();
             if (authProvider.currentUser != null) {
               final u = authProvider.currentUser!;
-              bp.initWallet(u.id, u.fullName, isAdmin: u.role == UserRole.admin);
+              bp.initWallet(
+                u.id,
+                u.fullName,
+                isAdmin: u.role == UserRole.admin,
+              );
             }
             return bp;
           },
@@ -78,7 +74,11 @@ Future<void> main() async {
             if (auth.currentUser != null) {
               final u = auth.currentUser!;
               if (bp.wallet.userId != u.id) {
-                bp.initWallet(u.id, u.fullName, isAdmin: u.role == UserRole.admin);
+                bp.initWallet(
+                  u.id,
+                  u.fullName,
+                  isAdmin: u.role == UserRole.admin,
+                );
               }
             } else if (bp.wallet.userId != 'guest') {
               bp.initWallet('guest', 'Pengguna Baru');

@@ -30,8 +30,10 @@ class MemberScreen extends StatelessWidget {
     final progress = isAdmin
         ? 1.0
         : (nextTier != null
-            ? ((totalExp - currentTier.value) / (nextTier.value - currentTier.value)).clamp(0.0, 1.0)
-            : 1.0);
+              ? ((totalExp - currentTier.value) /
+                        (nextTier.value - currentTier.value))
+                    .clamp(0.0, 1.0)
+              : 1.0);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -46,7 +48,9 @@ class MemberScreen extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const BlockchainLedgerScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const BlockchainLedgerScreen(),
+                ),
               );
             },
           ),
@@ -84,25 +88,41 @@ class MemberScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(
                       user?.fullName ?? 'Member Doctor Computer',
-                      style: AppTextStyles.titleLarge.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       isAdmin
                           ? 'Tier Aktif: PLATINUM (MAX • Hak Akses Administrator)'
                           : 'Tier Aktif: ${currentTier.name.toUpperCase()} (Diskon ${currentTier.discountPercent}%)',
-                      style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black26,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        isAdmin ? 'Total: 999,999 EXP (MAX)' : 'Total: $totalExp EXP',
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        isAdmin
+                            ? 'Total: 999,999 EXP (MAX)'
+                            : 'Total: $totalExp EXP',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -121,23 +141,31 @@ class MemberScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text('Progress Naik Tier', style: AppTextStyles.titleSmall),
+                          child: Text(
+                            'Progress Naik Tier',
+                            style: AppTextStyles.titleSmall,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           isAdmin
                               ? 'Level Tertinggi (Maksimal)'
                               : (nextTier != null
-                                  ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
-                                  : 'Maksimal (Platinum)'),
-                          style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold),
+                                    ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
+                                    : 'Maksimal (Platinum)'),
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     ExpProgressBar(
                       progress: progress,
-                      currentLevel: isAdmin ? 'Platinum (MAX)' : currentTier.name,
+                      currentLevel: isAdmin
+                          ? 'Platinum (MAX)'
+                          : currentTier.name,
                       nextLevel: nextTier?.name,
                     ),
                   ],
@@ -150,8 +178,13 @@ class MemberScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Minigames (Klaim EXP)', style: AppTextStyles.titleMedium),
-                  Text('Mainkan & Naikkan Tier', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                  Text('Minigames', style: AppTextStyles.titleMedium),
+                  Text(
+                    'EXP dinonaktifkan',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -159,13 +192,16 @@ class MemberScreen extends StatelessWidget {
               _buildGameCard(
                 context: context,
                 title: 'Memory Match Komponen PC',
-                description: 'Cocokkan kartu CPU, GPU, RAM, SSD untuk melatih ingatan.',
-                exp: 150,
+                description:
+                    'Cocokkan kartu CPU, GPU, RAM, SSD untuk melatih ingatan.',
                 difficulty: 'Mudah',
                 icon: Icons.memory,
                 color: Colors.teal,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MemoryMatchGame(expReward: 150)));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MemoryMatchGame()),
+                  );
                 },
               ),
 
@@ -173,25 +209,30 @@ class MemberScreen extends StatelessWidget {
                 context: context,
                 title: 'Kuis Perakitan PC & Hardware',
                 description: 'Uji pengetahuan seputar soket, RAM DDR5, dan spek komputer.',
-                exp: 120,
                 difficulty: 'Sedang',
                 icon: Icons.quiz,
                 color: Colors.orange,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const PcQuizGame(expReward: 120)));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PcQuizGame()),
+                  );
                 },
               ),
 
               _buildGameCard(
                 context: context,
                 title: 'Speed Thermal Paste & Repair',
-                description: 'Tap cepat untuk membersihkan debu dan mendinginkan CPU.',
-                exp: 100,
+                description:
+                    'Tap cepat untuk membersihkan debu dan mendinginkan CPU.',
                 difficulty: 'Cepat (10s)',
                 icon: Icons.speed,
                 color: Colors.blue,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SpeedRepairGame(expReward: 100)));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SpeedRepairGame()),
+                  );
                 },
               ),
 
@@ -201,7 +242,12 @@ class MemberScreen extends StatelessWidget {
               GlassCard(
                 padding: const EdgeInsets.all(16),
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockchainLedgerScreen()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const BlockchainLedgerScreen(),
+                    ),
+                  );
                 },
                 child: Row(
                   children: [
@@ -211,16 +257,28 @@ class MemberScreen extends StatelessWidget {
                         color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.hub, color: AppColors.primary, size: 28),
+                      child: Icon(
+                        Icons.hub,
+                        color: AppColors.primary,
+                        size: 28,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Buku Besar Blockchain Pribadi', style: AppTextStyles.titleSmall),
+                          Text(
+                            'Buku Besar Blockchain Pribadi',
+                            style: AppTextStyles.titleSmall,
+                          ),
                           const SizedBox(height: 2),
-                          Text('${blockchain.blockchain.length} Blok Tercatat (Genesis A1B2, Game, Belanja)', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                          Text(
+                            '${blockchain.blockchain.length} Blok Tercatat (Genesis A1B2, Game, Belanja)',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -231,28 +289,12 @@ class MemberScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // Demo Button: Belanja RAM +500 EXP (Block 2)
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                  side: BorderSide(color: AppColors.primary),
+              Text(
+                'Poin belanja diberikan server setelah pesanan dikonfirmasi selesai. '
+                'Poin minigame sementara dinonaktifkan sampai hasilnya dapat diverifikasi server.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
                 ),
-                icon: const Icon(Icons.add_shopping_cart, size: 20),
-                label: const Text('Simulasi Belanja RAM: +500 EXP (Blok 2 Demo)'),
-                onPressed: () async {
-                  final block = await blockchain.addShoppingReward(
-                    itemName: 'Corsair Vengeance DDR5 32GB RAM',
-                    expEarned: 500,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: AppColors.success,
-                        content: Text('Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
-                      ),
-                    );
-                  }
-                },
               ),
               const SizedBox(height: 24),
             ],
@@ -266,7 +308,6 @@ class MemberScreen extends StatelessWidget {
     required BuildContext context,
     required String title,
     required String description,
-    required int exp,
     required String difficulty,
     required IconData icon,
     required Color color,
@@ -294,28 +335,53 @@ class MemberScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(child: Text(title, style: AppTextStyles.titleSmall)),
+                      Expanded(
+                        child: Text(title, style: AppTextStyles.titleSmall),
+                      ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.warning.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          '+$exp EXP',
-                          style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold),
+                          'EXP nonaktif',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(description, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                    description,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text('Tingkat: $difficulty', style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+                      Text(
+                        'Tingkat: $difficulty',
+                        style: AppTextStyles.caption.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const Spacer(),
-                      Text('Mainkan Sekarang ➔', style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Mainkan Sekarang ➔',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ],

@@ -1,13 +1,15 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
+import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/admin/product_editor_dialog.dart';
+import 'package:doctor_computer/services/product_image_storage_service.dart';
 
 class CashierDashboardScreen extends StatefulWidget {
   const CashierDashboardScreen({super.key});
@@ -25,6 +27,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   Map<String, dynamic>? _currentShift;
   List<Map<String, dynamic>> _shiftHistory = [];
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _managedProducts = [];
   List<Map<String, dynamic>> _posOrders = [];
 
   // POS Cart: Map of productId -> quantity
@@ -37,7 +40,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadCashierData();
   }
 
@@ -62,15 +65,16 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   String _formatNumber(dynamic number) {
     if (number == null) return '0';
     final n = number is num ? number : num.tryParse(number.toString()) ?? 0;
-    return n.toStringAsFixed(0).replaceAllMapped(
+    return n
+        .toStringAsFixed(0)
+        .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match[1]}.',
         );
   }
 
   String _getCashierId() {
-    final user = context.read<AuthProvider>().currentUser;
-    return user?.id ?? 'cashier-dc-001';
+    return supabase.auth.currentUser?.id ?? '';
   }
 
   String _getCashierName() {
@@ -83,7 +87,6 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     final cashierId = _getCashierId();
 
     try {
-      // 1. Fetch active shift for this cashier
       try {
         final shiftRes = await supabase
             .from('cashier_shifts')
@@ -91,34 +94,21 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
             .eq('cashier_id', cashierId)
             .eq('status', 'open')
             .maybeSingle();
-        _currentShift = shiftRes != null ? Map<String, dynamic>.from(shiftRes) : null;
+        _currentShift = shiftRes != null
+            ? Map<String, dynamic>.from(shiftRes)
+            : null;
       } catch (e) {
         debugPrint('Notice loading active shift from Supabase: $e');
         _currentShift = null;
       }
 
-      // Check local cache if DB was null or errored
-      if (_currentShift == null) {
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final localJson = prefs.getString('local_cashier_shift_$cashierId');
-          if (localJson != null && localJson.isNotEmpty) {
-            final decoded = jsonDecode(localJson);
-            if (decoded is Map<String, dynamic> && decoded['status'] == 'open') {
-              _currentShift = decoded;
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 2. Fetch shift history
       try {
         final historyRes = await supabase
             .from('cashier_shifts')
             .select()
             .eq('cashier_id', cashierId)
             .order('opened_at', ascending: false)
-            .limit(15);
+            .limit(20);
         _shiftHistory = List<Map<String, dynamic>>.from(historyRes);
       } catch (e) {
         debugPrint('Notice loading shift history: $e');
@@ -126,12 +116,16 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
       // 3. Fetch products (merge Supabase + ProductProvider)
       try {
-        final productsRes = await supabase.from('products').select();
+        final productsRes = await supabase
+            .from('products')
+            .select()
+            .order('created_at', ascending: false);
         final Map<String, Map<String, dynamic>> pMap = {};
         for (final p in productsRes) {
           final id = p['id']?.toString() ?? '';
           if (id.isNotEmpty) pMap[id] = Map<String, dynamic>.from(p);
         }
+        _managedProducts = pMap.values.toList();
         if (mounted) {
           final providerProducts = context.read<ProductProvider>().allProducts;
           for (final p in providerProducts) {
@@ -145,15 +139,32 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         debugPrint('Notice loading products: $e');
       }
 
-      // 4. Fetch POS orders
+      // 4. Fetch POS orders from Supabase
       try {
-        final ordersRes = await supabase
-            .from('orders')
-            .select()
-            .eq('channel', 'pos')
-            .order('order_date', ascending: false)
-            .limit(30);
-        _posOrders = List<Map<String, dynamic>>.from(ordersRes);
+        List<dynamic> ordersRes;
+        try {
+          ordersRes = await supabase
+              .from('orders')
+              .select()
+              .eq('channel', 'pos')
+              .order('order_date', ascending: false)
+              .limit(50);
+        } catch (_) {
+          try {
+            ordersRes = await supabase
+                .from('orders')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(50);
+          } catch (_) {
+            ordersRes = await supabase.from('orders').select().limit(50);
+          }
+        }
+        final filtered = ordersRes.where((o) {
+          final ch = o['channel']?.toString().toLowerCase();
+          return ch == null || ch == 'pos' || ch.isEmpty;
+        }).toList();
+        _posOrders = List<Map<String, dynamic>>.from(filtered);
       } catch (e) {
         debugPrint('Notice loading POS orders: $e');
       }
@@ -191,7 +202,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
               children: [
                 Text(
                   'Kasir: ${_getCashierName()}',
-                  style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -221,61 +234,58 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
               onPressed: isSubmitting
                   ? null
                   : () async {
                       final messenger = ScaffoldMessenger.of(context);
-                      final cash = double.tryParse(cashCtrl.text.replaceAll('.', '')) ?? 0;
+                      final cash =
+                          double.tryParse(cashCtrl.text.replaceAll('.', '')) ??
+                          0;
                       setDialogState(() => isSubmitting = true);
-                      final cashierId = _getCashierId();
-
-                      Map<String, dynamic>? newShiftData;
-                      bool isLocal = false;
 
                       try {
-                        final res = await supabase.from('cashier_shifts').insert({
-                          'cashier_id': cashierId,
-                          'opening_cash': cash,
-                          'notes': notesCtrl.text.trim(),
-                          'status': 'open',
-                        }).select().single();
-                        newShiftData = Map<String, dynamic>.from(res);
-                      } catch (e) {
-                        debugPrint('Supabase cashier_shifts insert error (fallback local): $e');
-                        isLocal = true;
-                        newShiftData = {
-                          'id': 'shift-${DateTime.now().millisecondsSinceEpoch}',
-                          'cashier_id': cashierId,
-                          'opening_cash': cash,
-                          'total_sales': 0.0,
-                          'total_orders': 0,
-                          'notes': notesCtrl.text.trim(),
-                          'status': 'open',
-                          'opened_at': DateTime.now().toIso8601String(),
-                        };
-                      }
-
-                      // Persist to SharedPreferences
-                      try {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setString('local_cashier_shift_$cashierId', jsonEncode(newShiftData));
-                      } catch (_) {}
-
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(isLocal
-                                ? 'Shift kasir dibuka (mode sesi lokal)!'
-                                : 'Shift kasir berhasil dibuka di server!'),
-                            backgroundColor: AppColors.success,
-                          ),
+                        final response = await supabase.rpc(
+                          'open_cashier_shift',
+                          params: {
+                            'p_opening_cash': cash,
+                            'p_notes': notesCtrl.text.trim(),
+                          },
                         );
-                        setState(() {
-                          _currentShift = newShiftData;
-                        });
-                        _loadCashierData();
+                        if (response is! Map) {
+                          throw const FormatException(
+                            'Respons open_cashier_shift tidak valid.',
+                          );
+                        }
+                        final newShiftData = Map<String, dynamic>.from(
+                          response,
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: const Text(
+                                'Shift kasir berhasil dibuka di server.',
+                              ),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                          setState(() => _currentShift = newShiftData);
+                          _loadCashierData();
+                        }
+                      } catch (e) {
+                        debugPrint('open_cashier_shift failed: $e');
+                        if (ctx.mounted) {
+                          setDialogState(() => isSubmitting = false);
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Shift gagal dibuka: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
                       }
                     },
               child: Text(isSubmitting ? 'Membuka...' : 'Buka Shift'),
@@ -294,7 +304,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     final totalOrders = _currentShift!['total_orders'] ?? 0;
     final expectedCash = openingCash + totalSales;
 
-    final closingCashCtrl = TextEditingController(text: expectedCash.toStringAsFixed(0));
+    final closingCashCtrl = TextEditingController(
+      text: expectedCash.toStringAsFixed(0),
+    );
     final notesCtrl = TextEditingController();
     bool isSubmitting = false;
 
@@ -303,7 +315,8 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final counted = double.tryParse(closingCashCtrl.text.replaceAll('.', '')) ?? 0;
+          final counted =
+              double.tryParse(closingCashCtrl.text.replaceAll('.', '')) ?? 0;
           final variance = counted - expectedCash;
 
           return AlertDialog(
@@ -329,11 +342,20 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSummaryRow('Modal Kas Awal:', 'Rp ${_formatNumber(openingCash)}'),
+                        _buildSummaryRow(
+                          'Modal Kas Awal:',
+                          'Rp ${_formatNumber(openingCash)}',
+                        ),
                         const SizedBox(height: 4),
-                        _buildSummaryRow('Total Penjualan Shift:', 'Rp ${_formatNumber(totalSales)}'),
+                        _buildSummaryRow(
+                          'Total Penjualan Shift:',
+                          'Rp ${_formatNumber(totalSales)}',
+                        ),
                         const SizedBox(height: 4),
-                        _buildSummaryRow('Total Transaksi:', '$totalOrders pesanan'),
+                        _buildSummaryRow(
+                          'Total Transaksi:',
+                          '$totalOrders pesanan',
+                        ),
                         const Divider(height: 16),
                         _buildSummaryRow(
                           'Estimasi Uang di Laci:',
@@ -359,21 +381,24 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Selisih Kas (Variance):', style: AppTextStyles.caption),
+                      Text(
+                        'Selisih Kas (Variance):',
+                        style: AppTextStyles.caption,
+                      ),
                       Text(
                         variance == 0
                             ? 'Pas (Rp 0)'
                             : variance > 0
-                                ? '+ Rp ${_formatNumber(variance)} (Lebih)'
-                                : '- Rp ${_formatNumber(variance.abs())} (Kurang)',
+                            ? '+ Rp ${_formatNumber(variance)} (Lebih)'
+                            : '- Rp ${_formatNumber(variance.abs())} (Kurang)',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: variance == 0
                               ? AppColors.success
                               : variance > 0
-                                  ? AppColors.primary
-                                  : AppColors.error,
+                              ? AppColors.primary
+                              : AppColors.error,
                         ),
                       ),
                     ],
@@ -396,37 +421,46 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 child: const Text('Batal'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                ),
                 onPressed: isSubmitting
                     ? null
                     : () async {
                         final messenger = ScaffoldMessenger.of(context);
-                        final cashierId = _getCashierId();
                         final shiftId = _currentShift!['id']?.toString() ?? '';
                         setDialogState(() => isSubmitting = true);
 
                         try {
-                          await supabase.from('cashier_shifts').update({
-                            'status': 'closed',
-                            'closing_cash': counted,
-                            'closed_at': DateTime.now().toIso8601String(),
-                            'notes': notesCtrl.text.trim(),
-                          }).eq('id', shiftId);
+                          await supabase.rpc(
+                            'close_cashier_shift',
+                            params: {
+                              'p_shift_id': shiftId,
+                              'p_closing_cash': counted,
+                              'p_notes': notesCtrl.text.trim(),
+                            },
+                          );
                         } catch (e) {
-                          debugPrint('Supabase close shift notice: $e');
+                          debugPrint('close_cashier_shift failed: $e');
+                          if (ctx.mounted) {
+                            setDialogState(() => isSubmitting = false);
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('Shift gagal ditutup: $e'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                          return;
                         }
-
-                        // Clear local cache
-                        try {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.remove('local_cashier_shift_$cashierId');
-                        } catch (_) {}
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           messenger.showSnackBar(
                             SnackBar(
-                              content: const Text('Shift kasir berhasil ditutup.'),
+                              content: const Text(
+                                'Shift kasir berhasil ditutup.',
+                              ),
                               backgroundColor: AppColors.success,
                             ),
                           );
@@ -445,7 +479,12 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, {bool isBold = false, Color? color}) {
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? color,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -469,7 +508,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     if (_currentShift == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Buka shift kasir terlebih dahulu untuk transaksi!'),
+          content: const Text(
+            'Buka shift kasir terlebih dahulu untuk transaksi!',
+          ),
           backgroundColor: AppColors.warning,
           action: SnackBarAction(
             label: 'Buka Shift',
@@ -486,9 +527,8 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     final currentQty = _cart[id] ?? 0;
 
     if (currentQty >= stock) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stok tidak mencukupi!')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Stok tidak mencukupi!')));
       return;
     }
 
@@ -532,7 +572,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
     final subtotal = _calculateSubtotal();
     String paymentMethod = 'Cash';
-    final tenderedCtrl = TextEditingController(text: subtotal.toStringAsFixed(0));
+    final tenderedCtrl = TextEditingController(
+      text: subtotal.toStringAsFixed(0),
+    );
     bool isSubmitting = false;
 
     showDialog(
@@ -540,7 +582,8 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final tendered = double.tryParse(tenderedCtrl.text.replaceAll('.', '')) ?? 0;
+          final tendered =
+              double.tryParse(tenderedCtrl.text.replaceAll('.', '')) ?? 0;
           final change = tendered - subtotal;
           final canPay = paymentMethod != 'Cash' || tendered >= subtotal;
 
@@ -560,11 +603,16 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   // Total tagihan
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 16,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Column(
                       children: [
@@ -572,7 +620,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                         const SizedBox(height: 4),
                         Text(
                           'Rp ${_formatNumber(subtotal)}',
-                          style: AppTextStyles.heading2.copyWith(color: AppColors.primary),
+                          style: AppTextStyles.heading2.copyWith(
+                            color: AppColors.primary,
+                          ),
                         ),
                       ],
                     ),
@@ -583,11 +633,23 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      _buildPaymentOption('Cash', paymentMethod, (m) => setDialogState(() => paymentMethod = m)),
+                      _buildPaymentOption(
+                        'Cash',
+                        paymentMethod,
+                        (m) => setDialogState(() => paymentMethod = m),
+                      ),
                       const SizedBox(width: 8),
-                      _buildPaymentOption('QRIS', paymentMethod, (m) => setDialogState(() => paymentMethod = m)),
+                      _buildPaymentOption(
+                        'QRIS',
+                        paymentMethod,
+                        (m) => setDialogState(() => paymentMethod = m),
+                      ),
                       const SizedBox(width: 8),
-                      _buildPaymentOption('Debit BCA', paymentMethod, (m) => setDialogState(() => paymentMethod = m)),
+                      _buildPaymentOption(
+                        'Debit BCA',
+                        paymentMethod,
+                        (m) => setDialogState(() => paymentMethod = m),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -607,11 +669,36 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                     Wrap(
                       spacing: 6,
                       children: [
-                        _buildQuickAmountChip('Pas', subtotal, tenderedCtrl, () => setDialogState(() {})),
-                        _buildQuickAmountChip('50rb', 50000, tenderedCtrl, () => setDialogState(() {})),
-                        _buildQuickAmountChip('100rb', 100000, tenderedCtrl, () => setDialogState(() {})),
-                        _buildQuickAmountChip('200rb', 200000, tenderedCtrl, () => setDialogState(() {})),
-                        _buildQuickAmountChip('500rb', 500000, tenderedCtrl, () => setDialogState(() {})),
+                        _buildQuickAmountChip(
+                          'Pas',
+                          subtotal,
+                          tenderedCtrl,
+                          () => setDialogState(() {}),
+                        ),
+                        _buildQuickAmountChip(
+                          '50rb',
+                          50000,
+                          tenderedCtrl,
+                          () => setDialogState(() {}),
+                        ),
+                        _buildQuickAmountChip(
+                          '100rb',
+                          100000,
+                          tenderedCtrl,
+                          () => setDialogState(() {}),
+                        ),
+                        _buildQuickAmountChip(
+                          '200rb',
+                          200000,
+                          tenderedCtrl,
+                          () => setDialogState(() {}),
+                        ),
+                        _buildQuickAmountChip(
+                          '500rb',
+                          500000,
+                          tenderedCtrl,
+                          () => setDialogState(() {}),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -626,7 +713,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: change >= 0 ? AppColors.success : AppColors.error,
+                            color: change >= 0
+                                ? AppColors.success
+                                : AppColors.error,
                           ),
                         ),
                       ],
@@ -641,7 +730,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                       child: Row(
                         children: [
                           Icon(
-                            paymentMethod == 'QRIS' ? Icons.qr_code : Icons.credit_card,
+                            paymentMethod == 'QRIS'
+                                ? Icons.qr_code
+                                : Icons.credit_card,
                             color: AppColors.accent,
                           ),
                           const SizedBox(width: 12),
@@ -666,20 +757,26 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 child: const Text('Batal'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                ),
                 onPressed: (!canPay || isSubmitting)
                     ? null
                     : () async {
                         setDialogState(() => isSubmitting = true);
-                        await _processCheckout(
+                        final completed = await _processCheckout(
                           dialogCtx: ctx,
                           paymentMethod: paymentMethod,
                           subtotal: subtotal,
                           tendered: tendered,
-                          change: change,
                         );
+                        if (!completed && ctx.mounted) {
+                          setDialogState(() => isSubmitting = false);
+                        }
                       },
-                child: Text(isSubmitting ? 'Memproses...' : 'Selesaikan Transaksi'),
+                child: Text(
+                  isSubmitting ? 'Memproses...' : 'Selesaikan Transaksi',
+                ),
               ),
             ],
           );
@@ -688,7 +785,11 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     );
   }
 
-  Widget _buildPaymentOption(String method, String selected, ValueChanged<String> onSelect) {
+  Widget _buildPaymentOption(
+    String method,
+    String selected,
+    ValueChanged<String> onSelect,
+  ) {
     final isSelected = method == selected;
     return Expanded(
       child: InkWell(
@@ -697,7 +798,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : AppColors.surface,
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: 0.15)
+                : AppColors.surface,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected ? AppColors.primary : AppColors.cardBorder,
@@ -720,7 +823,11 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   }
 
   Widget _buildQuickAmountChip(
-      String label, double amount, TextEditingController ctrl, VoidCallback onUpdate) {
+    String label,
+    double amount,
+    TextEditingController ctrl,
+    VoidCallback onUpdate,
+  ) {
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 11)),
       onPressed: () {
@@ -732,117 +839,85 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     );
   }
 
-  Future<void> _processCheckout({
+  Future<bool> _processCheckout({
     required BuildContext dialogCtx,
     required String paymentMethod,
     required double subtotal,
     required double tendered,
-    required double change,
   }) async {
     final cashierId = _getCashierId();
     final cashierName = _getCashierName();
+    final productProvider = context.read<ProductProvider>();
+    final orderProvider = context.read<OrderProvider>();
 
     final List<Map<String, dynamic>> itemsPayload = [];
-    final List<Map<String, dynamic>> receiptItems = [];
-
     for (final entry in _cart.entries) {
-      final prod = _products.firstWhere(
-        (p) => p['id']?.toString() == entry.key,
-        orElse: () => {},
-      );
-      if (prod.isNotEmpty) {
-        final price = _parseDouble(prod['price']);
-        itemsPayload.add({
-          'product_id': entry.key,
-          'quantity': entry.value,
-          'unit_price': price,
-        });
-        receiptItems.add({
-          'name': prod['name'] ?? 'Produk',
-          'quantity': entry.value,
-          'unit_price': price,
-          'subtotal': price * entry.value,
-        });
-      }
+      itemsPayload.add({'product_id': entry.key, 'quantity': entry.value});
     }
-
-    String generatedOrderId = 'POS-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
 
     try {
-      // 1. Call create_pos_order RPC
-      final rpcRes = await supabase.rpc('create_pos_order', params: {
-        'p_cashier_id': cashierId,
-        'p_total_price': subtotal,
-        'p_payment_method': paymentMethod,
-        'p_items': itemsPayload,
-      });
-
-      if (rpcRes != null) {
-        generatedOrderId = rpcRes.toString();
-      }
-    } catch (e) {
-      debugPrint('create_pos_order RPC fallback notice: $e');
-
-      // Fallback: manual insert to orders if RPC fails
-      try {
-        await supabase.from('orders').insert({
-          'id': generatedOrderId,
-          'cashier_id': cashierId,
-          'total_price': subtotal,
-          'payment_method': paymentMethod,
-          'status': 'delivered',
-          'channel': 'pos',
-          'shipping_address': 'Ambil di Toko (POS Kasir)',
-          'items_summary': receiptItems,
-        });
-
-        // Deduct product stock locally and in DB
-        for (final item in itemsPayload) {
-          final pid = item['product_id'];
-          final qty = item['quantity'] as int;
-          try {
-            final prod = _products.firstWhere((p) => p['id'] == pid);
-            final currentStock = _parseInt(prod['stock']);
-            final newStock = (currentStock - qty).clamp(0, 99999);
-            await supabase.from('products').update({'stock': newStock}).eq('id', pid);
-          } catch (_) {}
-        }
-      } catch (fallbackErr) {
-        debugPrint('Fallback order insert error: $fallbackErr');
-      }
-    }
-
-    if (dialogCtx.mounted) Navigator.pop(dialogCtx);
-
-    // Update local shift accumulator if shift is active
-    if (_currentShift != null) {
-      final curSales = _parseDouble(_currentShift!['total_sales']) + subtotal;
-      final curOrders = (_currentShift!['total_orders'] ?? 0) + 1;
-      _currentShift!['total_sales'] = curSales;
-      _currentShift!['total_orders'] = curOrders;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('local_cashier_shift_$cashierId', jsonEncode(_currentShift));
-      } catch (_) {}
-    }
-
-    // Clear cart and refresh
-    setState(() {
-      _cart.clear();
-    });
-    _loadCashierData();
-
-    // Show Digital Receipt
-    if (mounted) {
-      _showReceiptDialog(
-        orderId: generatedOrderId,
-        cashierName: cashierName,
-        items: receiptItems,
-        totalPrice: subtotal,
-        paymentMethod: paymentMethod,
-        tendered: tendered,
-        change: change >= 0 ? change : 0,
+      final rpcRes = await supabase.rpc(
+        'create_pos_order',
+        params: {
+          'p_cashier_id': cashierId,
+          'p_total_price': subtotal,
+          'p_payment_method': paymentMethod,
+          'p_items': itemsPayload,
+        },
       );
+      if (rpcRes is! Map) {
+        throw const FormatException('Respons create_pos_order tidak valid.');
+      }
+      final order = Map<String, dynamic>.from(rpcRes);
+      final orderId = order['id']?.toString();
+      final totalPrice = (order['total_price'] as num?)?.toDouble();
+      final rawItems = order['items'];
+      if (orderId == null ||
+          orderId.isEmpty ||
+          totalPrice == null ||
+          rawItems is! List) {
+        throw const FormatException('Respons create_pos_order tidak lengkap.');
+      }
+      final receiptItems = rawItems.map((rawItem) {
+        final item = Map<String, dynamic>.from(rawItem as Map);
+        final price = (item['unit_price'] as num).toDouble();
+        final quantity = (item['quantity'] as num).toInt();
+        return <String, dynamic>{
+          'name': item['product_name'] ?? 'Produk',
+          'quantity': quantity,
+          'unit_price': price,
+          'subtotal': price * quantity,
+        };
+      }).toList();
+
+      if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+      if (mounted) {
+        setState(() => _cart.clear());
+        await _loadCashierData();
+        productProvider.reloadData();
+        orderProvider.reloadOrders();
+        _showReceiptDialog(
+          orderId: orderId,
+          cashierName: cashierName,
+          items: receiptItems,
+          totalPrice: totalPrice,
+          paymentMethod: paymentMethod,
+          tendered: tendered,
+          change: tendered - totalPrice,
+        );
+      }
+      return true;
+    } catch (e) {
+      debugPrint('create_pos_order failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transaksi gagal disimpan: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return false;
     }
   }
 
@@ -884,57 +959,89 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                     children: [
                       Text(
                         'DOCTOR COMPUTER STORE',
-                        style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      Text('Sistem Kasir & POS Omnichannel', style: AppTextStyles.caption),
-                      Text('Jl. Elektronik Komputer No. 10', style: AppTextStyles.caption),
+                      Text(
+                        'Sistem Kasir & POS Omnichannel',
+                        style: AppTextStyles.caption,
+                      ),
+                      Text(
+                        'Jl. Elektronik Komputer No. 10',
+                        style: AppTextStyles.caption,
+                      ),
                       const Divider(height: 20),
 
                       _buildSummaryRow('No. Nota:', orderId),
-                      _buildSummaryRow('Tanggal:', DateTime.now().toString().split('.').first),
+                      _buildSummaryRow(
+                        'Tanggal:',
+                        DateTime.now().toString().split('.').first,
+                      ),
                       _buildSummaryRow('Kasir:', cashierName),
                       const Divider(height: 20),
 
-                      ...items.map((it) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        it['name']?.toString() ?? '',
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                      ...items.map(
+                        (it) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      it['name']?.toString() ?? '',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      Text(
-                                        '${it['quantity']} x Rp ${_formatNumber(it['unit_price'])}',
-                                        style: AppTextStyles.caption,
-                                      ),
-                                    ],
-                                  ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${it['quantity']} x Rp ${_formatNumber(it['unit_price'])}',
+                                      style: AppTextStyles.caption,
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  'Rp ${_formatNumber(it['subtotal'])}',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'Rp ${_formatNumber(it['subtotal'])}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              ],
-                            ),
-                          )),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
                       const Divider(height: 20),
-                      _buildSummaryRow('TOTAL:', 'Rp ${_formatNumber(totalPrice)}', isBold: true),
+                      _buildSummaryRow(
+                        'TOTAL:',
+                        'Rp ${_formatNumber(totalPrice)}',
+                        isBold: true,
+                      ),
                       _buildSummaryRow('Metode:', paymentMethod),
                       if (paymentMethod == 'Cash') ...[
-                        _buildSummaryRow('Tunai:', 'Rp ${_formatNumber(tendered)}'),
-                        _buildSummaryRow('Kembalian:', 'Rp ${_formatNumber(change)}', color: AppColors.success),
+                        _buildSummaryRow(
+                          'Tunai:',
+                          'Rp ${_formatNumber(tendered)}',
+                        ),
+                        _buildSummaryRow(
+                          'Kembalian:',
+                          'Rp ${_formatNumber(change)}',
+                          color: AppColors.success,
+                        ),
                       ],
                       const Divider(height: 20),
                       Text(
                         'Terima Kasih Atas Kunjungan Anda!',
-                        style: AppTextStyles.caption.copyWith(fontStyle: FontStyle.italic),
+                        style: AppTextStyles.caption.copyWith(
+                          fontStyle: FontStyle.italic,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -950,7 +1057,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
             label: const Text('Cetak Struk'),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Perintah cetak dikirim ke printer POS!')),
+                const SnackBar(
+                  content: Text('Perintah cetak dikirim ke printer POS!'),
+                ),
               );
               Navigator.pop(ctx);
             },
@@ -978,7 +1087,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Dashboard Kasir & POS', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            const Text(
+              'Dashboard Kasir & POS',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
             Text(
               'Kasir: $cashierName',
               style: const TextStyle(fontSize: 11, color: Colors.white70),
@@ -995,18 +1107,29 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
               onTap: isOpen ? _showCloseShiftDialog : _showOpenShiftDialog,
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: isOpen ? Colors.green.shade600 : Colors.red.shade600,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   children: [
-                    Icon(isOpen ? Icons.check_circle : Icons.lock, size: 14, color: Colors.white),
+                    Icon(
+                      isOpen ? Icons.check_circle : Icons.lock,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       isOpen ? 'SHIFT OPEN' : 'SHIFT CLOSED',
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ],
                 ),
@@ -1031,8 +1154,12 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
               text: 'Mesin Kasir (${_cart.values.fold(0, (a, b) => a + b)})',
             ),
             const Tab(icon: Icon(Icons.schedule), text: 'Kelola Shift'),
-            const Tab(icon: Icon(Icons.receipt_long), text: 'Riwayat Transaksi'),
+            const Tab(
+              icon: Icon(Icons.receipt_long),
+              text: 'Riwayat Transaksi',
+            ),
             const Tab(icon: Icon(Icons.inventory_2), text: 'Cek Stok'),
+            const Tab(icon: Icon(Icons.edit_note), text: 'Kelola Produk'),
           ],
         ),
       ),
@@ -1045,6 +1172,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 _buildShiftTab(),
                 _buildOrdersTab(),
                 _buildStockTab(),
+                _buildProductManagementTab(),
               ],
             ),
     );
@@ -1062,7 +1190,8 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
       final name = p['name']?.toString().toLowerCase() ?? '';
       final brand = p['brand']?.toString().toLowerCase() ?? '';
       final cat = p['category_id']?.toString().toLowerCase() ?? '';
-      final matchesQuery = _productSearchQuery.isEmpty ||
+      final matchesQuery =
+          _productSearchQuery.isEmpty ||
           name.contains(_productSearchQuery.toLowerCase()) ||
           brand.contains(_productSearchQuery.toLowerCase());
       final matchesCat = _selectedCategory == 'all' || cat == _selectedCategory;
@@ -1089,11 +1218,17 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.warning,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
                   onPressed: _showOpenShiftDialog,
-                  child: const Text('Buka Shift', style: TextStyle(fontSize: 11)),
+                  child: const Text(
+                    'Buka Shift',
+                    style: TextStyle(fontSize: 11),
+                  ),
                 ),
               ],
             ),
@@ -1112,8 +1247,13 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                       onPressed: () => setState(() => _productSearchQuery = ''),
                     )
                   : null,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
             ),
             onChanged: (val) => setState(() => _productSearchQuery = val),
           ),
@@ -1160,7 +1300,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                         side: inCartQty > 0
-                            ? const BorderSide(color: Color(0xFF8B5CF6), width: 2)
+                            ? const BorderSide(
+                                color: Color(0xFF8B5CF6),
+                                width: 2,
+                              )
                             : BorderSide(color: AppColors.cardBorder),
                       ),
                       child: InkWell(
@@ -1173,16 +1316,26 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                             children: [
                               // Top badge: stock & cart badge
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: stock > 5
-                                          ? AppColors.success.withValues(alpha: 0.15)
+                                          ? AppColors.success.withValues(
+                                              alpha: 0.15,
+                                            )
                                           : (stock > 0
-                                              ? AppColors.warning.withValues(alpha: 0.15)
-                                              : AppColors.error.withValues(alpha: 0.15)),
+                                                ? AppColors.warning.withValues(
+                                                    alpha: 0.15,
+                                                  )
+                                                : AppColors.error.withValues(
+                                                    alpha: 0.15,
+                                                  )),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -1192,7 +1345,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                                         fontWeight: FontWeight.bold,
                                         color: stock > 5
                                             ? AppColors.success
-                                            : (stock > 0 ? AppColors.warning : AppColors.error),
+                                            : (stock > 0
+                                                  ? AppColors.warning
+                                                  : AppColors.error),
                                       ),
                                     ),
                                   ),
@@ -1202,7 +1357,11 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                                       backgroundColor: const Color(0xFF8B5CF6),
                                       child: Text(
                                         '$inCartQty',
-                                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -1210,7 +1369,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                               const Spacer(),
                               Text(
                                 p['name']?.toString() ?? '-',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1221,7 +1383,8 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                               ),
                               const SizedBox(height: 6),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Rp ${_formatNumber(price)}',
@@ -1232,11 +1395,16 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                                     ),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.add_shopping_cart, size: 16),
+                                    icon: const Icon(
+                                      Icons.add_shopping_cart,
+                                      size: 16,
+                                    ),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                     color: const Color(0xFF8B5CF6),
-                                    onPressed: stock > 0 ? () => _addToCart(p) : null,
+                                    onPressed: stock > 0
+                                        ? () => _addToCart(p)
+                                        : null,
                                   ),
                                 ],
                               ),
@@ -1293,17 +1461,31 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, size: 16),
+                              icon: const Icon(
+                                Icons.remove_circle_outline,
+                                size: 16,
+                              ),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
                               onPressed: () => _removeFromCart(entry.key),
                             ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
-                              child: Text('${entry.value}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Text(
+                                '${entry.value}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.add_circle_outline, size: 16),
+                              icon: const Icon(
+                                Icons.add_circle_outline,
+                                size: 16,
+                              ),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
                               onPressed: () => _addToCart(prod),
@@ -1311,7 +1493,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                             const SizedBox(width: 8),
                             Text(
                               'Rp ${_formatNumber(price * entry.value)}',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -1327,10 +1512,15 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$totalItems Item di Keranjang', style: AppTextStyles.caption),
+                      Text(
+                        '$totalItems Item di Keranjang',
+                        style: AppTextStyles.caption,
+                      ),
                       Text(
                         'Rp ${_formatNumber(subtotal)}',
-                        style: AppTextStyles.titleMedium.copyWith(color: AppColors.primary),
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.primary,
+                        ),
                       ),
                     ],
                   ),
@@ -1339,15 +1529,31 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                       if (_cart.isNotEmpty)
                         TextButton(
                           onPressed: () => setState(() => _cart.clear()),
-                          child: Text('Reset', style: TextStyle(color: AppColors.error)),
+                          child: Text(
+                            'Reset',
+                            style: TextStyle(color: AppColors.error),
+                          ),
                         ),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6D28D9),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
                         ),
-                        icon: const Icon(Icons.payment, size: 18, color: Colors.white),
-                        label: const Text('Bayar POS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        icon: const Icon(
+                          Icons.payment,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'Bayar POS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         onPressed: _cart.isEmpty ? null : _showCheckoutDialog,
                       ),
                     ],
@@ -1366,7 +1572,13 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: FilterChip(
-        label: Text(label, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : null)),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: isSelected ? Colors.white : null,
+          ),
+        ),
         selected: isSelected,
         selectedColor: const Color(0xFF6D28D9),
         checkmarkColor: Colors.white,
@@ -1395,11 +1607,18 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Status Shift Saat Ini', style: AppTextStyles.titleMedium),
+                    Text(
+                      'Status Shift Saat Ini',
+                      style: AppTextStyles.titleMedium,
+                    ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isOpen ? AppColors.success : Colors.grey).withValues(alpha: 0.15),
+                        color: (isOpen ? AppColors.success : Colors.grey)
+                            .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -1415,22 +1634,45 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 ),
                 const Divider(height: 24),
                 if (isOpen) ...[
-                  _buildSummaryRow('ID Shift:', _currentShift!['id']?.toString() ?? '-'),
+                  _buildSummaryRow(
+                    'ID Shift:',
+                    _currentShift!['id']?.toString() ?? '-',
+                  ),
                   const SizedBox(height: 6),
-                  _buildSummaryRow('Waktu Dibuka:', _currentShift!['opened_at']?.toString().split('.').first ?? '-'),
+                  _buildSummaryRow(
+                    'Waktu Dibuka:',
+                    _currentShift!['opened_at']?.toString().split('.').first ??
+                        '-',
+                  ),
                   const SizedBox(height: 6),
-                  _buildSummaryRow('Modal Kas Awal:', 'Rp ${_formatNumber(_currentShift!['opening_cash'])}'),
+                  _buildSummaryRow(
+                    'Modal Kas Awal:',
+                    'Rp ${_formatNumber(_currentShift!['opening_cash'])}',
+                  ),
                   const SizedBox(height: 6),
-                  _buildSummaryRow('Total Penjualan:', 'Rp ${_formatNumber(_currentShift!['total_sales'])}', isBold: true, color: AppColors.success),
+                  _buildSummaryRow(
+                    'Total Penjualan:',
+                    'Rp ${_formatNumber(_currentShift!['total_sales'])}',
+                    isBold: true,
+                    color: AppColors.success,
+                  ),
                   const SizedBox(height: 6),
-                  _buildSummaryRow('Jumlah Transaksi:', '${_currentShift!['total_orders'] ?? 0} pesanan'),
+                  _buildSummaryRow(
+                    'Jumlah Transaksi:',
+                    '${_currentShift!['total_orders'] ?? 0} pesanan',
+                  ),
                   const SizedBox(height: 6),
-                  _buildSummaryRow('Catatan:', _currentShift!['notes']?.toString() ?? '-'),
+                  _buildSummaryRow(
+                    'Catatan:',
+                    _currentShift!['notes']?.toString() ?? '-',
+                  ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                      ),
                       icon: const Icon(Icons.lock_clock),
                       label: const Text('Tutup Shift Sekarang'),
                       onPressed: _showCloseShiftDialog,
@@ -1447,7 +1689,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                      ),
                       icon: Icon(Icons.point_of_sale, color: Colors.white),
                       label: const Text('Mulai Buka Shift Kasir'),
                       onPressed: _showOpenShiftDialog,
@@ -1475,10 +1719,14 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: (isShiftOpen ? AppColors.success : Colors.grey).withValues(alpha: 0.15),
+                    backgroundColor:
+                        (isShiftOpen ? AppColors.success : Colors.grey)
+                            .withValues(alpha: 0.15),
                     child: Icon(
                       isShiftOpen ? Icons.lock_open : Icons.lock,
                       color: isShiftOpen ? AppColors.success : Colors.grey,
@@ -1487,16 +1735,23 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   ),
                   title: Text(
                     'Buka: $openedAt',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   subtitle: Text(
                     'Penjualan: Rp ${_formatNumber(sales)} • $orders pesanan',
                     style: AppTextStyles.caption,
                   ),
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: (isShiftOpen ? AppColors.success : Colors.grey).withValues(alpha: 0.15),
+                      color: (isShiftOpen ? AppColors.success : Colors.grey)
+                          .withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -1536,8 +1791,13 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
             decoration: InputDecoration(
               hintText: 'Cari nota POS (No. Transaksi)...',
               prefixIcon: const Icon(Icons.search, size: 20),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
             ),
             onChanged: (val) => setState(() => _orderSearchQuery = val),
           ),
@@ -1546,7 +1806,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Text('Total: ${filtered.length} transaksi POS', style: AppTextStyles.caption),
+              Text(
+                'Total: ${filtered.length} transaksi POS',
+                style: AppTextStyles.caption,
+              ),
             ],
           ),
         ),
@@ -1567,15 +1830,25 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF6D28D9).withValues(alpha: 0.15),
-                          child: const Icon(Icons.receipt, color: Color(0xFF6D28D9), size: 20),
+                          backgroundColor: const Color(0xFF6D28D9)
+                              .withValues(alpha: 0.15),
+                          child: const Icon(
+                            Icons.receipt,
+                            color: Color(0xFF6D28D9),
+                            size: 20,
+                          ),
                         ),
                         title: Text(
                           order['id']?.toString() ?? '-',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                         subtitle: Text(
                           'Waktu: $date\nMetode: $method',
@@ -1588,18 +1861,31 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                           children: [
                             Text(
                               'Rp ${_formatNumber(total)}',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.primary,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.15),
+                                color: AppColors.success.withValues(
+                                  alpha: 0.15,
+                                ),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 'SELESAI',
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.success),
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.success,
+                                ),
                               ),
                             ),
                           ],
@@ -1618,7 +1904,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   // ============================================================
   Widget _buildStockTab() {
     final lowStock = _products.where((p) => _parseInt(p['stock']) < 5).length;
-    final outOfStock = _products.where((p) => _parseInt(p['stock']) == 0).length;
+    final outOfStock = _products
+        .where((p) => _parseInt(p['stock']) == 0)
+        .length;
 
     return Column(
       children: [
@@ -1634,8 +1922,16 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStockStat('Total Produk', '${_products.length}', AppColors.primary),
-              _buildStockStat('Stok Rendah (<5)', '$lowStock', AppColors.warning),
+              _buildStockStat(
+                'Total Produk',
+                '${_products.length}',
+                AppColors.primary,
+              ),
+              _buildStockStat(
+                'Stok Rendah (<5)',
+                '$lowStock',
+                AppColors.warning,
+              ),
               _buildStockStat('Stok Habis (0)', '$outOfStock', AppColors.error),
             ],
           ),
@@ -1655,20 +1951,26 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   dense: true,
                   title: Text(
                     p['name']?.toString() ?? '-',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   subtitle: Text(
                     'Brand: ${p['brand'] ?? '-'} • Rp ${_formatNumber(price)}',
                     style: AppTextStyles.caption,
                   ),
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: stock > 5
                           ? AppColors.success.withValues(alpha: 0.15)
                           : (stock > 0
-                              ? AppColors.warning.withValues(alpha: 0.15)
-                              : AppColors.error.withValues(alpha: 0.15)),
+                                ? AppColors.warning.withValues(alpha: 0.15)
+                                : AppColors.error.withValues(alpha: 0.15)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1691,10 +1993,183 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     );
   }
 
+  Future<void> _editProduct({ProductModel? product}) async {
+    final editedProduct = await showDialog<ProductModel>(
+      context: context,
+      builder: (_) => ProductEditorDialog(product: product),
+    );
+    if (editedProduct == null || !mounted) return;
+
+    try {
+      final provider = context.read<ProductProvider>();
+      if (product == null) {
+        await provider.addProduct(editedProduct);
+      } else {
+        await provider.updateProduct(editedProduct);
+        final oldImage = product.images.isNotEmpty
+            ? product.images.first
+            : null;
+        final newImage = editedProduct.images.isNotEmpty
+            ? editedProduct.images.first
+            : null;
+        if (oldImage != newImage) {
+          try {
+            await ProductImageStorageService.deleteProductImage(oldImage);
+          } catch (error) {
+            debugPrint('Old product image cleanup failed: $error');
+          }
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            product == null
+                ? 'Produk berhasil ditambahkan.'
+                : 'Produk berhasil diperbarui.',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      await _loadCashierData();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Produk gagal disimpan: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteProduct(ProductModel product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus produk?'),
+        content: Text('Produk "${product.name}" akan dihapus dari katalog.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await context.read<ProductProvider>().deleteProduct(product.id);
+      if (product.images.isNotEmpty) {
+        try {
+          await ProductImageStorageService.deleteProductImage(
+            product.images.first,
+          );
+        } catch (error) {
+          debugPrint('Product image cleanup failed: $error');
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Produk berhasil dihapus.')));
+      await _loadCashierData();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Produk gagal dihapus: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Widget _buildProductManagementTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _editProduct(),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Produk + Foto'),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _managedProducts.isEmpty
+              ? const Center(child: Text('Belum ada produk dari database.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  itemCount: _managedProducts.length,
+                  itemBuilder: (context, index) {
+                    final product = ProductModel.fromMap(
+                      _managedProducts[index],
+                    );
+                    return Card(
+                      child: ListTile(
+                        leading: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: product.images.isEmpty
+                              ? const Icon(Icons.image_outlined)
+                              : Image.network(
+                                  product.images.first,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      const Icon(Icons.broken_image_outlined),
+                                ),
+                        ),
+                        title: Text(product.name),
+                        subtitle: Text(
+                          '${product.brand} • Rp ${_formatNumber(product.price)} • Stok ${product.stock}',
+                        ),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            IconButton(
+                              tooltip: 'Edit produk/foto',
+                              onPressed: () => _editProduct(product: product),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Hapus produk',
+                              onPressed: () => _deleteProduct(product),
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStockStat(String title, String val, Color color) {
     return Column(
       children: [
-        Text(val, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          val,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
         Text(title, style: AppTextStyles.caption),
       ],
     );

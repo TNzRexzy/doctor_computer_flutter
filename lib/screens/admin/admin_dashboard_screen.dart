@@ -1,21 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
-import 'package:doctor_computer/providers/blockchain_provider.dart';
-import 'package:doctor_computer/models/blockchain/blockchain.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/review_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/product_image_picker.dart';
+import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -48,10 +47,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     super.initState();
     final user = context.read<AuthProvider>().currentUser;
     final isAdmin = user?.role == UserRole.admin;
-    _tabController = TabController(
-      length: isAdmin ? 6 : 4,
-      vsync: this,
-    );
+    _tabController = TabController(length: isAdmin ? 6 : 4, vsync: this);
     _loadData();
 
     _flashSaleTicker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -81,7 +77,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   String _formatNumber(dynamic number) {
     if (number == null) return '0';
     final n = number is num ? number : num.tryParse(number.toString()) ?? 0;
-    return n.toStringAsFixed(0).replaceAllMapped(
+    return n
+        .toStringAsFixed(0)
+        .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match[1]}.',
         );
@@ -104,81 +102,60 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final user = context.read<AuthProvider>().currentUser;
       final isAdmin = user?.role == UserRole.admin;
 
-      // Products - merge Supabase + ProductProvider (includes locally cached & newly added products)
-      final productsRes = await supabase.from('products').select();
-      final Map<String, Map<String, dynamic>> productMap = {};
-      for (final p in productsRes) {
-        final id = p['id']?.toString() ?? '';
-        if (id.isNotEmpty) productMap[id] = Map<String, dynamic>.from(p);
-      }
-      if (mounted) {
-        final providerProducts = context.read<ProductProvider>().allProducts;
-        for (final p in providerProducts) {
-          if (!productMap.containsKey(p.id)) {
-            productMap[p.id] = p.toMap();
-          }
-        }
-      }
-      _products = productMap.values.toList();
-
-      // Orders - merge Supabase + OrderProvider
-      final ordersRes = await supabase.from('orders').select().order('order_date', ascending: false);
-      final Map<String, Map<String, dynamic>> orderMap = {};
-      for (final o in ordersRes) {
-        final id = o['id']?.toString() ?? '';
-        if (id.isNotEmpty) orderMap[id] = Map<String, dynamic>.from(o);
-      }
-      if (mounted) {
-        final providerOrders = context.read<OrderProvider>().orders;
-        for (final o in providerOrders) {
-          if (!orderMap.containsKey(o.id)) {
-            orderMap[o.id] = o.toMap();
-          }
-        }
-      }
-      _orders = orderMap.values.toList();
-
-      // Apply locally cached order status overrides
+      // Products - merge Supabase + ProductProvider (isolated so one failure doesn't abort others)
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final overridesJson = prefs.getString('admin_order_status_overrides');
-        if (overridesJson != null && overridesJson.isNotEmpty) {
-          final Map<String, dynamic> overrides = jsonDecode(overridesJson);
-          for (int i = 0; i < _orders.length; i++) {
-            final oid = _orders[i]['id']?.toString() ?? '';
-            if (overrides.containsKey(oid)) {
-              _orders[i] = Map<String, dynamic>.from(_orders[i]);
-              _orders[i]['status'] = overrides[oid].toString();
+        final productsRes = await supabase.from('products').select();
+        final Map<String, Map<String, dynamic>> productMap = {};
+        for (final p in productsRes) {
+          final id = p['id']?.toString() ?? '';
+          if (id.isNotEmpty) productMap[id] = Map<String, dynamic>.from(p);
+        }
+        if (mounted) {
+          final providerProducts = context.read<ProductProvider>().allProducts;
+          for (final p in providerProducts) {
+            if (!productMap.containsKey(p.id)) {
+              productMap[p.id] = p.toMap();
             }
           }
         }
+        _products = productMap.values.toList();
       } catch (e) {
-        debugPrint('Error applying order overrides: $e');
+        debugPrint('Notice loading products: $e');
+        if (mounted) {
+          final providerProducts = context.read<ProductProvider>().allProducts;
+          _products = providerProducts.map((p) => p.toMap()).toList();
+        }
+      }
+
+      // Orders - merge Supabase + OrderProvider (try order_date, fallback created_at)
+      try {
+        List<dynamic> ordersRes;
+        try {
+          ordersRes = await supabase
+              .from('orders')
+              .select()
+              .order('order_date', ascending: false);
+        } catch (_) {
+          ordersRes = await supabase
+              .from('orders')
+              .select()
+              .order('created_at', ascending: false);
+        }
+        final Map<String, Map<String, dynamic>> orderMap = {};
+        for (final o in ordersRes) {
+          final id = o['id']?.toString() ?? '';
+          if (id.isNotEmpty) orderMap[id] = Map<String, dynamic>.from(o);
+        }
+        _orders = orderMap.values.toList();
+      } catch (e) {
+        debugPrint('Notice loading orders: $e');
+        _orders = [];
       }
 
       // Users - admin only
       if (isAdmin) {
         final usersRes = await supabase.from('users').select();
         _users = List<Map<String, dynamic>>.from(usersRes);
-
-        // Apply locally cached role overrides
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final overridesJson = prefs.getString('admin_managed_user_roles');
-          if (overridesJson != null && overridesJson.isNotEmpty) {
-            final Map<String, dynamic> overrides = jsonDecode(overridesJson);
-            for (int i = 0; i < _users.length; i++) {
-              final uid = _users[i]['id']?.toString() ?? '';
-              if (overrides.containsKey(uid)) {
-                final override = overrides[uid] as Map<String, dynamic>;
-                _users[i] = Map<String, dynamic>.from(_users[i])
-                  ..addAll(override);
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('Error loading user overrides: $e');
-        }
 
         // Cashier shifts - admin monitoring
         try {
@@ -217,11 +194,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           isScrollable: true,
           tabs: [
             const Tab(icon: Icon(Icons.inventory_2), text: 'Produk'),
-            const Tab(icon: Icon(Icons.local_fire_department), text: 'Flash Sale'),
+            const Tab(
+              icon: Icon(Icons.local_fire_department),
+              text: 'Flash Sale',
+            ),
             const Tab(icon: Icon(Icons.receipt_long), text: 'Pesanan'),
             const Tab(icon: Icon(Icons.star_rate), text: 'Ulasan'),
             if (isAdmin) const Tab(icon: Icon(Icons.people), text: 'Pengguna'),
-            if (isAdmin) const Tab(icon: Icon(Icons.analytics), text: 'Statistik'),
+            if (isAdmin)
+              const Tab(icon: Icon(Icons.analytics), text: 'Statistik'),
           ],
         ),
       ),
@@ -249,10 +230,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final name = p['name']?.toString().toLowerCase() ?? '';
       final brand = p['brand']?.toString().toLowerCase() ?? '';
       final cat = p['category_id']?.toString().toLowerCase() ?? '';
-      final matchesQuery = _productSearchQuery.isEmpty ||
+      final matchesQuery =
+          _productSearchQuery.isEmpty ||
           name.contains(_productSearchQuery.toLowerCase()) ||
           brand.contains(_productSearchQuery.toLowerCase());
-      final matchesCat = _productCategoryFilter == 'all' || cat == _productCategoryFilter;
+      final matchesCat =
+          _productCategoryFilter == 'all' || cat == _productCategoryFilter;
       return matchesQuery && matchesCat;
     }).toList();
 
@@ -270,11 +253,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   suffixIcon: _productSearchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear),
-                          onPressed: () => setState(() => _productSearchQuery = ''),
+                          onPressed: () =>
+                              setState(() => _productSearchQuery = ''),
                         )
                       : null,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                 ),
                 onChanged: (val) => setState(() => _productSearchQuery = val),
               ),
@@ -283,13 +272,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  Text('Total: ${filtered.length} produk', style: AppTextStyles.caption),
+                  Text(
+                    'Total: ${filtered.length} produk',
+                    style: AppTextStyles.caption,
+                  ),
                   const Spacer(),
                   if (_products.any((p) => p['is_on_sale'] == true))
                     TextButton.icon(
-                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                      icon: Icon(Icons.local_fire_department, size: 16, color: AppColors.error),
-                      label: Text('Ke Tab Flash Sale', style: TextStyle(color: AppColors.error, fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: Icon(
+                        Icons.local_fire_department,
+                        size: 16,
+                        color: AppColors.error,
+                      ),
+                      label: Text(
+                        'Ke Tab Flash Sale',
+                        style: TextStyle(color: AppColors.error, fontSize: 12),
+                      ),
                       onPressed: () => _tabController.animateTo(1),
                     ),
                 ],
@@ -301,9 +302,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textTertiary),
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 64,
+                            color: AppColors.textTertiary,
+                          ),
                           const SizedBox(height: 12),
-                          Text('Tidak ada produk yang cocok', style: AppTextStyles.bodyMedium),
+                          Text(
+                            'Tidak ada produk yang cocok',
+                            style: AppTextStyles.bodyMedium,
+                          ),
                         ],
                       ),
                     )
@@ -314,7 +322,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         final product = filtered[index];
                         final isOnSale = product['is_on_sale'] == true;
                         final price = _parseDouble(product['price']);
-                        final origPrice = _parseDouble(product['original_price']);
+                        final origPrice = _parseDouble(
+                          product['original_price'],
+                        );
                         final stock = _parseInt(product['stock']);
 
                         return GlassCard(
@@ -330,8 +340,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
-                                isOnSale ? Icons.local_fire_department : Icons.inventory_2,
-                                color: isOnSale ? AppColors.error : AppColors.textSecondary,
+                                isOnSale
+                                    ? Icons.local_fire_department
+                                    : Icons.inventory_2,
+                                color: isOnSale
+                                    ? AppColors.error
+                                    : AppColors.textSecondary,
                               ),
                             ),
                             title: Text(
@@ -343,20 +357,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Brand: ${product['brand'] ?? '-'}', style: AppTextStyles.caption),
+                                Text(
+                                  'Brand: ${product['brand'] ?? '-'}',
+                                  style: AppTextStyles.caption,
+                                ),
                                 const SizedBox(height: 2),
                                 Row(
                                   children: [
-                                    Text('Stok: $stock',
-                                        style: TextStyle(
-                                            color: stock < 5 ? AppColors.error : AppColors.success,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12)),
+                                    Text(
+                                      'Stok: $stock',
+                                      style: TextStyle(
+                                        color: stock < 5
+                                            ? AppColors.error
+                                            : AppColors.success,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
                                         'Harga: Rp ${_formatNumber(price)}',
-                                        style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold),
+                                        style: AppTextStyles.caption.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -367,14 +391,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: AppColors.error.withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: AppColors.error.withValues(
+                                            alpha: 0.12,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Text(
                                           'FLASH SALE',
-                                          style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.bold),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.error,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                       if (origPrice > price) ...[
@@ -384,7 +419,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                           style: TextStyle(
                                             fontSize: 11,
                                             color: AppColors.textTertiary,
-                                            decoration: TextDecoration.lineThrough,
+                                            decoration:
+                                                TextDecoration.lineThrough,
                                           ),
                                         ),
                                       ],
@@ -394,7 +430,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               ],
                             ),
                             trailing: PopupMenuButton<String>(
-                              icon: Icon(Icons.more_vert, color: AppColors.primary),
+                              icon: Icon(
+                                Icons.more_vert,
+                                color: AppColors.primary,
+                              ),
                               onSelected: (value) {
                                 switch (value) {
                                   case 'edit':
@@ -409,14 +448,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                 }
                               },
                               itemBuilder: (ctx) => [
-                                const PopupMenuItem(value: 'edit', child: Text('Edit Produk')),
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit Produk'),
+                                ),
                                 PopupMenuItem(
                                   value: 'flash_sale',
-                                  child: Text(isOnSale ? 'Atur / Hapus Flash Sale' : 'Aktifkan Flash Sale'),
+                                  child: Text(
+                                    isOnSale
+                                        ? 'Atur / Hapus Flash Sale'
+                                        : 'Aktifkan Flash Sale',
+                                  ),
                                 ),
                                 const PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Hapus Produk', style: TextStyle(color: Colors.red)),
+                                  child: Text(
+                                    'Hapus Produk',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
                                 ),
                               ],
                             ),
@@ -446,7 +495,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final flashSaleEndTime = productProvider.flashSaleEndTime;
     final isFlashSaleActive = productProvider.isFlashSaleActive;
     final remaining = productProvider.flashSaleRemainingTime;
-    final flashProducts = productProvider.allProducts.where((p) => p.isOnSale).toList();
+    final flashProducts = productProvider.allProducts
+        .where((p) => p.isOnSale)
+        .toList();
 
     return Scaffold(
       body: RefreshIndicator(
@@ -467,7 +518,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.local_fire_department, color: AppColors.error, size: 24),
+                        Icon(
+                          Icons.local_fire_department,
+                          color: AppColors.error,
+                          size: 24,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -476,24 +531,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: isFlashSaleActive && remaining > Duration.zero
+                            color:
+                                isFlashSaleActive && remaining > Duration.zero
                                 ? AppColors.success.withValues(alpha: 0.15)
                                 : AppColors.surfaceLight,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isFlashSaleActive && remaining > Duration.zero
+                              color:
+                                  isFlashSaleActive && remaining > Duration.zero
                                   ? AppColors.success
                                   : AppColors.textTertiary,
                             ),
                           ),
                           child: Text(
-                            isFlashSaleActive && remaining > Duration.zero ? 'AKTIF' : 'NONAKTIF',
+                            isFlashSaleActive && remaining > Duration.zero
+                                ? 'AKTIF'
+                                : 'NONAKTIF',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: isFlashSaleActive && remaining > Duration.zero
+                              color:
+                                  isFlashSaleActive && remaining > Duration.zero
                                   ? AppColors.success
                                   : AppColors.textTertiary,
                             ),
@@ -504,7 +567,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     const Divider(height: 24),
                     SwitchListTile(
                       title: const Text('Status Flash Sale Global'),
-                      subtitle: const Text('Mengaktifkan banner promo dan harga coret di Beranda & Katalog'),
+                      subtitle: const Text(
+                        'Mengaktifkan banner promo dan harga coret di Beranda & Katalog',
+                      ),
                       value: isFlashSaleActive,
                       activeColor: AppColors.error,
                       contentPadding: EdgeInsets.zero,
@@ -512,7 +577,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         await productProvider.setFlashSaleActive(val);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Flash Sale ${val ? "diaktifkan" : "dinonaktifkan"}')),
+                            SnackBar(
+                              content: Text(
+                                'Flash Sale ${val ? "diaktifkan" : "dinonaktifkan"}',
+                              ),
+                            ),
                           );
                         }
                       },
@@ -522,15 +591,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     // Countdown Display
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.error.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+                        border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.25),
+                        ),
                       ),
                       child: Column(
                         children: [
-                          Text('SISA WAKTU FLASH SALE:', style: AppTextStyles.caption.copyWith(letterSpacing: 1)),
+                          Text(
+                            'SISA WAKTU FLASH SALE:',
+                            style: AppTextStyles.caption.copyWith(
+                              letterSpacing: 1,
+                            ),
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             _formatDuration(remaining),
@@ -543,7 +622,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           const SizedBox(height: 4),
                           Text(
                             'Target Berakhir: ${flashSaleEndTime.day}/${flashSaleEndTime.month}/${flashSaleEndTime.year} - ${flashSaleEndTime.hour.toString().padLeft(2, '0')}:${flashSaleEndTime.minute.toString().padLeft(2, '0')} WIB',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -551,17 +632,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     const SizedBox(height: 14),
 
                     // Quick duration presets
-                    Text('Perpanjang Waktu Cepat:', style: AppTextStyles.bodySmall),
+                    Text(
+                      'Perpanjang Waktu Cepat:',
+                      style: AppTextStyles.bodySmall,
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _buildQuickTimeChip(context, '+2 Jam', const Duration(hours: 2)),
-                        _buildQuickTimeChip(context, '+6 Jam', const Duration(hours: 6)),
-                        _buildQuickTimeChip(context, '+12 Jam', const Duration(hours: 12)),
-                        _buildQuickTimeChip(context, '+24 Jam', const Duration(hours: 24)),
-                        _buildQuickTimeChip(context, '+3 Hari', const Duration(days: 3)),
+                        _buildQuickTimeChip(
+                          context,
+                          '+2 Jam',
+                          const Duration(hours: 2),
+                        ),
+                        _buildQuickTimeChip(
+                          context,
+                          '+6 Jam',
+                          const Duration(hours: 6),
+                        ),
+                        _buildQuickTimeChip(
+                          context,
+                          '+12 Jam',
+                          const Duration(hours: 12),
+                        ),
+                        _buildQuickTimeChip(
+                          context,
+                          '+24 Jam',
+                          const Duration(hours: 24),
+                        ),
+                        _buildQuickTimeChip(
+                          context,
+                          '+3 Hari',
+                          const Duration(days: 3),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -590,12 +694,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Produk Flash Sale (${flashProducts.length})', style: AppTextStyles.titleMedium),
+                  Text(
+                    'Produk Flash Sale (${flashProducts.length})',
+                    style: AppTextStyles.titleMedium,
+                  ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       visualDensity: VisualDensity.compact,
                     ),
                     icon: const Icon(Icons.add, size: 16),
@@ -612,9 +722,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     padding: const EdgeInsets.symmetric(vertical: 36),
                     child: Column(
                       children: [
-                        Icon(Icons.local_fire_department_outlined, size: 56, color: AppColors.textTertiary),
+                        Icon(
+                          Icons.local_fire_department_outlined,
+                          size: 56,
+                          color: AppColors.textTertiary,
+                        ),
                         const SizedBox(height: 12),
-                        Text('Belum ada produk dalam Flash Sale', style: AppTextStyles.bodyMedium),
+                        Text(
+                          'Belum ada produk dalam Flash Sale',
+                          style: AppTextStyles.bodyMedium,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Klik "Tambah Produk" untuk memasukkan barang promosi',
@@ -633,12 +750,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 2.2,
-                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 2.2,
+                            ),
                         itemCount: flashProducts.length,
                         itemBuilder: (context, index) {
                           return _buildFlashProductCard(flashProducts[index]);
@@ -673,7 +791,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildQuickTimeChip(BuildContext context, String label, Duration duration) {
+  Widget _buildQuickTimeChip(
+    BuildContext context,
+    String label,
+    Duration duration,
+  ) {
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 12)),
       avatar: const Icon(Icons.timer_outlined, size: 14),
@@ -697,7 +819,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     final pickedDate = await showDatePicker(
       context: context,
-      initialDate: currentEnd.isAfter(now) ? currentEnd : now.add(const Duration(hours: 1)),
+      initialDate: currentEnd.isAfter(now)
+          ? currentEnd
+          : now.add(const Duration(hours: 1)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 30)),
       helpText: 'Pilih Tanggal Selesai Flash Sale',
@@ -723,7 +847,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     if (finalDateTime.isBefore(DateTime.now())) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Waktu selesai harus lebih besar dari waktu saat ini')),
+        SnackBar(
+          content: Text('Waktu selesai harus lebih besar dari waktu saat ini'),
+        ),
       );
       return;
     }
@@ -731,7 +857,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     await productProvider.updateFlashSaleTime(finalDateTime);
 
     messenger.showSnackBar(
-      const SnackBar(content: Text('Waktu Flash Sale berhasil diperbarui secara realtime')),
+      SnackBar(
+        content: Text('Waktu Flash Sale berhasil diperbarui secara realtime'),
+      ),
     );
   }
 
@@ -754,7 +882,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   child: Image.network(
                     product.images.first,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Icon(Icons.inventory_2, color: AppColors.error),
+                    errorBuilder: (_, _, _) =>
+                        Icon(Icons.inventory_2, color: AppColors.error),
                   ),
                 )
               : Icon(Icons.inventory_2, color: AppColors.error),
@@ -772,14 +901,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.error,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     '-$discount%',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -839,7 +975,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         title: const Text('Keluarkan dari Flash Sale'),
         content: Text('Kembalikan "${product.name}" ke harga normal?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(ctx, true),
@@ -854,11 +993,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     await productProvider.toggleFlashSale(product.id, false);
 
     try {
-      await supabase.from('products').update({
-        'is_on_sale': false,
-        'price': product.originalPrice ?? product.price,
-        'original_price': null,
-      }).eq('id', product.id);
+      await supabase
+          .from('products')
+          .update({
+            'is_on_sale': false,
+            'price': product.originalPrice ?? product.price,
+            'original_price': null,
+          })
+          .eq('id', product.id);
     } catch (e) {
       debugPrint('Supabase revert flash sale notice: $e');
     }
@@ -894,10 +1036,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       final id = o['id']?.toString().toLowerCase() ?? '';
       final status = o['status']?.toString().toLowerCase() ?? '';
       final channel = o['channel']?.toString().toLowerCase() ?? 'online';
-      final matchesSearch = _orderSearchQuery.isEmpty ||
+      final matchesSearch =
+          _orderSearchQuery.isEmpty ||
           id.contains(_orderSearchQuery.toLowerCase()) ||
           status.contains(_orderSearchQuery.toLowerCase());
-      final matchesChannel = _orderChannelFilter == 'all' || channel == _orderChannelFilter;
+      final matchesChannel =
+          _orderChannelFilter == 'all' || channel == _orderChannelFilter;
       return matchesSearch && matchesChannel;
     }).toList();
 
@@ -915,8 +1059,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       onPressed: () => setState(() => _orderSearchQuery = ''),
                     )
                   : null,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
             ),
             onChanged: (val) => setState(() => _orderSearchQuery = val),
           ),
@@ -937,7 +1086,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 avatar: const Icon(Icons.language, size: 14),
                 label: const Text('Online App'),
                 selected: _orderChannelFilter == 'online',
-                onSelected: (_) => setState(() => _orderChannelFilter = 'online'),
+                onSelected: (_) =>
+                    setState(() => _orderChannelFilter = 'online'),
               ),
               const SizedBox(width: 8),
               FilterChip(
@@ -955,9 +1105,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.receipt_long, size: 64, color: AppColors.textTertiary),
+                      Icon(
+                        Icons.receipt_long,
+                        size: 64,
+                        color: AppColors.textTertiary,
+                      ),
                       const SizedBox(height: 16),
-                      Text('Belum ada pesanan yang sesuai', style: AppTextStyles.bodyMedium),
+                      Text(
+                        'Belum ada pesanan yang sesuai',
+                        style: AppTextStyles.bodyMedium,
+                      ),
                     ],
                   ),
                 )
@@ -968,18 +1125,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final order = filtered[index];
-                      final status = order['status']?.toString() ?? 'processing';
-                      final channel = order['channel']?.toString().toLowerCase() ?? 'online';
+                      final status =
+                          order['status']?.toString() ?? 'processing';
+                      final channel =
+                          order['channel']?.toString().toLowerCase() ??
+                          'online';
                       final isPos = channel == 'pos';
                       final cashierId = order['cashier_id']?.toString();
 
                       final statusColor = status == 'delivered'
                           ? AppColors.success
                           : status == 'shipped'
-                              ? AppColors.accent
-                              : status == 'cancelled'
-                                  ? AppColors.error
-                                  : AppColors.warning;
+                          ? AppColors.accent
+                          : status == 'cancelled'
+                          ? AppColors.error
+                          : AppColors.warning;
 
                       return GlassCard(
                         margin: const EdgeInsets.only(bottom: 8),
@@ -997,7 +1157,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Total: Rp ${_formatNumber(order['total_price'])}  •  Metode: ${order['payment_method'] ?? '-'}'),
+                              Text(
+                                'Total: Rp ${_formatNumber(order['total_price'])}  •  Metode: ${order['payment_method'] ?? '-'}',
+                              ),
                               const SizedBox(height: 4),
                               Wrap(
                                 spacing: 4,
@@ -1006,7 +1168,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   Chip(
                                     label: Text(
                                       status.toUpperCase(),
-                                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                     backgroundColor: statusColor,
                                     padding: EdgeInsets.zero,
@@ -1020,9 +1185,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                     ),
                                     label: Text(
                                       isPos ? 'POS KASIR' : 'ONLINE',
-                                      style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                    backgroundColor: isPos ? const Color(0xFF8B5CF6) : AppColors.primary,
+                                    backgroundColor: isPos
+                                        ? const Color(0xFF8B5CF6)
+                                        : AppColors.primary,
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
                                   ),
@@ -1060,7 +1231,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Update Status Pesanan', style: AppTextStyles.titleMedium),
+          title: Text(
+            'Update Status Pesanan',
+            style: AppTextStyles.titleMedium,
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1087,7 +1261,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
               onPressed: () async {
                 final nav = Navigator.of(ctx);
                 final messenger = ScaffoldMessenger.of(context);
@@ -1101,11 +1277,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   }
                 }
 
-                // Update via OrderProvider (saves to memory, local cache, and Supabase)
-                await context.read<OrderProvider>().updateOrderStatus(orderId, newStatus);
+                final success = await context
+                    .read<OrderProvider>()
+                    .updateOrderStatus(orderId, newStatus);
+                if (!ctx.mounted) return;
+                if (!success) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        context.read<OrderProvider>().errorMessage ??
+                            'Status pesanan gagal diperbarui.',
+                      ),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                  return;
+                }
 
                 // Update local list
-                final idx = _orders.indexWhere((o) => o['id']?.toString() == orderId);
+                final idx = _orders.indexWhere(
+                  (o) => o['id']?.toString() == orderId,
+                );
                 if (idx != -1) {
                   _orders[idx] = Map<String, dynamic>.from(_orders[idx]);
                   _orders[idx]['status'] = selectedStatus;
@@ -1113,7 +1305,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                 nav.pop();
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('Status pesanan berhasil diperbarui')),
+                  const SnackBar(
+                    content: Text('Status pesanan berhasil diperbarui'),
+                  ),
                 );
                 if (mounted) setState(() {});
               },
@@ -1141,7 +1335,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.rate_review_outlined, size: 64, color: AppColors.textTertiary),
+            Icon(
+              Icons.rate_review_outlined,
+              size: 64,
+              color: AppColors.textTertiary,
+            ),
             const SizedBox(height: 16),
             Text('Belum ada ulasan', style: AppTextStyles.bodyMedium),
           ],
@@ -1170,8 +1368,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       backgroundColor: AppColors.primary.withValues(alpha: 0.2),
                       radius: 18,
                       child: Text(
-                        review.userName.isNotEmpty ? review.userName[0].toUpperCase() : '?',
-                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                        review.userName.isNotEmpty
+                            ? review.userName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1179,7 +1382,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(review.userName, style: AppTextStyles.titleSmall),
+                          Text(
+                            review.userName,
+                            style: AppTextStyles.titleSmall,
+                          ),
                           Text(
                             'Produk ID: ${review.productId}',
                             style: AppTextStyles.caption,
@@ -1206,7 +1412,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 Text(review.comment, style: AppTextStyles.bodyMedium),
                 Text(
                   review.date.toString().substring(0, 10),
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
                 ),
 
                 if (review.reply != null && review.reply!.isNotEmpty) ...[
@@ -1216,14 +1424,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.store, size: 14, color: AppColors.primary),
+                            Icon(
+                              Icons.store,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'Respon Penjual${review.replyRole != null ? ' - ${review.replyRole == 'admin' ? 'Admin' : 'Kasir'}' : ''}',
@@ -1313,8 +1527,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              Text('Balasan Anda (${replierRole == 'admin' ? 'Admin' : 'Kasir'}):',
-                  style: AppTextStyles.bodySmall),
+              Text(
+                'Balasan Anda (${replierRole == 'admin' ? 'Admin' : 'Kasir'}):',
+                style: AppTextStyles.bodySmall,
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: replyC,
@@ -1355,7 +1571,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
               nav.pop();
               messenger.showSnackBar(
-                SnackBar(content: Text(success ? 'Balasan berhasil disimpan' : 'Gagal menyimpan balasan')),
+                SnackBar(
+                  content: Text(
+                    success
+                        ? 'Balasan berhasil disimpan'
+                        : 'Gagal menyimpan balasan',
+                  ),
+                ),
               );
             },
             child: const Text('Kirim Balasan'),
@@ -1391,8 +1613,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       onPressed: () => setState(() => _userSearchQuery = ''),
                     )
                   : null,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
             ),
             onChanged: (val) => setState(() => _userSearchQuery = val),
           ),
@@ -1403,11 +1630,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           child: Row(
             children: [
               Expanded(
-                child: Text('Total ${filtered.length} Akun Terdaftar', style: AppTextStyles.caption),
+                child: Text(
+                  'Total ${filtered.length} Akun Terdaftar',
+                  style: AppTextStyles.caption,
+                ),
               ),
               ElevatedButton.icon(
                 icon: const Icon(Icons.person_add, size: 16),
-                label: const Text('Tambah Staff (Kasir/Admin)', style: TextStyle(fontSize: 12)),
+                label: const Text(
+                  'Tambah Staff (Kasir/Admin)',
+                  style: TextStyle(fontSize: 12),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -1426,9 +1659,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.people_outline, size: 64, color: AppColors.textTertiary),
+                        Icon(
+                          Icons.people_outline,
+                          size: 64,
+                          color: AppColors.textTertiary,
+                        ),
                         const SizedBox(height: 16),
-                        Text('Tidak ada pengguna yang cocok', style: AppTextStyles.bodyMedium),
+                        Text(
+                          'Tidak ada pengguna yang cocok',
+                          style: AppTextStyles.bodyMedium,
+                        ),
                       ],
                     ),
                   )
@@ -1449,10 +1689,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             backgroundColor: role == 'admin'
                                 ? AppColors.error
                                 : role == 'cashier'
-                                    ? AppColors.warning
-                                    : AppColors.primary,
+                                ? AppColors.warning
+                                : AppColors.primary,
                             child: Text(
-                              (u['full_name']?.toString() ?? '?')[0].toUpperCase(),
+                              (u['full_name']?.toString() ?? '?')[0]
+                                  .toUpperCase(),
                               style: const TextStyle(color: Colors.white),
                             ),
                           ),
@@ -1465,11 +1706,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(u['email']?.toString() ?? '-', style: AppTextStyles.caption),
+                              Text(
+                                u['email']?.toString() ?? '-',
+                                style: AppTextStyles.caption,
+                              ),
                               Row(
                                 children: [
                                   Chip(
-                                    label: Text(tier.toUpperCase(), style: const TextStyle(fontSize: 9)),
+                                    label: Text(
+                                      tier.toUpperCase(),
+                                      style: const TextStyle(fontSize: 9),
+                                    ),
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
                                   ),
@@ -1477,19 +1724,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   Chip(
                                     label: Text(
                                       role.toUpperCase(),
-                                      style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                     backgroundColor: role == 'admin'
                                         ? AppColors.error
                                         : role == 'cashier'
-                                            ? AppColors.warning
-                                            : AppColors.primary,
+                                        ? AppColors.warning
+                                        : AppColors.primary,
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
                                   ),
                                   const SizedBox(width: 4),
-                                  Text('$points pts',
-                                      style: AppTextStyles.caption.copyWith(color: AppColors.accent)),
+                                  Text(
+                                    '$points pts',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.accent,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -1532,8 +1787,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Akun staff dibuat via fungsi provision_staff Supabase (tercatat di audit_logs).',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  'Akun staff dibuat melalui Edge Function terautentikasi dan role ditetapkan di server.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -1588,7 +1845,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
               onPressed: isSubmitting
                   ? null
                   : () async {
@@ -1596,30 +1855,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       final email = emailCtrl.text.trim();
                       final pass = passwordCtrl.text;
 
-                      if (name.isEmpty || email.isEmpty || pass.length < 6) {
+                      if (name.isEmpty || email.isEmpty || pass.length < 12) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Lengkapi form (password min 6 karakter)!')),
+                          const SnackBar(
+                            content: Text(
+                              'Lengkapi form (password min 12 karakter)!',
+                            ),
+                          ),
                         );
                         return;
                       }
 
                       setDialogState(() => isSubmitting = true);
-                      final currentAdmin = context.read<AuthProvider>().currentUser;
-
                       try {
-                        final res = await supabase.rpc('provision_staff', params: {
-                          'p_email': email,
-                          'p_password': pass,
-                          'p_full_name': name,
-                          'p_role': selectedRole,
-                          'p_created_by': currentAdmin?.id,
-                        });
+                        final response = await supabase.functions.invoke(
+                          'provision-staff',
+                          body: {
+                            'email': email,
+                            'password': pass,
+                            'full_name': name,
+                            'role': selectedRole,
+                          },
+                        );
+                        final res = response.data is Map
+                            ? (response.data as Map)['id']
+                            : null;
+                        if (res == null) {
+                          throw const FormatException(
+                            'Respons provisioning tidak valid.',
+                          );
+                        }
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Staff $name ($selectedRole) berhasil dibuat! ID: $res'),
+                              content: Text(
+                                'Staff $name ($selectedRole) berhasil dibuat! ID: $res',
+                              ),
                               backgroundColor: AppColors.success,
                             ),
                           );
@@ -1646,10 +1919,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   void _showEditUserDialog(Map<String, dynamic> userData) {
-    final nameController =
-        TextEditingController(text: userData['full_name']?.toString() ?? '');
-    final pointsController =
-        TextEditingController(text: (userData['points'] ?? 0).toString());
+    final nameController = TextEditingController(
+      text: userData['full_name']?.toString() ?? '',
+    );
+    final pointsController = TextEditingController(
+      text: (userData['points'] ?? 0).toString(),
+    );
     final rawRole = userData['role']?.toString() ?? 'client';
     String selectedRole = rawRole == 'user' ? 'client' : rawRole;
     String selectedTier = userData['membership_tier']?.toString() ?? 'bronze';
@@ -1658,13 +1933,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Edit Hak Akses Pengguna', style: AppTextStyles.titleMedium),
+          title: Text(
+            'Edit Hak Akses Pengguna',
+            style: AppTextStyles.titleMedium,
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Email: ${userData['email']}', style: AppTextStyles.caption),
+                Text(
+                  'Email: ${userData['email']}',
+                  style: AppTextStyles.caption,
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: nameController,
@@ -1684,24 +1965,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ),
                 const SizedBox(height: 12),
                 Text('Role Akses:', style: AppTextStyles.bodySmall),
-                ...['client', 'cashier', 'admin'].map((r) => RadioListTile<String>(
-                      value: r,
-                      groupValue: selectedRole,
-                      title: Text(
-                        r == 'client'
-                            ? 'CLIENT (Pelanggan App)'
-                            : r == 'cashier'
-                                ? 'CASHIER (Kasir POS)'
-                                : 'ADMIN (Administrator)',
-                      ),
-                      dense: true,
-                      activeColor: AppColors.primary,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() => selectedRole = val);
-                        }
-                      },
-                    )),
+                ...['client', 'cashier', 'admin'].map(
+                  (r) => RadioListTile<String>(
+                    value: r,
+                    groupValue: selectedRole,
+                    title: Text(
+                      r == 'client'
+                          ? 'CLIENT (Pelanggan App)'
+                          : r == 'cashier'
+                          ? 'CASHIER (Kasir POS)'
+                          : 'ADMIN (Administrator)',
+                    ),
+                    dense: true,
+                    activeColor: AppColors.primary,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedRole = val);
+                      }
+                    },
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text('Tier Membership:', style: AppTextStyles.bodySmall),
                 ...['bronze', 'silver', 'gold', 'platinum'].map(
@@ -1727,86 +2010,70 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
               onPressed: () async {
                 final nav = Navigator.of(ctx);
                 final messenger = ScaffoldMessenger.of(context);
                 final userId = userData['id']?.toString() ?? '';
-                final updatePayload = {
-                  'full_name': nameController.text.trim(),
-                  'points': int.tryParse(pointsController.text) ?? 0,
-                  'role': selectedRole,
-                  'membership_tier': selectedTier,
-                };
-
-                // 1. Update in-memory list immediately
-                final idx = _users.indexWhere((u) => u['id'] == userId);
-                if (idx != -1) {
-                  _users[idx] = Map<String, dynamic>.from(_users[idx])..addAll(updatePayload);
-                }
-
-                // 2. Cache role/tier override in SharedPreferences
-                try {
-                  final prefs = await SharedPreferences.getInstance();
-                  Map<String, dynamic> overrides = {};
-                  final existingJson = prefs.getString('admin_managed_user_roles');
-                  if (existingJson != null && existingJson.isNotEmpty) {
-                    overrides = Map<String, dynamic>.from(jsonDecode(existingJson));
-                  }
-                  overrides[userId] = {
-                    'role': selectedRole,
-                    'membership_tier': selectedTier,
-                    'full_name': nameController.text.trim(),
-                    'points': int.tryParse(pointsController.text) ?? 0,
-                  };
-                  await prefs.setString('admin_managed_user_roles', jsonEncode(overrides));
-                } catch (e) {
-                  debugPrint('Error caching user role override: $e');
-                }
-
-                // 3. Update blockchain wallet points & tier
-                if (!ctx.mounted) return;
-                try {
-                  MemberTier targetTier = MemberTier.bronze;
-                  for (final t in MemberTier.values) {
-                    if (t.name.toLowerCase() == selectedTier.toLowerCase()) {
-                      targetTier = t;
-                      break;
-                    }
-                  }
-                  final newExp = int.tryParse(pointsController.text) ?? 0;
-                  final targetName = nameController.text.trim().isNotEmpty
-                      ? nameController.text.trim()
-                      : (userData['full_name']?.toString() ?? 'Pengguna');
-                  await context.read<BlockchainProvider>().adminSetUserPoints(
-                    userId: userId,
-                    userName: targetName,
-                    newExp: newExp,
-                    newTier: targetTier,
-                    adminNote: 'Penyesuaian oleh Admin (${context.read<AuthProvider>().currentUser?.fullName ?? "Admin"})',
+                final fullName = nameController.text.trim();
+                final points = int.tryParse(pointsController.text);
+                if (userId.isEmpty ||
+                    fullName.isEmpty ||
+                    fullName.length > 100 ||
+                    points == null ||
+                    points < 0) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Periksa nama dan jumlah poin yang dimasukkan.',
+                      ),
+                      backgroundColor: AppColors.error,
+                    ),
                   );
-                } catch (e) {
-                  debugPrint('Error syncing blockchain points in admin dialog: $e');
+                  return;
                 }
-
-                // 4. Attempt Supabase update
-                bool supabaseSuccess = false;
                 try {
-                  await supabase.from('users').update(updatePayload).eq('id', userId);
-                  supabaseSuccess = true;
+                  final result = await supabase.rpc(
+                    'admin_update_user',
+                    params: {
+                      'p_user_id': userId,
+                      'p_full_name': fullName,
+                      'p_points': points,
+                      'p_role': selectedRole,
+                      'p_membership_tier': selectedTier,
+                    },
+                  );
+                  if (result is! Map) {
+                    throw const FormatException(
+                      'Respons admin_update_user tidak valid.',
+                    );
+                  }
+                  if (!ctx.mounted) return;
+                  final idx = _users.indexWhere((u) => u['id'] == userId);
+                  if (idx != -1) {
+                    _users[idx] = Map<String, dynamic>.from(result);
+                  }
+                  nav.pop();
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Pengguna berhasil diupdate')),
+                  );
+                  if (mounted) {
+                    setState(() {});
+                    _loadData();
+                  }
                 } catch (e) {
-                  debugPrint('Supabase user update notice: $e');
+                  debugPrint('admin_update_user failed: $e');
+                  if (ctx.mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Gagal memperbarui pengguna: $e'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
                 }
-
-                nav.pop();
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(supabaseSuccess
-                        ? 'Pengguna berhasil diupdate'
-                        : 'Hak akses disimpan secara lokal'),
-                  ),
-                );
-                if (mounted) setState(() {});
               },
               child: const Text('Simpan'),
             ),
@@ -1823,18 +2090,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final totalProducts = _products.length;
     final totalOrders = _orders.length;
     final totalUsers = _users.length;
-    final lowStockProducts =
-        _products.where((p) => (_parseInt(p['stock'])) < 5).length;
-    final flashSaleCount =
-        _products.where((p) => p['is_on_sale'] == true).length;
+    final lowStockProducts = _products
+        .where((p) => (_parseInt(p['stock'])) < 5)
+        .length;
+    final flashSaleCount = _products
+        .where((p) => p['is_on_sale'] == true)
+        .length;
     final totalRevenue = _orders.fold<double>(
-        0, (sum, o) => sum + (_parseDouble(o['total_price'])));
+      0,
+      (sum, o) => sum + (_parseDouble(o['total_price'])),
+    );
 
     // Omnichannel breakdown
-    final onlineOrders = _orders.where((o) => (o['channel'] ?? 'online') == 'online').toList();
+    final onlineOrders = _orders
+        .where((o) => (o['channel'] ?? 'online') == 'online')
+        .toList();
     final posOrders = _orders.where((o) => o['channel'] == 'pos').toList();
-    final onlineRevenue = onlineOrders.fold<double>(0, (sum, o) => sum + (_parseDouble(o['total_price'])));
-    final posRevenue = posOrders.fold<double>(0, (sum, o) => sum + (_parseDouble(o['total_price'])));
+    final onlineRevenue = onlineOrders.fold<double>(
+      0,
+      (sum, o) => sum + (_parseDouble(o['total_price'])),
+    );
+    final posRevenue = posOrders.fold<double>(
+      0,
+      (sum, o) => sum + (_parseDouble(o['total_price'])),
+    );
 
     final openShifts = _shifts.where((s) => s['status'] == 'open').toList();
 
@@ -1850,45 +2129,129 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               if (isWide) ...[
                 Row(
                   children: [
-                    Expanded(child: _buildStatCard('Total Produk', '$totalProducts', Icons.inventory, AppColors.primary)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Produk',
+                        '$totalProducts',
+                        Icons.inventory,
+                        AppColors.primary,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Total Pesanan', '$totalOrders', Icons.receipt, AppColors.accent)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Pesanan',
+                        '$totalOrders',
+                        Icons.receipt,
+                        AppColors.accent,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Total Pengguna', '$totalUsers', Icons.people, AppColors.success)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Pengguna',
+                        '$totalUsers',
+                        Icons.people,
+                        AppColors.success,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildStatCard('Stok Rendah', '$lowStockProducts', Icons.warning, AppColors.error)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Stok Rendah',
+                        '$lowStockProducts',
+                        Icons.warning,
+                        AppColors.error,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Flash Sale', '$flashSaleCount', Icons.local_fire_department, AppColors.warning)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Flash Sale',
+                        '$flashSaleCount',
+                        Icons.local_fire_department,
+                        AppColors.warning,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Ulasan', '${context.read<ReviewProvider>().allReviews.length}', Icons.star_rate, Colors.amber)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Ulasan',
+                        '${context.read<ReviewProvider>().allReviews.length}',
+                        Icons.star_rate,
+                        Colors.amber,
+                      ),
+                    ),
                   ],
                 ),
               ] else ...[
                 Row(
                   children: [
-                    Expanded(child: _buildStatCard('Total Produk', '$totalProducts', Icons.inventory, AppColors.primary)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Produk',
+                        '$totalProducts',
+                        Icons.inventory,
+                        AppColors.primary,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Total Pesanan', '$totalOrders', Icons.receipt, AppColors.accent)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Pesanan',
+                        '$totalOrders',
+                        Icons.receipt,
+                        AppColors.accent,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildStatCard('Total Pengguna', '$totalUsers', Icons.people, AppColors.success)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Pengguna',
+                        '$totalUsers',
+                        Icons.people,
+                        AppColors.success,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Stok Rendah', '$lowStockProducts', Icons.warning, AppColors.error)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Stok Rendah',
+                        '$lowStockProducts',
+                        Icons.warning,
+                        AppColors.error,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildStatCard('Flash Sale', '$flashSaleCount', Icons.local_fire_department, AppColors.warning)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Flash Sale',
+                        '$flashSaleCount',
+                        Icons.local_fire_department,
+                        AppColors.warning,
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard('Ulasan', '${context.read<ReviewProvider>().allReviews.length}', Icons.star_rate, Colors.amber)),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Ulasan',
+                        '${context.read<ReviewProvider>().allReviews.length}',
+                        Icons.star_rate,
+                        Colors.amber,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -1902,14 +2265,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total Pendapatan (Omnichannel)', style: AppTextStyles.titleSmall),
-                        Icon(Icons.monetization_on, color: AppColors.accent, size: 20),
+                        Text(
+                          'Total Pendapatan (Omnichannel)',
+                          style: AppTextStyles.titleSmall,
+                        ),
+                        Icon(
+                          Icons.monetization_on,
+                          color: AppColors.accent,
+                          size: 20,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Rp ${_formatNumber(totalRevenue)}',
-                      style: AppTextStyles.heading2.copyWith(color: AppColors.accent),
+                      style: AppTextStyles.heading2.copyWith(
+                        color: AppColors.accent,
+                      ),
                     ),
                     const Divider(height: 24),
                     Row(
@@ -1929,13 +2301,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text('Online (${onlineOrders.length} order)', style: AppTextStyles.caption),
+                                  Text(
+                                    'Online (${onlineOrders.length} order)',
+                                    style: AppTextStyles.caption,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 'Rp ${_formatNumber(onlineRevenue)}',
-                                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
@@ -1955,7 +2332,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text('POS Kasir (${posOrders.length} order)', style: AppTextStyles.caption),
+                                  Text(
+                                    'POS Kasir (${posOrders.length} order)',
+                                    style: AppTextStyles.caption,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 4),
@@ -1986,13 +2366,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.point_of_sale, size: 18, color: AppColors.primary),
+                            Icon(
+                              Icons.point_of_sale,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 8),
-                            Text('Monitoring Shift Kasir', style: AppTextStyles.titleSmall),
+                            Text(
+                              'Monitoring Shift Kasir',
+                              style: AppTextStyles.titleSmall,
+                            ),
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: openShifts.isNotEmpty
                                 ? AppColors.success.withValues(alpha: 0.15)
@@ -2006,7 +2396,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: openShifts.isNotEmpty ? AppColors.success : Colors.grey,
+                              color: openShifts.isNotEmpty
+                                  ? AppColors.success
+                                  : Colors.grey,
                             ),
                           ),
                         ),
@@ -2026,8 +2418,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     else
                       ..._shifts.take(5).map((shift) {
                         final isOpen = shift['status'] == 'open';
-                        final cashier = shift['users'] != null && shift['users'] is Map
-                            ? (shift['users']['full_name'] ?? shift['cashier_id'] ?? '-')
+                        final cashier =
+                            shift['users'] != null && shift['users'] is Map
+                            ? (shift['users']['full_name'] ??
+                                  shift['cashier_id'] ??
+                                  '-')
                             : (shift['cashier_id'] ?? '-');
                         final openedAt = shift['opened_at'] != null
                             ? shift['opened_at'].toString().split('T').first
@@ -2039,7 +2434,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor.withValues(alpha: 0.4),
+                            color: Theme.of(context).cardColor
+                                .withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isOpen
@@ -2057,7 +2453,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                 child: Icon(
                                   isOpen ? Icons.lock_open : Icons.lock,
                                   size: 16,
-                                  color: isOpen ? AppColors.success : Colors.grey,
+                                  color: isOpen
+                                      ? AppColors.success
+                                      : Colors.grey,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -2067,7 +2465,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   children: [
                                     Text(
                                       '$cashier',
-                                      style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -2091,9 +2491,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   ),
                                   const SizedBox(height: 2),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: (isOpen ? AppColors.success : Colors.grey).withValues(alpha: 0.15),
+                                      color:
+                                          (isOpen
+                                                  ? AppColors.success
+                                                  : Colors.grey)
+                                              .withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -2101,7 +2508,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       style: TextStyle(
                                         fontSize: 9,
                                         fontWeight: FontWeight.bold,
-                                        color: isOpen ? AppColors.success : Colors.grey,
+                                        color: isOpen
+                                            ? AppColors.success
+                                            : Colors.grey,
                                       ),
                                     ),
                                   ),
@@ -2121,30 +2530,42 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Produk Stok Rendah (< 5)', style: AppTextStyles.titleSmall),
+                    Text(
+                      'Produk Stok Rendah (< 5)',
+                      style: AppTextStyles.titleSmall,
+                    ),
                     const SizedBox(height: 8),
                     ..._products
                         .where((p) => (_parseInt(p['stock'])) < 5)
-                        .map((p) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.warning, size: 16, color: AppColors.error),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      p['name']?.toString() ?? '-',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                        .map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.warning,
+                                  size: 16,
+                                  color: AppColors.error,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    p['name']?.toString() ?? '-',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  Text(
-                                    'Stok: ${p['stock'] ?? 0}',
-                                    style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  'Stok: ${p['stock'] ?? 0}',
+                                  style: TextStyle(
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                ],
-                              ),
-                            )),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                   ],
                 ),
               ),
@@ -2155,14 +2576,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return GlassCard(
       child: Column(
         children: [
           Icon(icon, color: color, size: 30),
           const SizedBox(height: 6),
           Text(value, style: AppTextStyles.heading3.copyWith(color: color)),
-          Text(title, style: AppTextStyles.caption, textAlign: TextAlign.center),
+          Text(
+            title,
+            style: AppTextStyles.caption,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -2171,22 +2601,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ============================================================
   // PRODUCT ADD DIALOG
   // ============================================================
-  void _showAddProductDialog() {
+  Future<void> _showAddProductDialog() async {
+    final List<dynamic> categoryRows;
+    try {
+      categoryRows = await supabase
+          .from('categories')
+          .select('id, name')
+          .order('name');
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kategori gagal dimuat dari database: $error')),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final categoryOptions = categoryRows
+        .map(
+          (row) => {
+            'id': row['id']?.toString() ?? '',
+            'name': row['name']?.toString() ?? '',
+          },
+        )
+        .where((category) => category['id']!.isNotEmpty)
+        .toList();
+    if (categoryOptions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Belum ada kategori. Jalankan migration kategori produk terlebih dahulu.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final nameC = TextEditingController();
     final brandC = TextEditingController();
     final priceC = TextEditingController();
     final origPriceC = TextEditingController();
     final stockC = TextEditingController(text: '10');
     final descC = TextEditingController();
-    final imageUrlC = TextEditingController();
-    String selectedCategory = 'laptop';
+    final productId = 'admin-${DateTime.now().microsecondsSinceEpoch}';
+    String? imageUrl;
+    String selectedCategory = categoryOptions.first['id']!;
     bool isFlashSale = false;
-
-    final categoryOptions = [
-      'laptop', 'desktop', 'monitor', 'keyboard', 'mouse',
-      'headset', 'storage', 'networking', 'cpu', 'gpu',
-      'motherboard', 'ram', 'case', 'cooler', 'psu',
-    ];
+    bool isImageUploading = false;
 
     showDialog(
       context: context,
@@ -2223,12 +2684,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       labelText: 'Kategori',
                       border: OutlineInputBorder(),
                     ),
-                    items: categoryOptions.map((c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c.toUpperCase()),
-                    )).toList(),
+                    items: categoryOptions
+                        .map(
+                          (category) => DropdownMenuItem(
+                            value: category['id'],
+                            child: Text(category['name']!),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (val) {
-                      if (val != null) setDialogState(() => selectedCategory = val);
+                      if (val != null)
+                        setDialogState(() => selectedCategory = val);
                     },
                   ),
                   const SizedBox(height: 12),
@@ -2260,13 +2726,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: imageUrlC,
-                    decoration: const InputDecoration(
-                      labelText: 'URL Gambar (opsional)',
-                      hintText: 'https://...',
-                      border: OutlineInputBorder(),
-                    ),
+                  ProductImagePicker(
+                    productId: productId,
+                    onChanged: (url) => setDialogState(() => imageUrl = url),
+                    onUploadingChanged: (uploading) =>
+                        setDialogState(() => isImageUploading = uploading),
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -2298,59 +2762,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               child: const Text('Batal'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () async {
-                final name = nameC.text.trim();
-                final brand = brandC.text.trim();
-                final price = _parseDouble(priceC.text.trim());
-                final stock = _parseInt(stockC.text.trim());
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              onPressed: isImageUploading
+                  ? null
+                  : () async {
+                      final name = nameC.text.trim();
+                      final brand = brandC.text.trim();
+                      final price = _parseDouble(priceC.text.trim());
+                      final stock = _parseInt(stockC.text.trim());
 
-                if (name.isEmpty || brand.isEmpty || price <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Nama, Brand, dan Harga wajib diisi')),
-                  );
-                  return;
-                }
+                      if (name.isEmpty || brand.isEmpty || price <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Nama, Brand, dan Harga wajib diisi'),
+                          ),
+                        );
+                        return;
+                      }
 
-                double? origPrice;
-                if (isFlashSale) {
-                  origPrice = _parseDouble(origPriceC.text.trim());
-                  if (origPrice <= price) {
-                    origPrice = price * 1.25;
-                  }
-                }
+                      double? origPrice;
+                      if (isFlashSale) {
+                        origPrice = _parseDouble(origPriceC.text.trim());
+                        if (origPrice <= price) {
+                          origPrice = price * 1.25;
+                        }
+                      }
 
-                final productId = 'admin-${DateTime.now().millisecondsSinceEpoch}';
-                final newProduct = ProductModel(
-                  id: productId,
-                  name: name,
-                  description: descC.text.trim().isEmpty ? name : descC.text.trim(),
-                  descriptionId: descC.text.trim().isEmpty ? name : descC.text.trim(),
-                  price: price,
-                  originalPrice: origPrice,
-                  categoryId: selectedCategory,
-                  brand: brand,
-                  images: imageUrlC.text.trim().isNotEmpty ? [imageUrlC.text.trim()] : [],
-                  specs: {},
-                  rating: 0,
-                  reviewCount: 0,
-                  stock: stock,
-                  isNew: true,
-                  isOnSale: isFlashSale,
-                );
+                      final newProduct = ProductModel(
+                        id: productId,
+                        name: name,
+                        description: descC.text.trim().isEmpty
+                            ? name
+                            : descC.text.trim(),
+                        descriptionId: descC.text.trim().isEmpty
+                            ? name
+                            : descC.text.trim(),
+                        price: price,
+                        originalPrice: origPrice,
+                        categoryId: selectedCategory,
+                        brand: brand,
+                        images: imageUrl == null ? [] : [imageUrl!],
+                        specs: {},
+                        rating: 0,
+                        reviewCount: 0,
+                        stock: stock,
+                        isNew: true,
+                        isOnSale: isFlashSale,
+                      );
 
-                final nav = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-                final productProvider = context.read<ProductProvider>();
+                      final nav = Navigator.of(ctx);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final productProvider = context.read<ProductProvider>();
 
-                await productProvider.addProduct(newProduct);
-                nav.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Produk berhasil ditambahkan')),
-                );
-                if (mounted) _loadData();
-              },
-              child: const Text('Simpan'),
+                      try {
+                        await productProvider.addProduct(newProduct);
+                        if (ctx.mounted) nav.pop();
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Produk berhasil ditambahkan'),
+                          ),
+                        );
+                        if (mounted) _loadData();
+                      } catch (e) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Gagal menambahkan produk: $e'),
+                          ),
+                        );
+                      }
+                    },
+              child: Text(isImageUploading ? 'Mengunggah foto...' : 'Simpan'),
             ),
           ],
         ),
@@ -2359,107 +2842,155 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   void _showEditProductDialog(Map<String, dynamic> product) {
-    final stockController =
-        TextEditingController(text: (product['stock'] ?? 0).toString());
-    final priceController =
-        TextEditingController(text: (product['price'] ?? 0).toString());
-    final nameController =
-        TextEditingController(text: product['name']?.toString() ?? '');
-    final brandController =
-        TextEditingController(text: product['brand']?.toString() ?? '');
-    final descController =
-        TextEditingController(text: product['description']?.toString() ?? '');
+    final existingProduct = ProductModel.fromMap(product);
+    String? imageUrl = existingProduct.images.isNotEmpty
+        ? existingProduct.images.first
+        : null;
+    var imageWasChanged = false;
+    final stockController = TextEditingController(
+      text: (product['stock'] ?? 0).toString(),
+    );
+    final priceController = TextEditingController(
+      text: (product['price'] ?? 0).toString(),
+    );
+    final nameController = TextEditingController(
+      text: product['name']?.toString() ?? '',
+    );
+    final brandController = TextEditingController(
+      text: product['brand']?.toString() ?? '',
+    );
+    final descController = TextEditingController(
+      text: product['description']?.toString() ?? '',
+    );
+    var isImageUploading = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Edit Produk', style: AppTextStyles.titleMedium),
-        content: SizedBox(
-          width: 480,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Nama Produk', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: brandController,
-                  decoration: const InputDecoration(labelText: 'Brand', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: priceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Harga (Rp)', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: stockController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Stok', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: descController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Deskripsi', border: OutlineInputBorder()),
-                ),
-              ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Edit Produk', style: AppTextStyles.titleMedium),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Produk',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: brandController,
+                    decoration: const InputDecoration(
+                      labelText: 'Brand',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Harga (Rp)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: stockController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Stok',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Deskripsi',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ProductImagePicker(
+                    productId: existingProduct.id,
+                    initialImageUrl: imageUrl,
+                    onChanged: (url) {
+                      imageUrl = url;
+                      imageWasChanged = true;
+                    },
+                    onUploadingChanged: (uploading) =>
+                        setDialogState(() => isImageUploading = uploading),
+                  ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              onPressed: isImageUploading
+                  ? null
+                  : () async {
+                      final nav = Navigator.of(ctx);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final productProvider = context.read<ProductProvider>();
+
+                      try {
+                        final oldImageUrl = existingProduct.images.isNotEmpty
+                            ? existingProduct.images.first
+                            : null;
+                        final editedProduct = existingProduct.copyWith(
+                          name: nameController.text.trim(),
+                          brand: brandController.text.trim(),
+                          price: _parseDouble(priceController.text.trim()),
+                          stock: _parseInt(stockController.text.trim()),
+                          description: descController.text.trim(),
+                          descriptionId: descController.text.trim(),
+                          images: imageWasChanged
+                              ? (imageUrl == null ? [] : [imageUrl!])
+                              : existingProduct.images,
+                        );
+                        await productProvider.updateProduct(editedProduct);
+                        if (imageWasChanged && oldImageUrl != imageUrl) {
+                          try {
+                            await ProductImageStorageService.deleteProductImage(
+                              oldImageUrl,
+                            );
+                          } catch (e) {
+                            debugPrint('Old product image cleanup failed: $e');
+                          }
+                        }
+
+                        nav.pop();
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Produk berhasil diupdate'),
+                          ),
+                        );
+                        if (mounted) _loadData();
+                      } catch (e) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Gagal: $e')),
+                        );
+                      }
+                    },
+              child: Text(isImageUploading ? 'Mengunggah foto...' : 'Simpan'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              final messenger = ScaffoldMessenger.of(context);
-              final productProvider = context.read<ProductProvider>();
-
-              try {
-                final updateData = {
-                  'name': nameController.text.trim(),
-                  'brand': brandController.text.trim(),
-                  'price': _parseDouble(priceController.text.trim()),
-                  'stock': _parseInt(stockController.text.trim()),
-                  'description': descController.text.trim(),
-                };
-
-                await supabase.from('products').update(updateData).eq('id', product['id']);
-
-                try {
-                  final existing = productProvider.getProductById(product['id']?.toString() ?? '');
-                  if (existing != null) {
-                    await productProvider.updateProduct(existing.copyWith(
-                      name: updateData['name']?.toString(),
-                      brand: updateData['brand']?.toString(),
-                      price: (updateData['price'] as num?)?.toDouble(),
-                      stock: (updateData['stock'] as num?)?.toInt(),
-                      description: updateData['description']?.toString(),
-                      descriptionId: updateData['description']?.toString(),
-                    ));
-                  }
-                } catch (_) {}
-
-                nav.pop();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Produk berhasil diupdate')),
-                );
-                if (mounted) _loadData();
-              } catch (e) {
-                messenger.showSnackBar(SnackBar(content: Text('Gagal: $e')));
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
       ),
     );
   }
@@ -2469,9 +3000,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Hapus Produk', style: AppTextStyles.titleMedium),
-        content: Text('Apakah Anda yakin ingin menghapus "${product['name']}"?'),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus "${product['name']}"?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () async {
@@ -2480,12 +3016,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
               try {
                 final productProvider = context.read<ProductProvider>();
-                await productProvider.deleteProduct(product['id']?.toString() ?? '');
-                try {
-                  await supabase.from('products').delete().eq('id', product['id']);
-                } catch (_) {}
+                final deletedProduct = ProductModel.fromMap(product);
+                await productProvider.deleteProduct(
+                  product['id']?.toString() ?? '',
+                );
+                if (deletedProduct.images.isNotEmpty) {
+                  try {
+                    await ProductImageStorageService.deleteProductImage(
+                      deletedProduct.images.first,
+                    );
+                  } catch (e) {
+                    debugPrint('Product image cleanup failed: $e');
+                  }
+                }
               } catch (e) {
                 debugPrint('Delete product error: $e');
+                nav.pop();
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Gagal menghapus produk: $e')),
+                );
+                return;
               }
 
               nav.pop();
@@ -2550,7 +3100,8 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
 
   void _recalculatePrices() {
     if (_selectedProduct == null) return;
-    final basePrice = _selectedProduct!.originalPrice ?? _selectedProduct!.price;
+    final basePrice =
+        _selectedProduct!.originalPrice ?? _selectedProduct!.price;
     final discounted = basePrice * (1 - _discountPct / 100);
     _origPriceC.text = basePrice.toStringAsFixed(0);
     _salePriceC.text = discounted.toStringAsFixed(0);
@@ -2559,7 +3110,9 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
   String _formatNumber(dynamic number) {
     if (number == null) return '0';
     final n = number is num ? number : num.tryParse(number.toString()) ?? 0;
-    return n.toStringAsFixed(0).replaceAllMapped(
+    return n
+        .toStringAsFixed(0)
+        .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match[1]}.',
         );
@@ -2569,7 +3122,8 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
   Widget build(BuildContext context) {
     final provider = context.watch<ProductProvider>();
     final nonFlashProducts = provider.allProducts.where((p) {
-      final matchesSearch = _searchC.text.isEmpty ||
+      final matchesSearch =
+          _searchC.text.isEmpty ||
           p.name.toLowerCase().contains(_searchC.text.toLowerCase()) ||
           p.brand.toLowerCase().contains(_searchC.text.toLowerCase());
       return matchesSearch;
@@ -2607,11 +3161,17 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Icon(Icons.local_fire_department, color: AppColors.error, size: 24),
+                    Icon(
+                      Icons.local_fire_department,
+                      color: AppColors.error,
+                      size: 24,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _selectedProduct != null ? 'Atur Promo Flash Sale' : 'Pilih Produk untuk Flash Sale',
+                        _selectedProduct != null
+                            ? 'Atur Promo Flash Sale'
+                            : 'Pilih Produk untuk Flash Sale',
                         style: AppTextStyles.titleMedium,
                       ),
                     ),
@@ -2624,15 +3184,23 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                 const Divider(),
 
                 if (_selectedProduct == null) ...[
-                  Text('Cari dan pilih produk dari katalog toko:', style: AppTextStyles.bodySmall),
+                  Text(
+                    'Cari dan pilih produk dari katalog toko:',
+                    style: AppTextStyles.bodySmall,
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _searchC,
                     decoration: InputDecoration(
                       hintText: 'Cari nama atau brand produk...',
                       prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
@@ -2640,15 +3208,23 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                   SizedBox(
                     height: 220,
                     child: nonFlashProducts.isEmpty
-                        ? const Center(child: Text('Tidak ada produk yang cocok'))
+                        ? const Center(
+                            child: Text('Tidak ada produk yang cocok'),
+                          )
                         : ListView.builder(
                             itemCount: nonFlashProducts.length,
                             itemBuilder: (ctx, i) {
                               final p = nonFlashProducts[i];
                               return ListTile(
                                 dense: true,
-                                title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('Rp ${_formatNumber(p.price)} • Stok: ${p.stock}'),
+                                title: Text(
+                                  p.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  'Rp ${_formatNumber(p.price)} • Stok: ${p.stock}',
+                                ),
                                 trailing: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.error,
@@ -2660,7 +3236,13 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                                       _recalculatePrices();
                                     });
                                   },
-                                  child: const Text('Pilih', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                  child: const Text(
+                                    'Pilih',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                    ),
+                                  ),
                                 ),
                               );
                             },
@@ -2672,7 +3254,9 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                     decoration: BoxDecoration(
                       color: AppColors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -2707,7 +3291,10 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                   ),
                   const SizedBox(height: 16),
 
-                  Text('Persentase Diskon Promo (%)', style: AppTextStyles.bodySmall),
+                  Text(
+                    'Persentase Diskon Promo (%)',
+                    style: AppTextStyles.bodySmall,
+                  ),
                   Row(
                     children: [
                       Expanded(
@@ -2727,14 +3314,20 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.error,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           '-$_discountPct%',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -2778,12 +3371,20 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () async {
-                            final salePrice = _parseDouble(_salePriceC.text.trim());
-                            final originalPrice = _parseDouble(_origPriceC.text.trim());
+                            final salePrice = _parseDouble(
+                              _salePriceC.text.trim(),
+                            );
+                            final originalPrice = _parseDouble(
+                              _origPriceC.text.trim(),
+                            );
 
                             if (salePrice <= 0 || salePrice >= originalPrice) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Harga promo harus lebih kecil dari harga asli')),
+                                const SnackBar(
+                                  content: Text(
+                                    'Harga promo harus lebih kecil dari harga asli',
+                                  ),
+                                ),
                               );
                               return;
                             }
@@ -2799,18 +3400,25 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                             );
 
                             try {
-                              await Supabase.instance.client.from('products').update({
-                                'is_on_sale': true,
-                                'price': salePrice,
-                                'original_price': originalPrice,
-                              }).eq('id', _selectedProduct!.id);
+                              await Supabase.instance.client
+                                  .from('products')
+                                  .update({
+                                    'is_on_sale': true,
+                                    'price': salePrice,
+                                    'original_price': originalPrice,
+                                  })
+                                  .eq('id', _selectedProduct!.id);
                             } catch (e) {
                               debugPrint('Supabase flash sale sync notice: $e');
                             }
 
                             nav.pop();
                             messenger.showSnackBar(
-                              const SnackBar(content: Text('Produk berhasil masuk ke Flash Sale')),
+                              const SnackBar(
+                                content: Text(
+                                  'Produk berhasil masuk ke Flash Sale',
+                                ),
+                              ),
                             );
                             widget.onSaved();
                           },

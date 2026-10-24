@@ -1,0 +1,5 @@
+[functions.gemini-chat]
+verify_jwt = true
+
+[functions.provision-staff]
+verify_jwt = true

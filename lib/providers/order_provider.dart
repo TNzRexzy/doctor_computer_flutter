@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
@@ -10,9 +11,11 @@ class OrderProvider extends ChangeNotifier {
   String? _userId;
   final supabase = Supabase.instance.client;
   bool _isLoading = false;
+  String? _errorMessage;
 
   String? get userId => _userId;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
   OrderProvider() {
     final currentUserId = supabase.auth.currentUser?.id;
@@ -34,9 +37,7 @@ class OrderProvider extends ChangeNotifier {
     return [
       OrderModel(
         id: 'ORD-1001',
-        items: [
-          CartItemModel(product: mockProducts[0], quantity: 1),
-        ],
+        items: [CartItemModel(product: mockProducts[0], quantity: 1)],
         totalPrice: 15500000,
         status: OrderStatus.processing,
         orderDate: DateTime.now().subtract(const Duration(hours: 4)),
@@ -49,9 +50,7 @@ class OrderProvider extends ChangeNotifier {
       ),
       OrderModel(
         id: 'ORD-1002',
-        items: [
-          CartItemModel(product: mockProducts[1], quantity: 1),
-        ],
+        items: [CartItemModel(product: mockProducts[1], quantity: 1)],
         totalPrice: 9499000,
         status: OrderStatus.shipped,
         orderDate: DateTime.now().subtract(const Duration(days: 2)),
@@ -64,9 +63,7 @@ class OrderProvider extends ChangeNotifier {
       ),
       OrderModel(
         id: 'ORD-1003',
-        items: [
-          CartItemModel(product: mockProducts[2], quantity: 1),
-        ],
+        items: [CartItemModel(product: mockProducts[2], quantity: 1)],
         totalPrice: 18999000,
         status: OrderStatus.delivered,
         orderDate: DateTime.now().subtract(const Duration(days: 8)),
@@ -79,9 +76,7 @@ class OrderProvider extends ChangeNotifier {
       ),
       OrderModel(
         id: 'ORD-1004',
-        items: [
-          CartItemModel(product: mockProducts[3], quantity: 1),
-        ],
+        items: [CartItemModel(product: mockProducts[3], quantity: 1)],
         totalPrice: 13499000,
         status: OrderStatus.delivered,
         orderDate: DateTime.now().subtract(const Duration(days: 15)),
@@ -97,9 +92,7 @@ class OrderProvider extends ChangeNotifier {
       ),
       OrderModel(
         id: 'ORD-1005',
-        items: [
-          CartItemModel(product: mockProducts[4], quantity: 2),
-        ],
+        items: [CartItemModel(product: mockProducts[4], quantity: 2)],
         totalPrice: 4200000,
         status: OrderStatus.delivered,
         orderDate: DateTime.now().subtract(const Duration(days: 45)),
@@ -132,6 +125,10 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> reloadOrders() async {
+    await _loadOrders();
+  }
+
   Future<void> _loadOrders() async {
     _isLoading = true;
     notifyListeners();
@@ -143,7 +140,9 @@ class OrderProvider extends ChangeNotifier {
       if (cachedJson != null && cachedJson.isNotEmpty) {
         try {
           final List list = jsonDecode(cachedJson) as List;
-          _orders = list.map((item) => OrderModel.fromMap(item as Map<String, dynamic>)).toList();
+          _orders = list
+              .map((item) => OrderModel.fromMap(item as Map<String, dynamic>))
+              .toList();
           notifyListeners();
         } catch (e) {
           debugPrint('Error decoding cached orders: $e');
@@ -164,7 +163,9 @@ class OrderProvider extends ChangeNotifier {
               .order('order_date', ascending: false);
 
           if (res.isNotEmpty) {
-            _orders = res.map((data) => OrderModel.fromMap(data as Map<String, dynamic>)).toList();
+            _orders = res
+                .map((data) => OrderModel.fromMap(data as Map<String, dynamic>))
+                .toList();
             await _saveOrdersToCache();
             notifyListeners();
           } else if (_orders.isEmpty) {
@@ -176,50 +177,6 @@ class OrderProvider extends ChangeNotifier {
         } catch (e) {
           debugPrint('Supabase orders fetch notice: $e');
         }
-      }
-
-      // Apply admin status overrides
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final overridesJson = prefs.getString('admin_order_status_overrides');
-        if (overridesJson != null && overridesJson.isNotEmpty) {
-          final Map<String, dynamic> overrides = jsonDecode(overridesJson);
-          for (int i = 0; i < _orders.length; i++) {
-            final oid = _orders[i].id;
-            if (overrides.containsKey(oid)) {
-              final statusStr = overrides[oid].toString();
-              OrderStatus? newStatus;
-              for (final s in OrderStatus.values) {
-                if (s.name == statusStr) {
-                  newStatus = s;
-                  break;
-                }
-              }
-              if (newStatus != null && _orders[i].status != newStatus) {
-                final o = _orders[i];
-                _orders[i] = OrderModel(
-                  id: o.id,
-                  items: o.items,
-                  totalPrice: o.totalPrice,
-                  status: newStatus,
-                  orderDate: o.orderDate,
-                  shippingAddress: o.shippingAddress,
-                  paymentMethod: o.paymentMethod,
-                  trackingNumber: o.trackingNumber,
-                  courier: o.courier,
-                  serialNumber: o.serialNumber,
-                  warrantyDurationMonths: o.warrantyDurationMonths,
-                  rating: o.rating,
-                  reviewComment: o.reviewComment,
-                  ratedAt: o.ratedAt,
-                  reviewMediaUrls: o.reviewMediaUrls,
-                );
-              }
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Error applying order status overrides: $e');
       }
     } finally {
       _isLoading = false;
@@ -237,14 +194,21 @@ class OrderProvider extends ChangeNotifier {
 
   OrderModel? getOrderBySerial(String serial) {
     try {
-      return _orders.firstWhere((o) => o.serialNumber.toLowerCase() == serial.toLowerCase());
+      return _orders.firstWhere(
+        (o) => o.serialNumber.toLowerCase() == serial.toLowerCase(),
+      );
     } catch (_) {
       return null;
     }
   }
 
   /// Give or update rating (validates 7-day policy)
-  bool updateOrderRating(String orderId, double newRating, String comment, {List<String>? mediaUrls}) {
+  Future<bool> updateOrderRating(
+    String orderId,
+    double newRating,
+    String comment, {
+    List<String>? mediaUrls,
+  }) async {
     final index = _orders.indexWhere((o) => o.id == orderId);
     if (index < 0) return false;
 
@@ -253,143 +217,115 @@ class OrderProvider extends ChangeNotifier {
       return false;
     }
 
-    order.rating = newRating;
-    order.reviewComment = comment;
-    order.ratedAt ??= DateTime.now();
-    if (mediaUrls != null) {
-      order.reviewMediaUrls = mediaUrls;
+    try {
+      await supabase.rpc(
+        'rate_order',
+        params: {
+          'p_order_id': orderId,
+          'p_rating': newRating,
+          'p_comment': comment,
+          'p_media_urls': mediaUrls ?? <String>[],
+        },
+      );
+      order.rating = newRating;
+      order.reviewComment = comment;
+      order.ratedAt = DateTime.now();
+      order.reviewMediaUrls = mediaUrls ?? [];
+      await _saveOrdersToCache();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Rating gagal disimpan: $e';
+      debugPrint('Error saving order rating: $e');
+      return false;
     }
-
-    _saveOrdersToCache();
-    notifyListeners();
-
-    if (_userId != null) {
-      try {
-        final updateData = <String, dynamic>{
-          'rating': newRating,
-          'review_comment': comment,
-          'rated_at': DateTime.now().toIso8601String(),
-        };
-        if (mediaUrls != null) {
-          updateData['review_media_urls'] = mediaUrls;
-        }
-        supabase.from('orders').update(updateData).eq('id', orderId).then((_) {}).catchError((e) {
-          debugPrint('Error updating order rating in DB: $e');
-        });
-      } catch (e) {
-        debugPrint('Error updating order rating in DB: $e');
-      }
-    }
-
-    return true;
   }
 
   /// Admin/Cashier can update order status
   Future<bool> updateOrderStatus(String orderId, OrderStatus newStatus) async {
-    // Update in-memory
     final index = _orders.indexWhere((o) => o.id == orderId);
-    if (index >= 0) {
-      final order = _orders[index];
-      _orders[index] = OrderModel(
-        id: order.id,
-        items: order.items,
-        totalPrice: order.totalPrice,
-        status: newStatus,
-        orderDate: order.orderDate,
-        shippingAddress: order.shippingAddress,
-        paymentMethod: order.paymentMethod,
-        trackingNumber: order.trackingNumber,
-        courier: order.courier,
-        serialNumber: order.serialNumber,
-        warrantyDurationMonths: order.warrantyDurationMonths,
-        rating: order.rating,
-        reviewComment: order.reviewComment,
-        ratedAt: order.ratedAt,
-        reviewMediaUrls: order.reviewMediaUrls,
+    try {
+      await supabase.rpc(
+        'update_order_status',
+        params: {'p_order_id': orderId, 'p_status': newStatus.name},
       );
-      notifyListeners();
-    }
-
-    // Persist override in SharedPreferences
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      Map<String, dynamic> overrides = {};
-      final existingJson = prefs.getString('admin_order_status_overrides');
-      if (existingJson != null && existingJson.isNotEmpty) {
-        overrides = Map<String, dynamic>.from(jsonDecode(existingJson));
+      if (index >= 0) {
+        final order = _orders[index];
+        _orders[index] = OrderModel(
+          id: order.id,
+          items: order.items,
+          totalPrice: order.totalPrice,
+          status: newStatus,
+          orderDate: order.orderDate,
+          shippingAddress: order.shippingAddress,
+          paymentMethod: order.paymentMethod,
+          trackingNumber: order.trackingNumber,
+          courier: order.courier,
+          serialNumber: order.serialNumber,
+          warrantyDurationMonths: order.warrantyDurationMonths,
+          rating: order.rating,
+          reviewComment: order.reviewComment,
+          ratedAt: order.ratedAt,
+          reviewMediaUrls: order.reviewMediaUrls,
+        );
+        notifyListeners();
+        await _saveOrdersToCache();
       }
-      overrides[orderId] = newStatus.name;
-      await prefs.setString('admin_order_status_overrides', jsonEncode(overrides));
+      return true;
     } catch (e) {
-      debugPrint('Error saving order status override: $e');
+      _errorMessage = 'Status pesanan gagal diperbarui: $e';
+      debugPrint('Supabase order status update failed: $e');
+      return false;
     }
-
-    // Try Supabase update
-    try {
-      await supabase.from('orders').update({'status': newStatus.name}).eq('id', orderId);
-    } catch (e) {
-      debugPrint('Supabase order status update notice: $e');
-    }
-
-    await _saveOrdersToCache();
-    return true;
   }
 
-  Future<void> addOrder(OrderModel newOrder) async {
-    _orders.insert(0, newOrder);
-    notifyListeners();
-    await _saveOrdersToCache();
-
-    if (_userId != null) {
-      // 1. Try full insert with extended schema
-      final fullData = {
-        'id': newOrder.id,
-        'user_id': _userId!,
-        'total_price': newOrder.totalPrice,
-        'status': newOrder.status.name,
-        'order_date': newOrder.orderDate.toIso8601String(),
-        'shipping_address': newOrder.shippingAddress,
-        'payment_method': newOrder.paymentMethod,
-        'tracking_number': newOrder.trackingNumber,
-        'courier': newOrder.courier,
-        'serial_number': newOrder.serialNumber,
-        'warranty_months': newOrder.warrantyDurationMonths,
-        'items_summary': jsonEncode(newOrder.items.map((it) => it.toMap()).toList()),
-      };
-
-      try {
-        await supabase.from('orders').insert(fullData);
-      } catch (e) {
-        debugPrint('Full order insert notice, trying standard columns: $e');
-        try {
-          // Fallback to standard columns defined in base schema
-          await supabase.from('orders').insert({
-            'id': newOrder.id,
-            'user_id': _userId!,
-            'total_price': newOrder.totalPrice,
-            'status': newOrder.status.name,
-            'order_date': newOrder.orderDate.toIso8601String(),
-            'shipping_address': newOrder.shippingAddress,
-            'payment_method': newOrder.paymentMethod,
-          });
-        } catch (e2) {
-          debugPrint('Standard order insert notice: $e2');
-        }
+  Future<OrderModel?> addOrder(
+    OrderModel newOrder, {
+    required String shippingMethod,
+  }) async {
+    if (_userId == null) {
+      _errorMessage = 'Silakan login sebelum membuat pesanan.';
+      return null;
+    }
+    _errorMessage = null;
+    try {
+      final response = await supabase.rpc(
+        'create_customer_order',
+        params: {
+          'p_items': newOrder.items
+              .map(
+                (item) => {
+                  'product_id': item.product.id,
+                  'quantity': item.quantity,
+                },
+              )
+              .toList(),
+          'p_shipping_address': newOrder.shippingAddress,
+          'p_payment_method': newOrder.paymentMethod,
+          'p_shipping_method': shippingMethod,
+        },
+      );
+      if (response is! Map) {
+        throw const FormatException(
+          'Respons create_customer_order tidak valid.',
+        );
       }
-
-      // 2. Also try inserting into order_items table
-      for (final item in newOrder.items) {
-        try {
-          await supabase.from('order_items').insert({
-            'order_id': newOrder.id,
-            'product_id': item.product.id,
-            'quantity': item.quantity,
-            'unit_price': item.product.price,
-          });
-        } catch (e) {
-          debugPrint('Order item insert notice: $e');
-        }
+      final savedOrder = OrderModel.fromMap(
+        Map<String, dynamic>.from(response),
+      );
+      if (savedOrder.id.isEmpty) {
+        throw const FormatException(
+          'Respons create_customer_order tidak memiliki ID.',
+        );
       }
+      _orders.insert(0, savedOrder);
+      await _saveOrdersToCache();
+      notifyListeners();
+      return savedOrder;
+    } catch (e) {
+      _errorMessage = 'Pesanan gagal disimpan: $e';
+      debugPrint('create_customer_order failed: $e');
+      return null;
     }
   }
 }

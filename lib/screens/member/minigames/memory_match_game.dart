@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
-import 'package:doctor_computer/providers/blockchain_provider.dart';
-import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 
 class MemoryMatchGame extends StatefulWidget {
-  final int expReward;
-  const MemoryMatchGame({super.key, this.expReward = 150});
+  const MemoryMatchGame({super.key});
 
   @override
   State<MemoryMatchGame> createState() => _MemoryMatchGameState();
@@ -21,11 +18,7 @@ class _CardItem {
   bool isFlipped = false;
   bool isMatched = false;
 
-  _CardItem({
-    required this.id,
-    required this.title,
-    required this.icon,
-  });
+  _CardItem({required this.id, required this.title, required this.icon});
 }
 
 class _MemoryMatchGameState extends State<MemoryMatchGame> {
@@ -53,8 +46,20 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   void _startNewGame() {
     List<_CardItem> items = [];
     for (int i = 0; i < _pairs.length; i++) {
-      items.add(_CardItem(id: i, title: _pairs[i]['title'] as String, icon: _pairs[i]['icon'] as IconData));
-      items.add(_CardItem(id: i, title: _pairs[i]['title'] as String, icon: _pairs[i]['icon'] as IconData));
+      items.add(
+        _CardItem(
+          id: i,
+          title: _pairs[i]['title'] as String,
+          icon: _pairs[i]['icon'] as IconData,
+        ),
+      );
+      items.add(
+        _CardItem(
+          id: i,
+          title: _pairs[i]['title'] as String,
+          icon: _pairs[i]['icon'] as IconData,
+        ),
+      );
     }
     items.shuffle();
     setState(() {
@@ -67,7 +72,11 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   }
 
   void _onCardTap(int index) async {
-    if (_isProcessing || _isCompleted || _cards[index].isFlipped || _cards[index].isMatched) return;
+    if (_isProcessing ||
+        _isCompleted ||
+        _cards[index].isFlipped ||
+        _cards[index].isMatched)
+      return;
 
     setState(() {
       _cards[index].isFlipped = true;
@@ -115,32 +124,13 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
       _isCompleted = true;
     });
 
-    final blockchainProvider = context.read<BlockchainProvider>();
-    final auth = context.read<AuthProvider>();
-    final oldTier = blockchainProvider.currentTier;
-    final block = await blockchainProvider.addMinigameReward(
-      gameTitle: 'Memory Match Komponen PC',
-      expEarned: widget.expReward,
-      userId: auth.currentUser?.id,
-      userName: auth.currentUser?.fullName,
-    );
-    final newTier = blockchainProvider.currentTier;
-
     // Send notification
     if (mounted) {
       context.read<NotificationProvider>().addNotification(
-        title: 'Minigame Selesai: +${widget.expReward} EXP!',
-        message: 'Selamat! Blok baru (#${block.index}) telah dicatat di Blockchain dengan Hash: ${block.hash.substring(0, 10)}...',
+        title: 'Minigame selesai',
+        message: 'EXP minigame belum diberikan karena hasil permainan belum diverifikasi server.',
         type: 'minigame',
       );
-
-      if (newTier != oldTier) {
-        context.read<NotificationProvider>().addNotification(
-          title: 'Upgrade Member Tier: ${newTier.name}!',
-          message: 'Luar biasa! Akumulasi EXP Anda sekarang ${blockchainProvider.totalExp} EXP dan Tier Anda naik ke ${newTier.name}!',
-          type: 'tier_upgrade',
-        );
-      }
     }
 
     if (!mounted) return;
@@ -160,40 +150,15 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Semua kartu komponen berhasil dicocokkan dalam $_moves langkah!', style: AppTextStyles.bodyMedium),
+            Text(
+              'Semua kartu komponen berhasil dicocokkan dalam $_moves langkah!',
+              style: AppTextStyles.bodyMedium,
+            ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Reward EXP:', style: AppTextStyles.bodySmall),
-                      Text('+${widget.expReward} EXP', style: AppTextStyles.titleSmall.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Blok Dibuat:', style: AppTextStyles.bodySmall),
-                      Text('Blok #${block.index}', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text('New Hash: ${block.hash.substring(0, 16)}...', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-                  if (newTier != oldTier) ...[
-                    const Divider(),
-                    Text('TIER UPGRADE: ${newTier.name.toUpperCase()}!', style: AppTextStyles.titleSmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
-                  ],
-                ],
+            Text(
+              'EXP minigame belum diberikan karena hasil permainan belum diverifikasi server.',
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -245,7 +210,10 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                 children: [
                   Text('Langkah: $_moves', style: AppTextStyles.titleSmall),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
@@ -254,7 +222,13 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                       children: [
                         Icon(Icons.star, color: AppColors.warning, size: 16),
                         const SizedBox(width: 4),
-                        Text('+${widget.expReward} EXP', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Tanpa EXP',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -281,12 +255,16 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                         decoration: BoxDecoration(
                           color: card.isMatched
                               ? AppColors.success.withValues(alpha: 0.2)
-                              : (isRevealed ? AppColors.surface : AppColors.primary),
+                              : (isRevealed
+                                    ? AppColors.surface
+                                    : AppColors.primary),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: card.isMatched
                                 ? AppColors.success
-                                : (isRevealed ? AppColors.primary : AppColors.primaryDark),
+                                : (isRevealed
+                                      ? AppColors.primary
+                                      : AppColors.primaryDark),
                             width: 2,
                           ),
                           boxShadow: [
@@ -302,12 +280,27 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                               ? Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(card.icon, size: 36, color: card.isMatched ? AppColors.success : AppColors.primary),
+                                    Icon(
+                                      card.icon,
+                                      size: 36,
+                                      color: card.isMatched
+                                          ? AppColors.success
+                                          : AppColors.primary,
+                                    ),
                                     const SizedBox(height: 6),
-                                    Text(card.title, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
+                                    Text(
+                                      card.title,
+                                      style: AppTextStyles.caption.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ],
                                 )
-                              : const Icon(Icons.computer, color: Colors.white, size: 32),
+                              : const Icon(
+                                  Icons.computer,
+                                  color: Colors.white,
+                                  size: 32,
+                                ),
                         ),
                       ),
                     );

@@ -24,7 +24,8 @@ dependencies:
   crypto: ^3.0.7
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
-  flutter_dotenv: ^6.0.1
+  image_picker: ^1.2.4
+  cross_file: ^0.3.5+5
 
 dev_dependencies:
   flutter_test:
@@ -40,4 +41,3 @@ flutter:
 
   assets:
     - assets/images/
-    - .env

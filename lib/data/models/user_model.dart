@@ -109,27 +109,30 @@ class UserModel {
       if (t == null) return MembershipTier.bronze;
       if (t is String) {
         switch (t.toLowerCase()) {
-          case 'silver': return MembershipTier.silver;
-          case 'gold': return MembershipTier.gold;
-          case 'platinum': return MembershipTier.platinum;
-          default: return MembershipTier.bronze;
+          case 'silver':
+            return MembershipTier.silver;
+          case 'gold':
+            return MembershipTier.gold;
+          case 'platinum':
+            return MembershipTier.platinum;
+          default:
+            return MembershipTier.bronze;
         }
       }
       return MembershipTier.bronze;
     }
 
-    UserRole parseRole(dynamic r, {String? email}) {
-      if (email != null) {
-        final le = email.toLowerCase();
-        if (le == 'admin@doctorcomputer.id' || le == 'admin') return UserRole.admin;
-        if (le == 'cashier@doctorcomputer.id' || le == 'cashier') return UserRole.cashier;
-      }
+    UserRole parseRole(dynamic r) {
       if (r is String) {
         switch (r.toLowerCase()) {
-          case 'admin': return UserRole.admin;
-          case 'cashier': return UserRole.cashier;
-          case 'client': return UserRole.user;
-          default: return UserRole.user;
+          case 'admin':
+            return UserRole.admin;
+          case 'cashier':
+            return UserRole.cashier;
+          case 'client':
+            return UserRole.user;
+          default:
+            return UserRole.user;
         }
       }
       return UserRole.user;
@@ -149,7 +152,7 @@ class UserModel {
       joinDate: map['join_date'] != null
           ? (DateTime.tryParse(map['join_date'].toString()) ?? DateTime.now())
           : DateTime.now(),
-      role: parseRole(map['role'], email: emailStr),
+      role: parseRole(map['role']),
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       profileImageUrl: map['profile_image_url']?.toString(),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
@@ -42,7 +43,10 @@ class AuthProvider extends ChangeNotifier {
   /// a retried registration. Every profile read therefore goes through a plain
   /// list query capped with `.limit(1)`, so login and session restore stay
   /// deterministic even when duplicates exist.
-  Future<Map<String, dynamic>?> _fetchProfileRow({String? id, String? email}) async {
+  Future<Map<String, dynamic>?> _fetchProfileRow({
+    String? id,
+    String? email,
+  }) async {
     if (id == null && email == null) return null;
 
     try {
@@ -53,7 +57,9 @@ class AuthProvider extends ChangeNotifier {
       if (rows.isEmpty) return null;
       return Map<String, dynamic>.from(rows.first as Map);
     } on PostgrestException catch (e) {
-      debugPrint('[AuthProvider] profile lookup failed (${e.code}): ${e.message}');
+      debugPrint(
+        '[AuthProvider] profile lookup failed (${e.code}): ${e.message}',
+      );
       return null;
     } catch (e) {
       debugPrint('[AuthProvider] profile lookup failed: $e');
@@ -64,32 +70,25 @@ class AuthProvider extends ChangeNotifier {
   Future<void> restoreSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final isLoggedInFlag = prefs.getBool('is_logged_in') ?? false;
-      final cachedUserJson = prefs.getString('cached_active_user');
-
-      // 1. Instant local restore from SharedPreferences (survives browser refresh)
-      if (isLoggedInFlag && cachedUserJson != null && cachedUserJson.isNotEmpty) {
-        try {
-          final Map<String, dynamic> userMap = jsonDecode(cachedUserJson);
-          _currentUser = UserModel.fromMap(userMap);
-          _isLoggedIn = true;
-          notifyListeners();
-        } catch (e) {
-          debugPrint('Error decoding cached user in restoreSession: $e');
-        }
-      }
-
-      // 2. Sync with Supabase Auth session if available
       final supaUser = supabase.auth.currentUser;
-      if (supaUser != null) {
-        final data = await _fetchProfileRow(id: supaUser.id);
-        if (data != null) {
-          _currentUser = _mapToUserModel(data);
-          _isLoggedIn = true;
-          await _saveSessionToPrefs(_currentUser!);
-          notifyListeners();
-        }
+      if (supaUser == null) {
+        await prefs.remove('cached_active_user');
+        await prefs.setBool('is_logged_in', false);
+        return;
       }
+
+      final data = await _fetchProfileRow(id: supaUser.id);
+      if (data == null) {
+        await supabase.auth.signOut();
+        await prefs.remove('cached_active_user');
+        await prefs.setBool('is_logged_in', false);
+        return;
+      }
+
+      _currentUser = _mapToUserModel(data);
+      _isLoggedIn = true;
+      await _saveSessionToPrefs(_currentUser!);
+      notifyListeners();
     } catch (e) {
       debugPrint('restoreSession error: $e');
     }
@@ -112,62 +111,10 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      // 1. Login via Supabase Auth
-      AuthResponse? authRes;
-      try {
-        authRes = await supabase.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-      } on AuthException catch (e) {
-        debugPrint('Supabase AuthException: ${e.message}');
-        // Special fallback for Admin and Cashier accounts if Supabase Auth fails
-        if (email.toLowerCase() == 'admin@doctorcomputer.id' &&
-            (password == 'admin123' || password == 'Admin@DC2026!')) {
-          _currentUser = UserModel(
-            id: 'admin-dc-001',
-            fullName: 'Administrator Doctor Computer',
-            email: 'admin@doctorcomputer.id',
-            phone: '081234567890',
-            address: 'Doctor Computer HQ, Jakarta',
-            city: 'Jakarta',
-            membershipTier: MembershipTier.platinum,
-            points: 999999,
-            joinDate: DateTime(2026, 1, 1),
-            role: UserRole.admin,
-            profileImageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&q=80',
-          );
-          _isLoggedIn = true;
-          _isLoading = false;
-          await _saveSessionToPrefs(_currentUser!);
-          notifyListeners();
-          return true;
-        }
-
-        if (email.toLowerCase() == 'cashier@doctorcomputer.id' &&
-            (password == 'cashier123' || password == 'Cashier@DC2026!')) {
-          _currentUser = UserModel(
-            id: 'cashier-dc-001',
-            fullName: 'Kasir Toko Doctor Computer',
-            email: 'cashier@doctorcomputer.id',
-            phone: '081234567891',
-            address: 'Doctor Computer Store, Jakarta',
-            city: 'Jakarta',
-            membershipTier: MembershipTier.silver,
-            points: 1500,
-            joinDate: DateTime(2026, 1, 1),
-            role: UserRole.cashier,
-          );
-          _isLoggedIn = true;
-          _isLoading = false;
-          await _saveSessionToPrefs(_currentUser!);
-          notifyListeners();
-          return true;
-        }
-
-        _errorMessage = 'Email atau password salah';
-        return false;
-      }
+      final authRes = await supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
 
       final userId = authRes.user?.id;
       if (userId == null) {
@@ -178,43 +125,18 @@ class AuthProvider extends ChangeNotifier {
       // 2. Fetch user profile from users table: id first, then email alias.
       //    Both reads are list-based (see _fetchProfileRow) so duplicate rows
       //    can no longer trigger a PostgREST coercion failure during login.
-      final data = await _fetchProfileRow(id: userId) ??
+      final data =
+          await _fetchProfileRow(id: userId) ??
           await _fetchProfileRow(email: authRes.user?.email ?? email);
 
       if (data == null) {
-        // User authenticated but no profile row yet - create one
-        try {
-          await supabase.from('users').insert({
-            'id': userId,
-            'full_name': authRes.user?.email?.split('@').first ?? 'User',
-            'email': authRes.user?.email ?? email,
-            'phone': '',
-            'address': '',
-            'city': '',
-            'membership_tier': 'bronze',
-            'points': 0,
-            'join_date': DateTime.now().toIso8601String(),
-          });
-        } catch (e) {
-          debugPrint('Notice inserting profile: $e');
-        }
-
-        _currentUser = UserModel(
-          id: userId,
-          fullName: authRes.user?.email?.split('@').first ?? 'User',
-          email: authRes.user?.email ?? email,
-          phone: '',
-          address: '',
-          city: '',
-          membershipTier: MembershipTier.bronze,
-          points: 0,
-          joinDate: DateTime.now(),
-          role: _parseUserRole(null, email: email),
-        );
-      } else {
-        _currentUser = _mapToUserModel(data);
+        await supabase.auth.signOut();
+        _errorMessage =
+            'Profil akun tidak ditemukan. Silakan hubungi administrator.';
+        return false;
       }
 
+      _currentUser = _mapToUserModel(data);
       _isLoggedIn = true;
       await _saveSessionToPrefs(_currentUser!);
 
@@ -222,7 +144,10 @@ class AuthProvider extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         final walletKey = 'blockchain_wallet_$userId';
         if (!prefs.containsKey(walletKey)) {
-          final initialWallet = UserWallet(userId: userId, userName: _currentUser?.fullName ?? 'User');
+          final initialWallet = UserWallet(
+            userId: userId,
+            userName: _currentUser?.fullName ?? 'User',
+          );
           await prefs.setString(walletKey, jsonEncode(initialWallet.toMap()));
         }
       } catch (e) {
@@ -230,7 +155,10 @@ class AuthProvider extends ChangeNotifier {
       }
 
       return true;
-
+    } on AuthException catch (e) {
+      _errorMessage = e.message;
+      debugPrint('Login AuthException: ${e.message}');
+      return false;
     } on PostgrestException catch (e) {
       _errorMessage = e.message;
       debugPrint('Login PostgrestException: ${e.message}');
@@ -263,6 +191,7 @@ class AuthProvider extends ChangeNotifier {
       final authRes = await supabase.auth.signUp(
         email: email,
         password: password,
+        data: {'full_name': name, 'phone': phone},
       );
 
       final userId = authRes.user?.id;
@@ -271,59 +200,29 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      // 2. Insert user profile into users table
-      final insertData = {
-        'id': userId,
-        'full_name': name,
-        'email': email,
-        'phone': phone,
-        'address': '',
-        'city': '',
-        'membership_tier': 'bronze',
-        'points': 0,
-        'join_date': DateTime.now().toIso8601String(),
-      };
+      if (authRes.session != null) {
+        final profile = await _fetchProfileRow(id: userId);
+        if (profile == null) {
+          await supabase.auth.signOut();
+          _errorMessage = 'Registrasi berhasil, tetapi profil belum tersedia. Silakan login kembali.';
+          return false;
+        }
+        _currentUser = _mapToUserModel(profile);
+        _isLoggedIn = true;
+        await _saveSessionToPrefs(_currentUser!);
 
-      try {
-        await supabase.from('users').insert(insertData);
-      } catch (e) {
-        debugPrint('Notice inserting profile on register: $e');
-      }
-
-      _currentUser = UserModel(
-        id: userId,
-        fullName: name,
-        email: email,
-        phone: phone,
-        address: '',
-        city: '',
-        membershipTier: MembershipTier.bronze,
-        points: 0,
-        joinDate: DateTime.now(),
-        role: UserRole.user,
-      );
-      _isLoggedIn = true;
-      await _saveSessionToPrefs(_currentUser!);
-
-      // Genesis Block
-      try {
         final prefs = await SharedPreferences.getInstance();
         final walletKey = 'blockchain_wallet_$userId';
-        final initialWallet = UserWallet(userId: userId, userName: name);
-        await prefs.setString(walletKey, jsonEncode(initialWallet.toMap()));
-
-        if (initialWallet.blockchain.isNotEmpty) {
-          final genesis = initialWallet.blockchain.first;
-          await supabase.from('blockchain_blocks').insert(genesis.toDbMap(userId));
+        if (!prefs.containsKey(walletKey)) {
+          final initialWallet = UserWallet(userId: userId, userName: name);
+          await prefs.setString(walletKey, jsonEncode(initialWallet.toMap()));
         }
-      } catch (e) {
-        debugPrint('Error creating genesis block: $e');
       }
 
       return true;
-
     } on AuthException catch (e) {
-      if (e.statusCode == '422' || e.message.toLowerCase().contains('already registered')) {
+      if (e.statusCode == '422' ||
+          e.message.toLowerCase().contains('already registered')) {
         _errorMessage = 'Email ini sudah terdaftar. Silakan login.';
       } else {
         _errorMessage = e.message;
@@ -377,16 +276,16 @@ class AuthProvider extends ChangeNotifier {
 
       if (latitude != null) updates['latitude'] = latitude;
       if (longitude != null) updates['longitude'] = longitude;
-      if (profileImageUrl != null) updates['profile_image_url'] = profileImageUrl;
-
-      try {
-        await supabase
-            .from('users')
-            .update(updates)
-            .eq('id', currentUserId);
-      } catch (e) {
-        debugPrint('Notice updating profile table: $e');
+      if (profileImageUrl != null) {
+        updates['profile_image_url'] = profileImageUrl;
       }
+
+      await supabase
+          .from('users')
+          .update(updates)
+          .eq('id', currentUserId)
+          .select()
+          .single();
 
       _currentUser = _currentUser?.copyWith(
         fullName: name,
@@ -428,17 +327,15 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      try {
-        await supabase
-            .from('users')
-            .update({
-              'profile_image_url': imageUrl,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', currentUserId);
-      } catch (e) {
-        debugPrint('Notice saving profile_image_url to DB: $e');
-      }
+      await supabase
+          .from('users')
+          .update({
+            'profile_image_url': imageUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', currentUserId)
+          .select()
+          .single();
 
       _currentUser = _currentUser?.copyWith(profileImageUrl: imageUrl);
       if (_currentUser != null) {
@@ -470,18 +367,16 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      try {
-        await supabase
-            .from('users')
-            .update({
-              'latitude': lat,
-              'longitude': lng,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', currentUserId);
-      } catch (e) {
-        debugPrint('Notice saving location to DB: $e');
-      }
+      await supabase
+          .from('users')
+          .update({
+            'latitude': lat,
+            'longitude': lng,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', currentUserId)
+          .select()
+          .single();
 
       _currentUser = _currentUser?.copyWith(latitude: lat, longitude: lng);
       if (_currentUser != null) {
@@ -511,53 +406,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateUserAsAdmin(String userId, Map<String, dynamic> updates) async {
+  Future<bool> updateUserAsAdmin(
+    String userId,
+    Map<String, dynamic> updates,
+  ) async {
     try {
-      await supabase.from('users').update(updates).eq('id', userId);
-      return true;
+      final result = await supabase.rpc(
+        'admin_update_user',
+        params: {
+          'p_user_id': userId,
+          'p_full_name': updates['full_name']?.toString() ?? '',
+          'p_points': (updates['points'] as num?)?.toInt() ?? 0,
+          'p_role': updates['role']?.toString() ?? 'client',
+          'p_membership_tier':
+              updates['membership_tier']?.toString() ?? 'bronze',
+        },
+      );
+      return result is Map;
     } catch (e) {
       debugPrint('Admin update error: $e');
       return false;
-    }
-  }
-
-  /// Ensures Admin and Cashier accounts are ready.
-  Future<void> ensureAdminAccount() async {
-    try {
-      // 1. Check if admin exists in Supabase Auth
-      try {
-        await supabase.auth.signUp(
-          email: 'admin@doctorcomputer.id',
-          password: 'Admin@DC2026!',
-        );
-      } catch (_) {}
-
-      // 2. Check if cashier exists in Supabase Auth
-      try {
-        await supabase.auth.signUp(
-          email: 'cashier@doctorcomputer.id',
-          password: 'Cashier@DC2026!',
-        );
-      } catch (_) {}
-
-      // 3. Make sure admin row exists in users table
-      final adminRow = await _fetchProfileRow(email: 'admin@doctorcomputer.id');
-
-      if (adminRow == null) {
-        await supabase.from('users').insert({
-          'id': 'admin-dc-001',
-          'full_name': 'Administrator',
-          'email': 'admin@doctorcomputer.id',
-          'phone': '081234567890',
-          'address': 'Doctor Computer HQ',
-          'city': 'Jakarta',
-          'membership_tier': 'platinum',
-          'points': 99999,
-          'join_date': DateTime.now().toIso8601String(),
-        });
-      }
-    } catch (e) {
-      debugPrint('ensureAdminAccount notice: $e');
     }
   }
 
@@ -586,30 +454,5 @@ class AuthProvider extends ChangeNotifier {
   // ============================================
   UserModel _mapToUserModel(Map<String, dynamic> data) {
     return UserModel.fromMap(data);
-  }
-
-  UserRole _parseUserRole(dynamic role, {String? email}) {
-    if (email != null) {
-      final lowerEmail = email.toLowerCase();
-      if (lowerEmail == 'admin@doctorcomputer.id' || lowerEmail == 'admin') {
-        return UserRole.admin;
-      }
-      if (lowerEmail == 'cashier@doctorcomputer.id' || lowerEmail == 'cashier') {
-        return UserRole.cashier;
-      }
-    }
-    if (role == null) return UserRole.user;
-    if (role is String) {
-      switch (role.toLowerCase()) {
-        case 'admin':
-          return UserRole.admin;
-        case 'cashier':
-          return UserRole.cashier;
-        case 'user':
-        default:
-          return UserRole.user;
-      }
-    }
-    return UserRole.user;
   }
 }

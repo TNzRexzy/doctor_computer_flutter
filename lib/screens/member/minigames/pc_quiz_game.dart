@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
-import 'package:doctor_computer/providers/blockchain_provider.dart';
-import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 
 class PcQuizGame extends StatefulWidget {
-  final int expReward;
-  const PcQuizGame({super.key, this.expReward = 120});
+  const PcQuizGame({super.key});
 
   @override
   State<PcQuizGame> createState() => _PcQuizGameState();
@@ -41,7 +38,12 @@ class _PcQuizGameState extends State<PcQuizGame> {
     },
     {
       'question': 'Komponen pendingin manakah yang menggunakan pompa sirkulasi cairan untuk meredam panas prosesor?',
-      'options': ['Air Cooler', 'AIO Liquid Cooler', 'Heatsink Pasif', 'Thermal Pad'],
+      'options': [
+        'Air Cooler',
+        'AIO Liquid Cooler',
+        'Heatsink Pasif',
+        'Thermal Pad',
+      ],
       'correct': 1,
       'explanation': 'AIO (All-in-One) Liquid Cooler menggunakan radiator, pipa, cairan coolant, dan pompa air.',
     },
@@ -73,31 +75,13 @@ class _PcQuizGameState extends State<PcQuizGame> {
   Future<void> _finishQuiz() async {
     final passed = _score >= 2;
     if (passed) {
-      final blockchainProvider = context.read<BlockchainProvider>();
-      final auth = context.read<AuthProvider>();
-      final oldTier = blockchainProvider.currentTier;
-      final block = await blockchainProvider.addMinigameReward(
-        gameTitle: 'Kuis Perakitan PC',
-        expEarned: widget.expReward,
-        userId: auth.currentUser?.id,
-        userName: auth.currentUser?.fullName,
-      );
-      final newTier = blockchainProvider.currentTier;
-
       if (mounted) {
         context.read<NotificationProvider>().addNotification(
-          title: 'Kuis PC Selesai: +${widget.expReward} EXP!',
-          message: 'Skor Anda $_score/${_questions.length}. Blok #${block.index} berhasil ditambang di Blockchain!',
+          title: 'Kuis PC selesai',
+          message:
+              'Skor Anda $_score/${_questions.length}. EXP belum diberikan sebelum hasil diverifikasi server.',
           type: 'minigame',
         );
-
-        if (newTier != oldTier) {
-          context.read<NotificationProvider>().addNotification(
-            title: 'Upgrade Member Tier: ${newTier.name}!',
-            message: 'Tier Anda naik ke ${newTier.name} berkat EXP kuis PC!',
-            type: 'tier_upgrade',
-          );
-        }
       }
 
       if (!mounted) return;
@@ -111,22 +95,15 @@ class _PcQuizGameState extends State<PcQuizGame> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Skor Anda: $_score dari ${_questions.length} soal benar!', style: AppTextStyles.bodyMedium),
+              Text(
+                'Skor Anda: $_score dari ${_questions.length} soal benar!',
+                style: AppTextStyles.bodyMedium,
+              ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.success),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Reward: +${widget.expReward} EXP', style: AppTextStyles.titleSmall.copyWith(color: AppColors.success)),
-                    Text('Blok Blockchain #${block.index}', style: AppTextStyles.caption),
-                    Text('Hash: ${block.hash.substring(0, 16)}...', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-                  ],
+              Text(
+                'EXP belum diberikan sebelum hasil kuis diverifikasi server.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -147,7 +124,7 @@ class _PcQuizGameState extends State<PcQuizGame> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Coba Lagi!'),
-          content: Text('Skor Anda $_score/${_questions.length}. Anda perlu minimal 2 jawaban benar untuk mendapatkan EXP.'),
+          content: Text('Skor Anda $_score/${_questions.length}.'),
           actions: [
             TextButton(
               onPressed: () {
@@ -187,8 +164,16 @@ class _PcQuizGameState extends State<PcQuizGame> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Soal ${_currentIndex + 1} dari ${_questions.length}', style: AppTextStyles.titleSmall),
-                  Text('Skor: $_score', style: AppTextStyles.titleSmall.copyWith(color: AppColors.primary)),
+                  Text(
+                    'Soal ${_currentIndex + 1} dari ${_questions.length}',
+                    style: AppTextStyles.titleSmall,
+                  ),
+                  Text(
+                    'Skor: $_score',
+                    style: AppTextStyles.titleSmall.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -240,11 +225,19 @@ class _PcQuizGameState extends State<PcQuizGame> {
                             backgroundColor: borderColor.withValues(alpha: 0.2),
                             child: Text(
                               String.fromCharCode(65 + idx),
-                              style: TextStyle(color: borderColor, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: borderColor,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Expanded(child: Text(optionText, style: AppTextStyles.bodyMedium)),
+                          Expanded(
+                            child: Text(
+                              optionText,
+                              style: AppTextStyles.bodyMedium,
+                            ),
+                          ),
                           if (_answered && isCorrect)
                             Icon(Icons.check_circle, color: AppColors.success)
                           else if (_answered && isSelected && !isCorrect)
@@ -262,11 +255,15 @@ class _PcQuizGameState extends State<PcQuizGame> {
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Text(
                     'Info: ${q['explanation']}',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
                 const Spacer(),
@@ -279,8 +276,13 @@ class _PcQuizGameState extends State<PcQuizGame> {
                     ),
                     onPressed: _nextQuestion,
                     child: Text(
-                      _currentIndex < _questions.length - 1 ? 'Soal Berikutnya' : 'Selesai & Klaim EXP',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      _currentIndex < _questions.length - 1
+                          ? 'Soal Berikutnya'
+                          : 'Selesai & Klaim EXP',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),

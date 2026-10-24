@@ -25,28 +25,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 3. Kebijakan Row Level Security (RLS) agar user dapat membaca dan membuat order sendiri
+-- 3. Enable RLS. The hardened policies are installed by
+-- 20261024_harden_client_access.sql after staff role helpers exist.
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-
--- Policy untuk tabel orders (baca & tambah pesanan)
-CREATE POLICY IF NOT EXISTS "User can view their own orders" 
-  ON orders FOR SELECT 
-  USING (true);
-
-CREATE POLICY IF NOT EXISTS "User can create orders" 
-  ON orders FOR INSERT 
-  WITH CHECK (true);
-
-CREATE POLICY IF NOT EXISTS "User can update their own orders" 
-  ON orders FOR UPDATE 
-  USING (true);
-
--- Policy untuk tabel order_items (baca & tambah item)
-CREATE POLICY IF NOT EXISTS "User can view order items" 
-  ON order_items FOR SELECT 
-  USING (true);
-
-CREATE POLICY IF NOT EXISTS "User can create order items" 
-  ON order_items FOR INSERT 
-  WITH CHECK (true);

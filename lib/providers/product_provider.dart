@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
@@ -34,8 +35,10 @@ class ProductProvider extends ChangeNotifier {
     _loadData();
   }
 
-  List<CategoryModel> get categories => _categories.isNotEmpty ? _categories : mockCategories;
-  List<ProductModel> get allProducts => _allProducts.isNotEmpty ? _allProducts : mockProducts;
+  List<CategoryModel> get categories =>
+      _categories.isNotEmpty ? _categories : mockCategories;
+  List<ProductModel> get allProducts =>
+      _allProducts.isNotEmpty ? _allProducts : mockProducts;
   String get searchQuery => _searchQuery;
   String get sortBy => _sortBy;
   bool get isLoading => _isLoading;
@@ -57,11 +60,13 @@ class ProductProvider extends ChangeNotifier {
       result = result.where((p) {
         if (p.categoryId == _selectedCategoryId) return true;
         final selectedCat = categories.cast<CategoryModel?>().firstWhere(
-              (c) => c?.id == _selectedCategoryId,
-              orElse: () => null,
-            );
+          (c) => c?.id == _selectedCategoryId,
+          orElse: () => null,
+        );
         if (selectedCat != null) {
-          return p.categoryId.toLowerCase().contains(selectedCat.name.toLowerCase()) ||
+          return p.categoryId.toLowerCase().contains(
+                selectedCat.name.toLowerCase(),
+              ) ||
               p.name.toLowerCase().contains(selectedCat.name.toLowerCase());
         }
         return false;
@@ -70,16 +75,21 @@ class ProductProvider extends ChangeNotifier {
 
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
-      result = result.where((p) =>
-          p.name.toLowerCase().contains(query) ||
-          p.brand.toLowerCase().contains(query) ||
-          p.description.toLowerCase().contains(query)
-      ).toList();
+      result = result
+          .where(
+            (p) =>
+                p.name.toLowerCase().contains(query) ||
+                p.brand.toLowerCase().contains(query) ||
+                p.description.toLowerCase().contains(query),
+          )
+          .toList();
     }
 
-    result = result.where((p) =>
-        p.price >= _priceRange.start && p.price <= _priceRange.end
-    ).toList();
+    result = result
+        .where(
+          (p) => p.price >= _priceRange.start && p.price <= _priceRange.end,
+        )
+        .toList();
 
     if (_selectedBrands.isNotEmpty) {
       result = result.where((p) => _selectedBrands.contains(p.brand)).toList();
@@ -134,7 +144,9 @@ class ProductProvider extends ChangeNotifier {
       final List catsRes = await supabase.from('categories').select();
       final List prodsRes = await supabase.from('products').select();
 
-      debugPrint('Supabase categories count: ${catsRes.length}, products count: ${prodsRes.length}');
+      debugPrint(
+        'Supabase categories count: ${catsRes.length}, products count: ${prodsRes.length}',
+      );
 
       if (catsRes.isNotEmpty) {
         _categories = catsRes.map((c) {
@@ -142,7 +154,9 @@ class ProductProvider extends ChangeNotifier {
             id: c['id']?.toString() ?? '',
             name: c['name']?.toString() ?? '',
             nameId: c['name_id']?.toString() ?? c['name']?.toString() ?? '',
-            icon: _mapIcon(c['icon']?.toString() ?? c['name']?.toString() ?? ''),
+            icon: _mapIcon(
+              c['icon']?.toString() ?? c['name']?.toString() ?? '',
+            ),
             productCount: (c['product_count'] as num? ?? 0).toInt(),
           );
         }).toList();
@@ -166,7 +180,9 @@ class ProductProvider extends ChangeNotifier {
 
           Map<String, String> specsMap = {};
           if (p['specs'] is Map) {
-            specsMap = (p['specs'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
+            specsMap = (p['specs'] as Map).map(
+              (k, v) => MapEntry(k.toString(), v.toString()),
+            );
           }
 
           final price = (p['price'] as num?)?.toDouble() ?? 0.0;
@@ -177,9 +193,14 @@ class ProductProvider extends ChangeNotifier {
             id: id,
             name: p['name']?.toString() ?? '',
             description: p['description']?.toString() ?? '',
-            descriptionId: p['description_id']?.toString() ?? p['description']?.toString() ?? '',
+            descriptionId:
+                p['description_id']?.toString() ??
+                p['description']?.toString() ??
+                '',
             price: price,
-            originalPrice: origPrice != null && origPrice > 0 ? origPrice : null,
+            originalPrice: origPrice != null && origPrice > 0
+                ? origPrice
+                : null,
             categoryId: p['category_id']?.toString() ?? '',
             brand: p['brand']?.toString() ?? 'Generic',
             images: images,
@@ -188,7 +209,9 @@ class ProductProvider extends ChangeNotifier {
             reviewCount: (p['review_count'] as num?)?.toInt() ?? 10,
             stock: (p['stock'] as num?)?.toInt() ?? 10,
             isNew: p['is_new'] as bool? ?? false,
-            isOnSale: p['is_on_sale'] as bool? ?? (origPrice != null && origPrice > price),
+            isOnSale:
+                p['is_on_sale'] as bool? ??
+                (origPrice != null && origPrice > price),
           );
         }
       } else {
@@ -227,9 +250,13 @@ class ProductProvider extends ChangeNotifier {
                 stock: (overMap['stock'] as num?)?.toInt() ?? existing.stock,
                 isOnSale: overMap['is_on_sale'] as bool? ?? existing.isOnSale,
                 brand: overMap['brand']?.toString() ?? existing.brand,
-                categoryId: overMap['category_id']?.toString() ?? existing.categoryId,
-                description: overMap['description']?.toString() ?? existing.description,
-                descriptionId: overMap['description']?.toString() ?? existing.descriptionId,
+                categoryId:
+                    overMap['category_id']?.toString() ?? existing.categoryId,
+                description:
+                    overMap['description']?.toString() ?? existing.description,
+                descriptionId:
+                    overMap['description']?.toString() ??
+                    existing.descriptionId,
               );
             }
           }
@@ -272,12 +299,19 @@ class ProductProvider extends ChangeNotifier {
   // ADMIN & CASHIER PRODUCT MANAGEMENT
   // ============================================================
 
-  /// Adds a new product to the catalog, caches locally, and syncs to Supabase.
+  /// Adds a catalog product in Supabase before updating the local display cache.
   Future<bool> addProduct(ProductModel product) async {
+    final savedProduct = await supabase
+        .from('products')
+        .insert(product.toMap())
+        .select('id, image_url')
+        .single();
+    _verifySavedImages(savedProduct, product);
+
+    _allProducts.removeWhere((existing) => existing.id == product.id);
     _allProducts.insert(0, product);
     notifyListeners();
 
-    // 1. Save to SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
       List<dynamic> customList = [];
@@ -292,18 +326,23 @@ class ProductProvider extends ChangeNotifier {
       debugPrint('Error caching new product: $e');
     }
 
-    // 2. Sync to Supabase products table
-    try {
-      await supabase.from('products').insert(product.toMap());
-    } catch (e) {
-      debugPrint('Supabase add product notice: $e');
-    }
-
     return true;
   }
 
   /// Updates an existing product details, price, stock, or flash sale status.
   Future<bool> updateProduct(ProductModel product) async {
+    final updatedRows = await supabase
+        .from('products')
+        .update(product.toMap())
+        .eq('id', product.id)
+        .select('id, image_url');
+    if (updatedRows.isEmpty) {
+      throw StateError(
+        'Produk tidak ditemukan atau perubahan tidak diizinkan.',
+      );
+    }
+    _verifySavedImages(updatedRows.first, product);
+
     final index = _allProducts.indexWhere((p) => p.id == product.id);
     if (index != -1) {
       _allProducts[index] = product;
@@ -326,14 +365,27 @@ class ProductProvider extends ChangeNotifier {
       debugPrint('Error caching product update: $e');
     }
 
-    // 2. Sync to Supabase products table
-    try {
-      await supabase.from('products').update(product.toMap()).eq('id', product.id);
-    } catch (e) {
-      debugPrint('Supabase update product notice: $e');
-    }
-
     return true;
+  }
+
+  void _verifySavedImages(Map<String, dynamic> savedRow, ProductModel product) {
+    final savedImages = savedRow['image_url'];
+    final images = savedImages is List
+        ? savedImages.map((image) => image.toString()).toList()
+        : savedImages is String && savedImages.isNotEmpty
+        ? [savedImages]
+        : <String>[];
+
+    if (images.length != product.images.length ||
+        !List.generate(
+          images.length,
+          (index) => images[index] == product.images[index],
+        ).every((matches) => matches)) {
+      throw StateError(
+        'Database tidak menyimpan URL foto produk. Periksa tipe kolom '
+        'products.image_url di Supabase.',
+      );
+    }
   }
 
   /// Toggles Flash Sale on a product with optional sale price and original price.
@@ -375,12 +427,12 @@ class ProductProvider extends ChangeNotifier {
     return await updateProduct(updated);
   }
 
-  /// Deletes a product from local memory, cache, and Supabase.
+  /// Deletes a product from Supabase before removing it from local caches.
   Future<bool> deleteProduct(String productId) async {
+    await supabase.from('products').delete().eq('id', productId);
     _allProducts.removeWhere((p) => p.id == productId);
     notifyListeners();
 
-    // 1. Update SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
       // Remove from custom products
@@ -404,51 +456,7 @@ class ProductProvider extends ChangeNotifier {
       debugPrint('Error updating deleted products cache: $e');
     }
 
-    // 2. Sync to Supabase
-    try {
-      await supabase.from('products').delete().eq('id', productId);
-    } catch (e) {
-      debugPrint('Supabase delete product notice: $e');
-    }
-
     return true;
-  }
-
-  /// Decrements stock for a product after purchase
-  Future<void> decrementStock(String productId, int quantity) async {
-    final index = _allProducts.indexWhere((p) => p.id == productId);
-    if (index == -1) return;
-
-    final product = _allProducts[index];
-    final newStock = (product.stock - quantity).clamp(0, 999999);
-    final updated = product.copyWith(stock: newStock);
-    _allProducts[index] = updated;
-    notifyListeners();
-
-    // 1. Update SharedPreferences overrides
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      Map<String, dynamic> overrides = {};
-      final existingJson = prefs.getString(_prefProductOverridesKey);
-      if (existingJson != null && existingJson.isNotEmpty) {
-        overrides = Map<String, dynamic>.from(jsonDecode(existingJson));
-      }
-      final currentMap = overrides[productId] != null
-          ? Map<String, dynamic>.from(overrides[productId] as Map)
-          : updated.toMap();
-      currentMap['stock'] = newStock;
-      overrides[productId] = currentMap;
-      await prefs.setString(_prefProductOverridesKey, jsonEncode(overrides));
-    } catch (e) {
-      debugPrint('Error caching stock decrement: $e');
-    }
-
-    // 2. Sync to Supabase
-    try {
-      await supabase.from('products').update({'stock': newStock}).eq('id', productId);
-    } catch (e) {
-      debugPrint('Supabase stock decrement notice: $e');
-    }
   }
 
   /// Updates Flash Sale end time in real-time and persists it across sessions.
@@ -459,7 +467,10 @@ class ProductProvider extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefFlashSaleEndTimeKey, newEndTime.toIso8601String());
+      await prefs.setString(
+        _prefFlashSaleEndTimeKey,
+        newEndTime.toIso8601String(),
+      );
       await prefs.setBool(_prefFlashSaleActiveKey, _isFlashSaleActive);
     } catch (e) {
       debugPrint('Error saving flash sale timer settings: $e');
@@ -482,13 +493,17 @@ class ProductProvider extends ChangeNotifier {
   IconData _mapIcon(String iconName) {
     final lower = iconName.toLowerCase();
     if (lower.contains('laptop')) return Icons.laptop_mac;
-    if (lower.contains('desktop') || lower.contains('periph')) return Icons.desktop_windows;
+    if (lower.contains('desktop') || lower.contains('periph'))
+      return Icons.desktop_windows;
     if (lower.contains('monitor')) return Icons.monitor;
     if (lower.contains('keyboard')) return Icons.keyboard;
     if (lower.contains('mouse')) return Icons.mouse;
-    if (lower.contains('headset') || lower.contains('audio')) return Icons.headset;
-    if (lower.contains('storage') || lower.contains('ssd')) return Icons.storage;
-    if (lower.contains('router') || lower.contains('network')) return Icons.router;
+    if (lower.contains('headset') || lower.contains('audio'))
+      return Icons.headset;
+    if (lower.contains('storage') || lower.contains('ssd'))
+      return Icons.storage;
+    if (lower.contains('router') || lower.contains('network'))
+      return Icons.router;
     if (lower.contains('cpu')) return Icons.memory;
     if (lower.contains('gpu')) return Icons.videogame_asset;
     if (lower.contains('motherboard')) return Icons.developer_board;

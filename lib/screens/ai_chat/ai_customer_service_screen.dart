@@ -7,7 +7,8 @@ class AiCustomerServiceScreen extends StatefulWidget {
   const AiCustomerServiceScreen({super.key});
 
   @override
-  State<AiCustomerServiceScreen> createState() => _AiCustomerServiceScreenState();
+  State<AiCustomerServiceScreen> createState() =>
+      _AiCustomerServiceScreenState();
 }
 
 class _ChatMessage {
@@ -15,11 +16,7 @@ class _ChatMessage {
   final bool isUser;
   final DateTime time;
 
-  _ChatMessage({
-    required this.text,
-    required this.isUser,
-    required this.time,
-  });
+  _ChatMessage({required this.text, required this.isUser, required this.time});
 }
 
 class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
@@ -47,7 +44,13 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
   @override
   void initState() {
     super.initState();
-    GeminiService().loadApiKeyFromDb();
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _sendMessage([String? presetText]) async {
@@ -59,23 +62,30 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
     }
 
     setState(() {
-      _messages.add(_ChatMessage(text: text, isUser: true, time: DateTime.now()));
+      _messages.add(
+        _ChatMessage(text: text, isUser: true, time: DateTime.now()),
+      );
       _isLoading = true;
     });
 
     _scrollToBottom();
 
     // Prepare history for Gemini
-    final history = _messages.take(_messages.length - 1).map((m) => {
-      'role': m.isUser ? 'user' : 'model',
-      'text': m.text,
-    }).toList();
+    final history = _messages
+        .take(_messages.length - 1)
+        .map((m) => {'role': m.isUser ? 'user' : 'model', 'text': m.text})
+        .toList();
 
-    final reply = await GeminiService().getCustomerServiceResponse(text, history);
+    final reply = await GeminiService().getCustomerServiceResponse(
+      text,
+      history,
+    );
 
     if (!mounted) return;
     setState(() {
-      _messages.add(_ChatMessage(text: reply, isUser: false, time: DateTime.now()));
+      _messages.add(
+        _ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+      );
       _isLoading = false;
     });
 
@@ -94,51 +104,6 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
     });
   }
 
-  void _showApiKeyDialog() {
-    final keyController = TextEditingController(text: GeminiService().apiKey);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Pengaturan Gemini API Key'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Masukkan Google Gemini API Key Anda untuk menghubungkan ke model cloud Gemini 1.5 Flash. Jika kosong, sistem otomatis memakai Doctor Computer AI Engine lokal.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: keyController,
-              decoration: const InputDecoration(
-                hintText: 'AIzaSy...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () {
-              GeminiService().apiKey = keyController.text.trim();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Gemini API Key berhasil disimpan!')),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -155,21 +120,20 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Dokter PC AI Assistant', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('Online • AI Assistant', style: TextStyle(fontSize: 11, color: AppColors.accent)),
+                const Text(
+                  'Dokter PC AI Assistant',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Online • AI Assistant',
+                  style: TextStyle(fontSize: 11, color: AppColors.accent),
+                ),
               ],
             ),
           ],
         ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.key),
-            tooltip: 'Konfigurasi Gemini API Key',
-            onPressed: _showApiKeyDialog,
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -185,9 +149,14 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
                 separatorBuilder: (context, index) => const SizedBox(width: 8),
                 itemBuilder: (context, idx) {
                   return ActionChip(
-                    label: Text(_quickPrompts[idx], style: const TextStyle(fontSize: 12)),
+                    label: Text(
+                      _quickPrompts[idx],
+                      style: const TextStyle(fontSize: 12),
+                    ),
                     backgroundColor: AppColors.surface,
-                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.3)),
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                    ),
                     onPressed: () => _sendMessage(_quickPrompts[idx]),
                   );
                 },
@@ -217,10 +186,18 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
                     SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    Text('Dokter AI sedang mengetik...', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                    Text(
+                      'Dokter AI sedang mengetik...',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -268,7 +245,9 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
       alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.8,
+        ),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: msg.isUser ? AppColors.primary : AppColors.surface,
@@ -278,7 +257,9 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
             bottomLeft: Radius.circular(msg.isUser ? 16 : 0),
             bottomRight: Radius.circular(msg.isUser ? 0 : 16),
           ),
-          border: msg.isUser ? null : Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+          border: msg.isUser
+              ? null
+              : Border.all(color: AppColors.border.withValues(alpha: 0.5)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -296,7 +277,13 @@ class _AiCustomerServiceScreenState extends State<AiCustomerServiceScreen> {
                 children: [
                   Icon(Icons.smart_toy, size: 14, color: AppColors.primary),
                   const SizedBox(width: 4),
-                  Text('Dokter AI', style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  Text(
+                    'Dokter AI',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             if (!msg.isUser) const SizedBox(height: 4),

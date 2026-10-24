@@ -5,13 +5,10 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/core/constants/app_constants.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
-import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
-import 'dart:math';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
-import 'package:doctor_computer/providers/blockchain_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
@@ -82,7 +79,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Alamat dari peta berhasil dipilih dan tersimpan ke database!'),
+            content: const Text(
+              'Alamat dari peta berhasil dipilih dan tersimpan ke database!',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -94,80 +93,53 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() {
       _isProcessing = true;
     });
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() {
-      _isProcessing = false;
-    });
-    
-    if (!mounted) return;
-    final randomDigits = Random().nextInt(900000) + 100000;
-    final orderId = 'DC-$randomDigits';
-    final serial = 'SN-DC2026-$randomDigits';
     final cart = context.read<CartProvider>();
     final shipping = AppConstants.shippingMethods[_selectedShipping];
     final payment = AppConstants.paymentMethods[_selectedPayment];
-    final fullAddress = '${_addressController.text.trim()}, ${_cityController.text.trim()} ${_postalController.text.trim()}';
+    final fullAddress =
+        '${_addressController.text.trim()}, ${_cityController.text.trim()} ${_postalController.text.trim()}';
 
-    // 1. Create order in OrderProvider
-    final newOrder = OrderModel(
-      id: orderId,
+    final orderRequest = OrderModel(
+      id: '',
       items: List<CartItemModel>.from(cart.items),
       totalPrice: cart.totalPrice + (shipping['price'] as double),
       status: OrderStatus.processing,
       orderDate: DateTime.now(),
-      shippingAddress: fullAddress.isNotEmpty ? fullAddress : 'Jl. Merdeka No 1, Jakarta',
+      shippingAddress: fullAddress.isNotEmpty
+          ? fullAddress
+          : 'Jl. Merdeka No 1, Jakarta',
       paymentMethod: payment,
-      trackingNumber: 'JNE-$randomDigits',
       courier: '${shipping['name']} (${shipping['days']} hari)',
-      serialNumber: serial,
       warrantyDurationMonths: 24,
     );
-    context.read<OrderProvider>().addOrder(newOrder);
-
-    // Decrement stock for each purchased item
-    final productProvider = context.read<ProductProvider>();
-    for (final item in cart.items) {
-      productProvider.decrementStock(item.product.id, item.quantity);
+    final order = await context.read<OrderProvider>().addOrder(
+      orderRequest,
+      shippingMethod: shipping['name'] as String,
+    );
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
+    if (order == null) {
+      final error =
+          context.read<OrderProvider>().errorMessage ??
+          'Pesanan gagal disimpan.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
+      );
+      return;
     }
 
-    // 2. Mine Block 2: Belanja Komponen (+500 EXP)
-    final itemName = cart.items.isNotEmpty ? cart.items.first.product.name : 'Komponen PC / RAM';
-    final blockchain = context.read<BlockchainProvider>();
-    final auth = context.read<AuthProvider>();
-    final oldTier = blockchain.currentTier;
-    final block = await blockchain.addShoppingReward(
-      itemName: itemName,
-      expEarned: 500,
-      userId: auth.currentUser?.id,
-      userName: auth.currentUser?.fullName,
-    );
-    final newTier = blockchain.currentTier;
+    final orderId = order.id;
+    final serial = order.serialNumber;
 
-    // 3. Add mobile notifications
     if (mounted) {
       context.read<NotificationProvider>().addNotification(
         title: 'Pesanan Berhasil: $orderId',
-        message: 'Pesanan Anda senilai ${formatRupiah(newOrder.totalPrice)} sedang diproses untuk QC & perakitan aman.',
+        message:
+            'Pesanan Anda senilai ${formatRupiah(order.totalPrice)} sedang diproses untuk QC & perakitan aman.',
         type: 'order',
         actionRoute: AppRouter.orderHistory,
         actionLabel: 'Lacak Pesanan',
       );
-
-      context.read<NotificationProvider>().addNotification(
-        title: 'Bonus Belanja: +500 EXP!',
-        message: 'Blok #${block.index} berhasil ditambang di Blockchain untuk transaksi $itemName. Akumulasi EXP: ${blockchain.totalExp} EXP.',
-        type: 'tier_upgrade',
-        actionRoute: AppRouter.membership,
-        actionLabel: 'Lihat Blockchain',
-      );
-
-      if (newTier != oldTier) {
-        context.read<NotificationProvider>().addNotification(
-          title: 'Selamat! Upgrade ke Tier ${newTier.name.toUpperCase()}!',
-          message: 'Akumulasi EXP Anda mencapai ${blockchain.totalExp} EXP. Tier Anda otomatis naik ke ${newTier.name}!',
-          type: 'tier_upgrade',
-        );
-      }
     }
 
     if (!mounted) return;
@@ -189,25 +161,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           children: [
             Text('Order ID: $orderId', style: AppTextStyles.titleSmall),
             const SizedBox(height: 4),
-            Text('Nomor Seri: $serial (Garansi 24 Bulan)', style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary),
+            Text(
+              'Nomor Seri: $serial (Garansi 24 Bulan)',
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Blockchain Transaksi (Blok #${block.index}):', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('Reward: +500 EXP (Belanja $itemName)', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
-                  Text('Akumulasi EXP: ${blockchain.totalExp} EXP', style: AppTextStyles.caption),
-                  Text('Tier Member: ${newTier.name.toUpperCase()}', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
-                  Text('Hash: ${block.hash.substring(0, 16)}...', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-                ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Poin loyalitas hanya diberikan setelah pesanan dikonfirmasi selesai.',
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.textSecondary,
               ),
             ),
           ],
@@ -221,8 +186,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             onPressed: () {
               context.read<CartProvider>().clearCart();
               Navigator.pop(ctx); // Close dialog
-              
-              // Cleanly reset stack to MainNavScreen and navigate straight to Order History
+
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 AppRouter.mainNav,
@@ -264,19 +228,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Text('Alamat Pengiriman', style: AppTextStyles.titleMedium),
+                      child: Text(
+                        'Alamat Pengiriman',
+                        style: AppTextStyles.titleMedium,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: _openMapPicker,
                       icon: const Icon(Icons.map, size: 16),
-                      label: const Text('Pilih via Map', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      label: const Text(
+                        'Pilih via Map',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -286,7 +264,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 if (_latitude != null && _longitude != null)
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
@@ -294,12 +275,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.pin_drop, color: AppColors.primary, size: 18),
+                        Icon(
+                          Icons.pin_drop,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Titik Peta: ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)} (Tersimpan di Database)',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -311,11 +299,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     children: [
                       TextFormField(
                         controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'Nama Lengkap'),
+                        decoration: const InputDecoration(
+                          labelText: 'Nama Lengkap',
+                        ),
                       ),
                       TextFormField(
                         controller: _phoneController,
-                        decoration: const InputDecoration(labelText: 'Nomor Telepon'),
+                        decoration: const InputDecoration(
+                          labelText: 'Nomor Telepon',
+                        ),
                       ),
                       TextFormField(
                         controller: _addressController,
@@ -327,7 +319,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           Expanded(
                             child: TextFormField(
                               controller: _cityController,
-                              decoration: const InputDecoration(labelText: 'Kota'),
+                              decoration: const InputDecoration(
+                                labelText: 'Kota',
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -335,7 +329,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             width: 120,
                             child: TextFormField(
                               controller: _postalController,
-                              decoration: const InputDecoration(labelText: 'Kode Pos'),
+                              decoration: const InputDecoration(
+                                labelText: 'Kode Pos',
+                              ),
                             ),
                           ),
                         ],
@@ -347,13 +343,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 Text('Metode Pengiriman', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 12),
                 Column(
-                  children: List.generate(AppConstants.shippingMethods.length, (index) {
+                  children: List.generate(AppConstants.shippingMethods.length, (
+                    index,
+                  ) {
                     final method = AppConstants.shippingMethods[index];
                     return RadioListTile<int>(
                       value: index,
                       groupValue: _selectedShipping,
                       onChanged: (val) {
-                        if (val != null) setState(() => _selectedShipping = val);
+                        if (val != null)
+                          setState(() => _selectedShipping = val);
                       },
                       title: Text(method['name'] as String),
                       subtitle: Text(method['days'] as String),
@@ -366,7 +365,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 Text('Metode Pembayaran', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 12),
                 Column(
-                  children: List.generate(AppConstants.paymentMethods.length, (index) {
+                  children: List.generate(AppConstants.paymentMethods.length, (
+                    index,
+                  ) {
                     final method = AppConstants.paymentMethods[index];
                     return RadioListTile<int>(
                       value: index,
@@ -385,7 +386,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 GlassCard(
                   child: Consumer<CartProvider>(
                     builder: (context, cart, _) {
-                      final shippingPrice = AppConstants.shippingMethods[_selectedShipping]['price'] as double;
+                      final shippingPrice =
+                          AppConstants
+                                  .shippingMethods[_selectedShipping]['price']
+                              as double;
                       final total = cart.totalPrice + shippingPrice;
 
                       return Column(
@@ -394,7 +398,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Subtotal', style: AppTextStyles.bodyMedium),
-                              Text(formatRupiah(cart.totalPrice), style: AppTextStyles.bodyMedium),
+                              Text(
+                                formatRupiah(cart.totalPrice),
+                                style: AppTextStyles.bodyMedium,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -402,15 +409,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Ongkir', style: AppTextStyles.bodyMedium),
-                              Text(formatRupiah(shippingPrice), style: AppTextStyles.bodyMedium),
+                              Text(
+                                formatRupiah(shippingPrice),
+                                style: AppTextStyles.bodyMedium,
+                              ),
                             ],
                           ),
                           const Divider(height: 24),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Total Pembayaran', style: AppTextStyles.titleMedium),
-                              Text(formatRupiah(total), style: AppTextStyles.price),
+                              Text(
+                                'Total Pembayaran',
+                                style: AppTextStyles.titleMedium,
+                              ),
+                              Text(
+                                formatRupiah(total),
+                                style: AppTextStyles.price,
+                              ),
                             ],
                           ),
                         ],
@@ -420,7 +436,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
                 const SizedBox(height: 32),
                 GradientButton(
-                  label: _isProcessing ? 'Memproses Pesanan...' : 'Bayar Sekarang',
+                  label: _isProcessing
+                      ? 'Memproses Pesanan...'
+                      : 'Bayar Sekarang',
                   onPressed: _isProcessing ? () {} : _processPayment,
                 ),
                 const SizedBox(height: 24),

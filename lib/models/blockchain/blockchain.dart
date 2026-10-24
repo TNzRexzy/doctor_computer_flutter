@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:crypto/crypto.dart';
 
 /// Member Tier System
@@ -6,7 +7,12 @@ enum MemberTier {
   bronze(value: 0, name: 'Bronze', color: 0xFFCD7F32, discountPercent: 5),
   silver(value: 300, name: 'Silver', color: 0xFFC0C0C0, discountPercent: 10),
   gold(value: 600, name: 'Gold', color: 0xFFFFD700, discountPercent: 15),
-  platinum(value: 1200, name: 'Platinum', color: 0xFFE5E4E2, discountPercent: 20);
+  platinum(
+    value: 1200,
+    name: 'Platinum',
+    color: 0xFFE5E4E2,
+    discountPercent: 20,
+  );
 
   final int value;
   final String name;
@@ -79,16 +85,16 @@ class Block {
   }
 
   Map<String, dynamic> toMap() => {
-        'index': index,
-        'timestamp': timestamp,
-        'blockType': blockType,
-        'title': title,
-        'data': data,
-        'previousHash': previousHash,
-        'hash': hash,
-        'expEarned': expEarned,
-        'upgradeTier': upgradeTier,
-      };
+    'index': index,
+    'timestamp': timestamp,
+    'blockType': blockType,
+    'title': title,
+    'data': data,
+    'previousHash': previousHash,
+    'hash': hash,
+    'expEarned': expEarned,
+    'upgradeTier': upgradeTier,
+  };
 
   factory Block.fromMap(Map<String, dynamic> map) {
     return Block(
@@ -105,17 +111,17 @@ class Block {
   }
 
   Map<String, dynamic> toDbMap(String userId) => {
-        'user_id': userId,
-        'block_index': index,
-        'block_type': blockType,
-        'title': title,
-        'data': data,
-        'previous_hash': previousHash,
-        'hash': hash,
-        'exp_earned': expEarned,
-        'upgrade_tier': upgradeTier,
-        'timestamp': timestamp,
-      };
+    'user_id': userId,
+    'block_index': index,
+    'block_type': blockType,
+    'title': title,
+    'data': data,
+    'previous_hash': previousHash,
+    'hash': hash,
+    'exp_earned': expEarned,
+    'upgrade_tier': upgradeTier,
+    'timestamp': timestamp,
+  };
 
   factory Block.fromDbMap(Map<String, dynamic> map) {
     return Block(
@@ -124,14 +130,17 @@ class Block {
       title: map['title'] as String? ?? 'Block #${map['block_index'] ?? 0}',
       data: map['data'] is Map<String, dynamic>
           ? map['data'] as Map<String, dynamic>
-          : (map['data'] is Map ? Map<String, dynamic>.from(map['data'] as Map) : {}),
+          : (map['data'] is Map
+                ? Map<String, dynamic>.from(map['data'] as Map)
+                : {}),
       previousHash: map['previous_hash'] as String? ?? '',
       initialHash: map['hash'] as String? ?? '',
       expEarned: map['exp_earned'] as int? ?? 0,
       upgradeTier: map['upgrade_tier'] as String?,
       customTimestamp: (map['timestamp'] is int)
           ? map['timestamp'] as int
-          : (int.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now().millisecondsSinceEpoch),
+          : (int.tryParse(map['timestamp']?.toString() ?? '') ??
+                DateTime.now().millisecondsSinceEpoch),
     );
   }
 }
@@ -336,16 +345,18 @@ class UserWallet {
   }
 
   Map<String, dynamic> toMap() => {
-        'userId': userId,
-        'userName': userName,
-        'totalExp': totalExp,
-        'currentTier': currentTier.name,
-        'blockchain': blockchain.map((b) => b.toMap()).toList(),
-      };
+    'userId': userId,
+    'userName': userName,
+    'totalExp': totalExp,
+    'currentTier': currentTier.name,
+    'blockchain': blockchain.map((b) => b.toMap()).toList(),
+  };
 
   factory UserWallet.fromMap(Map<String, dynamic> map) {
     final rawBlocks = map['blockchain'] as List? ?? [];
-    final blocks = rawBlocks.map((b) => Block.fromMap(Map<String, dynamic>.from(b as Map))).toList();
+    final blocks = rawBlocks
+        .map((b) => Block.fromMap(Map<String, dynamic>.from(b as Map)))
+        .toList();
     final tierName = map['currentTier'] as String? ?? 'bronze';
     final tier = MemberTier.values.firstWhere(
       (t) => t.name.toLowerCase() == tierName.toLowerCase(),

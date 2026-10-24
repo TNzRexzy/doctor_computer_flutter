@@ -24,9 +24,8 @@ ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS reply_role varchar(20);
 ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS reply_date timestamptz;
 ALTER TABLE public.reviews ADD COLUMN IF NOT EXISTS user_name varchar(100);
 
--- 3. Update existing admin/cashier accounts with correct roles
-UPDATE public.users SET role = 'admin' WHERE email = 'admin@doctorcomputer.id';
-UPDATE public.users SET role = 'cashier' WHERE email = 'cashier@doctorcomputer.id';
+-- Staff roles must be granted through a trusted server-side provisioning flow;
+-- email addresses alone never confer a privileged role.
 
 -- ------------------------------------------------------------
 -- 4. Role helpers (RLS-safe)
