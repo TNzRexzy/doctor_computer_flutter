@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/blockchain_provider.dart';
-import 'package:doctor_computer/providers/auth_provider.dart';
 
 class MinigameCard extends StatefulWidget {
   final Map<String, dynamic> game;
@@ -31,23 +30,15 @@ class _MinigameCardState extends State<MinigameCard> {
     _showCompletion();
   }
 
-  void _showCompletion() async {
-    final bp = context.read<BlockchainProvider>();
-    final block = await bp.addMinigameReward(
+  void _showCompletion() {
+    context.read<BlockchainProvider>().addMinigameReward(
       gameTitle: widget.game['title']?.toString() ?? 'Minigame',
       expEarned: (widget.game['expReward'] as num?)?.toInt() ?? 100,
     );
-    if (!mounted) return;
-    final auth = context.read<AuthProvider>();
-    if (auth.currentUser != null) {
-      final tierEnum = auth.parseMembershipTier(bp.currentTier.name);
-      await auth.updatePointsAndTier(bp.totalExp, tierEnum);
-    }
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Minigame selesai! +${widget.game['expReward']} EXP (Blok #${block.index})',
+          'Minigame selesai! +${widget.game['expReward']} EXP',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.surface),
         ),
         backgroundColor: AppColors.success,

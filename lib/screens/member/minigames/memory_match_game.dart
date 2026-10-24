@@ -1,9 +1,9 @@
-import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 
 class MemoryMatchGame extends StatefulWidget {
@@ -116,21 +116,15 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
     });
 
     final blockchainProvider = context.read<BlockchainProvider>();
+    final auth = context.read<AuthProvider>();
     final oldTier = blockchainProvider.currentTier;
     final block = await blockchainProvider.addMinigameReward(
       gameTitle: 'Memory Match Komponen PC',
       expEarned: widget.expReward,
+      userId: auth.currentUser?.id,
+      userName: auth.currentUser?.fullName,
     );
     final newTier = blockchainProvider.currentTier;
-
-    // Immediately persist and sync EXP and Tier to AuthProvider and Supabase users table
-    if (mounted) {
-      final authProvider = context.read<AuthProvider>();
-      if (authProvider.currentUser != null) {
-        final tierEnum = authProvider.parseMembershipTier(newTier.name);
-        await authProvider.updatePointsAndTier(blockchainProvider.totalExp, tierEnum);
-      }
-    }
 
     // Send notification
     if (mounted) {

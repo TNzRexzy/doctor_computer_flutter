@@ -23,13 +23,8 @@ class MemberScreen extends StatelessWidget {
     final user = context.watch<AuthProvider>().currentUser;
     final isAdmin = user?.role == UserRole.admin;
 
-    final effectiveExp = isAdmin
-        ? 999999
-        : (blockchain.totalExp >= (user?.points ?? 0) ? blockchain.totalExp : (user?.points ?? 0));
-    final currentTier = isAdmin
-        ? MemberTier.platinum
-        : MemberTier.fromExp(effectiveExp);
-    final totalExp = effectiveExp;
+    final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
+    final totalExp = isAdmin ? 999999 : blockchain.totalExp;
     final nextTier = isAdmin ? null : currentTier.getNextTier();
 
     final progress = isAdmin
@@ -250,19 +245,12 @@ class MemberScreen extends StatelessWidget {
                     expEarned: 500,
                   );
                   if (context.mounted) {
-                    final auth = context.read<AuthProvider>();
-                    if (auth.currentUser != null) {
-                      final tierEnum = auth.parseMembershipTier(blockchain.currentTier.name);
-                      await auth.updatePointsAndTier(blockchain.totalExp, tierEnum);
-                    }
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: AppColors.success,
-                          content: Text('Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
-                        ),
-                      );
-                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.success,
+                        content: Text('Belanja Berhasil! +500 EXP ditambahkan ke Blok #${block.index}! Tier: ${blockchain.currentTier.name}'),
+                      ),
+                    );
                   }
                 },
               ),

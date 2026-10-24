@@ -122,8 +122,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       serialNumber: serial,
       warrantyDurationMonths: 24,
     );
-    await context.read<OrderProvider>().addOrder(newOrder);
-    if (!mounted) return;
+    context.read<OrderProvider>().addOrder(newOrder);
 
     // Decrement stock for each purchased item
     final productProvider = context.read<ProductProvider>();
@@ -134,21 +133,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // 2. Mine Block 2: Belanja Komponen (+500 EXP)
     final itemName = cart.items.isNotEmpty ? cart.items.first.product.name : 'Komponen PC / RAM';
     final blockchain = context.read<BlockchainProvider>();
+    final auth = context.read<AuthProvider>();
     final oldTier = blockchain.currentTier;
     final block = await blockchain.addShoppingReward(
       itemName: itemName,
       expEarned: 500,
+      userId: auth.currentUser?.id,
+      userName: auth.currentUser?.fullName,
     );
     final newTier = blockchain.currentTier;
-
-    // Immediately persist and sync EXP and Tier to AuthProvider and Supabase users table
-    if (mounted) {
-      final authProvider = context.read<AuthProvider>();
-      if (authProvider.currentUser != null) {
-        final tierEnum = authProvider.parseMembershipTier(newTier.name);
-        await authProvider.updatePointsAndTier(blockchain.totalExp, tierEnum);
-      }
-    }
 
     // 3. Add mobile notifications
     if (mounted) {
