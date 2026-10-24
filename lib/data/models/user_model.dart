@@ -97,7 +97,7 @@ class UserModel {
       'membership_tier': membershipTier.name,
       'points': points,
       'join_date': joinDate.toIso8601String(),
-      'role': role.name,
+      'role': role == UserRole.user ? 'client' : role.name,
       'latitude': latitude,
       'longitude': longitude,
       'profile_image_url': profileImageUrl,
@@ -128,6 +128,7 @@ class UserModel {
         switch (r.toLowerCase()) {
           case 'admin': return UserRole.admin;
           case 'cashier': return UserRole.cashier;
+          case 'client': return UserRole.user;
           default: return UserRole.user;
         }
       }

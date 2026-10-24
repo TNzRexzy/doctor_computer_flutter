@@ -47,6 +47,8 @@ class OrderModel {
   final String courier;
   final int warrantyDurationMonths;
   final String serialNumber;
+  final String channel;
+  final String? cashierId;
   double? rating;
   String? reviewComment;
   DateTime? ratedAt;
@@ -64,6 +66,8 @@ class OrderModel {
     this.courier = 'JNE Reguler',
     this.warrantyDurationMonths = 24,
     this.serialNumber = 'SN-DC2026-00918',
+    this.channel = 'online',
+    this.cashierId,
     this.rating,
     this.reviewComment,
     this.ratedAt,
@@ -101,6 +105,8 @@ class OrderModel {
       'courier': courier,
       'warranty_months': warrantyDurationMonths,
       'serial_number': serialNumber,
+      'channel': channel,
+      'cashier_id': cashierId,
       'rating': rating,
       'review_comment': reviewComment,
       'rated_at': ratedAt?.toIso8601String(),
@@ -151,6 +157,8 @@ class OrderModel {
       courier: map['courier']?.toString() ?? 'JNE Reguler',
       warrantyDurationMonths: (map['warranty_months'] as num?)?.toInt() ?? 24,
       serialNumber: map['serial_number']?.toString() ?? 'SN-DC2026-00918',
+      channel: map['channel']?.toString() ?? 'online',
+      cashierId: map['cashier_id']?.toString(),
       rating: (map['rating'] as num?)?.toDouble(),
       reviewComment: map['review_comment']?.toString(),
       ratedAt: map['rated_at'] != null ? DateTime.tryParse(map['rated_at'].toString()) : null,
