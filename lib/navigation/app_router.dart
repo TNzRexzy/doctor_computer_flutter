@@ -18,7 +18,6 @@ import 'package:doctor_computer/screens/cart/checkout_screen.dart';
 import 'package:doctor_computer/screens/profile/profile_screen.dart';
 import 'package:doctor_computer/screens/profile/edit_profile_screen.dart';
 import 'package:doctor_computer/screens/profile/order_history_screen.dart';
-import 'package:doctor_computer/screens/profile/security_settings_screen.dart';
 import 'package:doctor_computer/screens/wishlist/wishlist_screen.dart';
 import 'package:doctor_computer/screens/member/member_screen.dart';
 import 'package:doctor_computer/screens/member/blockchain_ledger_screen.dart';
@@ -26,6 +25,7 @@ import 'package:doctor_computer/screens/notifications/notifications_screen.dart'
 import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 import 'package:doctor_computer/screens/admin/admin_dashboard_screen.dart';
+import 'package:doctor_computer/screens/cashier/cashier_dashboard_screen.dart';
 import 'package:doctor_computer/screens/map/location_picker_screen.dart';
 
 class AppRouter {
@@ -44,7 +44,6 @@ class AppRouter {
   static const String checkout = '/checkout';
   static const String profile = '/profile';
   static const String editProfile = '/edit-profile';
-  static const String securitySettings = '/security-settings';
   static const String membership = '/membership';
   static const String orderHistory = '/order-history';
   static const String wishlist = '/wishlist';
@@ -54,6 +53,7 @@ class AppRouter {
   static const String aiChat = '/ai-chat';
   static const String warranty = '/warranty';
   static const String adminDashboard = '/admin-dashboard';
+  static const String cashierDashboard = '/cashier-dashboard';
   static const String locationPicker = '/location-picker';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -91,8 +91,6 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const ProfileScreen(), settings: settings);
       case editProfile:
         return MaterialPageRoute(builder: (_) => const EditProfileScreen(), settings: settings);
-      case securitySettings:
-        return MaterialPageRoute(builder: (_) => const SecuritySettingsScreen(), settings: settings);
       case membership:
         return MaterialPageRoute(builder: (_) => const MemberScreen(), settings: settings);
       case orderHistory:
@@ -111,6 +109,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const WarrantyCheckScreen(), settings: settings);
       case adminDashboard:
         return MaterialPageRoute(builder: (_) => const AdminDashboardScreen(), settings: settings);
+      case cashierDashboard:
+        return MaterialPageRoute(builder: (_) => const CashierDashboardScreen(), settings: settings);
       case locationPicker:
         final args = settings.arguments as Map<String, dynamic>?;
         return MaterialPageRoute(

@@ -1,4 +1,3 @@
-import 'package:doctor_computer/core/utils/image_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/providers/theme_provider.dart';
@@ -70,13 +69,8 @@ class ProfileScreen extends StatelessWidget {
                 blockchain.syncWithUser(user.id, user.fullName, true);
               }
 
-              final effectiveExp = isAdmin
-                  ? 999999
-                  : (blockchain.totalExp >= user.points ? blockchain.totalExp : user.points);
-              final currentTier = isAdmin
-                  ? MemberTier.platinum
-                  : MemberTier.fromExp(effectiveExp);
-              final totalExp = effectiveExp;
+              final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
+              final totalExp = isAdmin ? 999999 : blockchain.totalExp;
               final nextTier = isAdmin ? null : currentTier.getNextTier();
 
               final progress = isAdmin
@@ -92,7 +86,9 @@ class ProfileScreen extends StatelessWidget {
                     child: CircleAvatar(
                       radius: 45,
                       backgroundColor: AppColors.surface,
-                      backgroundImage: AppImageHelper.getImageProvider(user.profileImageUrl),
+                      backgroundImage: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
+                          ? NetworkImage(user.profileImageUrl!)
+                          : null,
                       child: user.profileImageUrl == null || user.profileImageUrl!.isEmpty
                           ? Text(initials, style: AppTextStyles.heading2.copyWith(color: AppColors.primary))
                           : null,
@@ -191,18 +187,28 @@ class ProfileScreen extends StatelessWidget {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberScreen()));
                   }),
                   _buildMenuItem(context, Icons.card_membership, 'Membership', () => Navigator.pushNamed(context, AppRouter.membership)),
-                  if (user.role == UserRole.admin || user.role == UserRole.cashier)
+                  if (user.role == UserRole.admin)
                     _buildMenuItem(
                       context, 
                       Icons.admin_panel_settings, 
-                      user.role == UserRole.admin ? 'Dashboard Admin' : 'Dashboard Kasir', 
+                      'Dashboard Admin', 
                       () => Navigator.pushNamed(context, AppRouter.adminDashboard),
                       trailing: Chip(
-                        label: Text(user.role.name.toUpperCase(), style: const TextStyle(fontSize: 10)),
-                        backgroundColor: AppColors.warning,
+                        label: const Text('ADMIN', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                        backgroundColor: AppColors.error,
                       ),
                     ),
-                  _buildMenuItem(context, Icons.security, 'Keamanan & Privasi', () => Navigator.pushNamed(context, AppRouter.securitySettings)),
+                  if (user.role == UserRole.admin || user.role == UserRole.cashier)
+                    _buildMenuItem(
+                      context, 
+                      Icons.point_of_sale, 
+                      'Dashboard Kasir & POS', 
+                      () => Navigator.pushNamed(context, AppRouter.cashierDashboard),
+                      trailing: const Chip(
+                        label: Text('KASIR', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                        backgroundColor: Color(0xFF6D28D9),
+                      ),
+                    ),
                   _buildMenuItem(context, Icons.edit, 'Edit Profil', () => Navigator.pushNamed(context, AppRouter.editProfile)),
                   _buildMenuItem(
                     context, 
