@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
+import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class WishlistProvider extends ChangeNotifier {
@@ -94,7 +95,12 @@ class WishlistProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching product for wishlist: $e');
     }
-    return null;
+
+    try {
+      return mockProducts.firstWhere((p) => p.id == productId);
+    } catch (_) {
+      return null;
+    }
   }
 
   bool isInWishlist(String productId) {

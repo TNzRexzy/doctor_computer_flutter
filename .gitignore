@@ -12,9 +12,10 @@
 .swiftpm/
 migrate_working_dir/
 
-# IDE & Local Tooling
-.vscode/
-.freebuff/
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
 .idea/
 
 # The .vscode folder contains launch configuration and tasks you configure in

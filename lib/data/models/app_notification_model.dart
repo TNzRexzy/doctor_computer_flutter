@@ -69,39 +69,4 @@ class AppNotificationModel {
         return AppColors.primary;
     }
   }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'message': message,
-      'type': type.name,
-      'timestamp': timestamp.toIso8601String(),
-      'is_read': isRead,
-      'action_route': actionRoute,
-      'action_label': actionLabel,
-    };
-  }
-
-  factory AppNotificationModel.fromMap(Map<String, dynamic> map) {
-    NotificationType parseType(dynamic t) {
-      if (t is String) {
-        for (final val in NotificationType.values) {
-          if (val.name == t) return val;
-        }
-      }
-      return NotificationType.general;
-    }
-
-    return AppNotificationModel(
-      id: map['id']?.toString() ?? '',
-      title: map['title']?.toString() ?? '',
-      message: map['message']?.toString() ?? '',
-      type: parseType(map['type']),
-      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
-      isRead: map['is_read'] as bool? ?? false,
-      actionRoute: map['action_route']?.toString(),
-      actionLabel: map['action_label']?.toString(),
-    );
-  }
 }

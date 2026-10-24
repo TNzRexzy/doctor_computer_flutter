@@ -171,29 +171,6 @@ class ProductCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      product.stock > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
-                      size: 11,
-                      color: product.stock > 0 
-                          ? (product.stock < 10 ? AppColors.error : AppColors.textTertiary)
-                          : AppColors.error,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      product.stock > 0 ? 'Stok: ' : 'Habis',
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 10,
-                        fontWeight: product.stock < 10 ? FontWeight.bold : FontWeight.normal,
-                        color: product.stock > 0 
-                            ? (product.stock < 10 ? AppColors.error : AppColors.textTertiary)
-                            : AppColors.error,
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),

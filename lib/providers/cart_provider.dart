@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
-import 'package:doctor_computer/data/models/flash_sale_model.dart';
+import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -83,7 +83,7 @@ class CartProvider extends ChangeNotifier {
           images = [rawImages];
         }
 
-        final base = ProductModel(
+        return ProductModel(
           id: data['id']?.toString() ?? productId,
           name: data['name']?.toString() ?? '',
           description: data['description']?.toString() ?? '',
@@ -98,33 +98,19 @@ class CartProvider extends ChangeNotifier {
           reviewCount: (data['review_count'] as num?)?.toInt() ?? 10,
           stock: (data['stock'] as num?)?.toInt() ?? 10,
           isNew: data['is_new'] as bool? ?? false,
-          isOnSale: false,
+          isOnSale: data['is_on_sale'] as bool? ?? false,
         );
-
-        // Apply the running flash sale (if any) so the cart shows the flash price.
-        try {
-          final nowIso = DateTime.now().toUtc().toIso8601String();
-          final sale = await supabase
-              .from('flash_sales')
-              .select()
-              .eq('product_id', productId)
-              .eq('is_active', true)
-              .lte('starts_at', nowIso)
-              .gt('ends_at', nowIso)
-              .maybeSingle();
-          if (sale != null) {
-            final fs = FlashSaleModel.fromMap(Map<String, dynamic>.from(sale));
-            if (!fs.isSoldOut && fs.flashPrice < base.price) return base.withFlash(fs);
-          }
-        } catch (e) {
-          debugPrint('Flash sale lookup for cart notice: $e');
-        }
-        return base;
       }
     } catch (e) {
       debugPrint('Error fetching product from Supabase: $e');
     }
-    return null;
+
+    // Fallback to mock product
+    try {
+      return mockProducts.firstWhere((p) => p.id == productId);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> addToCart(ProductModel product, {int quantity = 1}) async {
@@ -138,29 +124,13 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
     _saveCartToCache();
 
-    if (_userId != null && !product.id.startsWith('build-')) {
+    if (_userId != null) {
       try {
-        final newQty = existingIndex >= 0 ? _items[existingIndex].quantity : quantity;
-        final List existingRows = await supabase
-            .from('cart_items')
-            .select('id')
-            .eq('user_id', _userId!)
-            .eq('product_id', product.id)
-            .limit(1);
-
-        if (existingRows.isNotEmpty) {
-          final rowId = existingRows.first['id'];
-          await supabase
-              .from('cart_items')
-              .update({'quantity': newQty})
-              .eq('id', rowId);
-        } else {
-          await supabase.from('cart_items').insert({
-            'user_id': _userId!,
-            'product_id': product.id,
-            'quantity': newQty,
-          });
-        }
+        await supabase.from('cart_items').upsert({
+          'user_id': _userId!,
+          'product_id': product.id,
+          'quantity': existingIndex >= 0 ? _items[existingIndex].quantity : quantity,
+        }, onConflict: 'user_id,product_id');
       } catch (e) {
         debugPrint('Error persisting cart item to db: $e');
       }

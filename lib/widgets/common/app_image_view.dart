@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
@@ -32,20 +31,6 @@ class AppImageView extends StatelessWidget {
 
     if (url == null || url.isEmpty) {
       imageWidget = _buildFallback();
-    } else if (url.startsWith('data:image') && url.contains('base64,')) {
-      try {
-        final base64Part = url.split('base64,').last;
-        final bytes = base64Decode(base64Part);
-        imageWidget = Image.memory(
-          bytes,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, _, _) => _buildFallback(),
-        );
-      } catch (e) {
-        imageWidget = _buildFallback();
-      }
     } else if (url.startsWith('assets/')) {
       imageWidget = Image.asset(
         url,

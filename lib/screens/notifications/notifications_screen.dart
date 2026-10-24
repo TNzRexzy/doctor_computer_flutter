@@ -15,7 +15,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   int _selectedFilter = 0;
-  final List<String> _filters = ['Semua', 'Pesanan', 'Promo & Diskon', 'Member', 'Lainnya'];
+  final List<String> _filters = ['Semua', 'Bottleneck', 'Reminder', 'Pembayaran', 'Voucher'];
 
   @override
   Widget build(BuildContext context) {
@@ -24,13 +24,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     List<AppNotificationModel> filtered = allNotifs;
     if (_selectedFilter == 1) {
-      filtered = allNotifs.where((n) => n.type == NotificationType.order).toList();
+      filtered = allNotifs.where((n) => n.type == NotificationType.bottleneck).toList();
     } else if (_selectedFilter == 2) {
-      filtered = allNotifs.where((n) => n.type == NotificationType.voucherExpiry || n.type == NotificationType.paymentDeadline).toList();
+      filtered = allNotifs.where((n) => n.type == NotificationType.minigame).toList();
     } else if (_selectedFilter == 3) {
-      filtered = allNotifs.where((n) => n.type == NotificationType.tierUpgrade || n.type == NotificationType.minigame).toList();
+      filtered = allNotifs.where((n) => n.type == NotificationType.paymentDeadline).toList();
     } else if (_selectedFilter == 4) {
-      filtered = allNotifs.where((n) => n.type == NotificationType.bottleneck || n.type == NotificationType.general).toList();
+      filtered = allNotifs.where((n) => n.type == NotificationType.voucherExpiry).toList();
     }
 
     return Scaffold(
@@ -75,113 +75,102 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             // Notification list
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => provider.loadNotifications(),
-                child: filtered.isEmpty
-                    ? ListView(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(height: MediaQuery.of(context).size.height * 0.25),
-                          Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                          Icon(Icons.notifications_off_outlined, size: 60, color: AppColors.textTertiary),
+                          const SizedBox(height: 12),
+                          Text('Belum ada notifikasi', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final notif = filtered[index];
+                        final timeAgo = _formatTimeAgo(notif.timestamp);
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10.0),
+                          child: GlassCard(
+                            padding: const EdgeInsets.all(14),
+                            onTap: () {
+                              provider.markAsRead(notif.id);
+                              if (notif.actionRoute != null) {
+                                Navigator.pushNamed(context, notif.actionRoute!);
+                              }
+                            },
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.notifications_off_outlined, size: 60, color: AppColors.textTertiary),
-                                const SizedBox(height: 12),
-                                Text('Belum ada notifikasi baru', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: notif.iconColor.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(notif.icon, color: notif.iconColor, size: 24),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              notif.title,
+                                              style: AppTextStyles.titleSmall.copyWith(
+                                                fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          if (!notif.isRead)
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        notif.message,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: notif.isRead ? AppColors.textSecondary : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(timeAgo, style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary)),
+                                          if (notif.actionLabel != null)
+                                            Text(
+                                              '${notif.actionLabel} ➔',
+                                              style: AppTextStyles.caption.copyWith(
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        ],
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final notif = filtered[index];
-                          final timeAgo = _formatTimeAgo(notif.timestamp);
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10.0),
-                            child: GlassCard(
-                              padding: const EdgeInsets.all(14),
-                              onTap: () {
-                                provider.markAsRead(notif.id);
-                                if (notif.actionRoute != null) {
-                                  Navigator.pushNamed(context, notif.actionRoute!);
-                                }
-                              },
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: notif.iconColor.withValues(alpha: 0.15),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(notif.icon, color: notif.iconColor, size: 24),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                notif.title,
-                                                style: AppTextStyles.titleSmall.copyWith(
-                                                  fontWeight: notif.isRead ? FontWeight.normal : FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                            if (!notif.isRead)
-                                              Container(
-                                                width: 8,
-                                                height: 8,
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.primary,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          notif.message,
-                                          style: AppTextStyles.bodySmall.copyWith(
-                                            color: notif.isRead ? AppColors.textSecondary : AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              timeAgo,
-                                              style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
-                                            ),
-                                            if (notif.actionLabel != null)
-                                              Text(
-                                                '${notif.actionLabel} →',
-                                                style: AppTextStyles.caption.copyWith(
-                                                  color: AppColors.primary,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -191,9 +180,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String _formatTimeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Baru saja';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} mnt lalu';
-    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
-    return '${diff.inDays} hari lalu';
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} mnt lalu';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours} jam lalu';
+    } else {
+      return '${diff.inDays} hari lalu';
+    }
   }
 }

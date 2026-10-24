@@ -1,5 +1,3 @@
-import 'package:doctor_computer/data/models/flash_sale_model.dart';
-
 /// Represents a product in the store.
 class ProductModel {
   final String id;
@@ -17,18 +15,6 @@ class ProductModel {
   final int stock;
   final bool isNew;
   final bool isOnSale;
-  final String? sku;
-  final String? brandCode;
-  final String? subtype;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-
-  // Runtime-only flash sale info (merged from the `flash_sales` table).
-  // Never written to `products`.
-  final String? flashSaleId;
-  final DateTime? flashSaleEndsAt;
-  final int? flashStockLeft;
-  final double? normalOriginalPrice; // product's own strike price before flash
 
   const ProductModel({
     required this.id,
@@ -46,79 +32,7 @@ class ProductModel {
     required this.stock,
     required this.isNew,
     required this.isOnSale,
-    this.sku,
-    this.brandCode,
-    this.subtype,
-    this.createdAt,
-    this.updatedAt,
-    this.flashSaleId,
-    this.flashSaleEndsAt,
-    this.flashStockLeft,
-    this.normalOriginalPrice,
   });
-
-  bool get isFlashSale => flashSaleId != null;
-
-  /// Price stored in `products` (the normal price, ignoring flash sale).
-  double get basePrice => isFlashSale ? (originalPrice ?? price) : price;
-
-  /// Returns this product with the given flash sale applied.
-  ProductModel withFlash(FlashSaleModel sale) {
-    final base = withoutFlash();
-    return ProductModel(
-      id: base.id,
-      name: base.name,
-      description: base.description,
-      descriptionId: base.descriptionId,
-      price: sale.flashPrice,
-      originalPrice: base.price,
-      categoryId: base.categoryId,
-      brand: base.brand,
-      images: base.images,
-      specs: base.specs,
-      rating: base.rating,
-      reviewCount: base.reviewCount,
-      stock: base.stock,
-      isNew: base.isNew,
-      isOnSale: true,
-      sku: base.sku,
-      brandCode: base.brandCode,
-      subtype: base.subtype,
-      createdAt: base.createdAt,
-      updatedAt: base.updatedAt,
-      flashSaleId: sale.id,
-      flashSaleEndsAt: sale.endsAt,
-      flashStockLeft: sale.stockLeft,
-      normalOriginalPrice: base.originalPrice,
-    );
-  }
-
-  /// Returns this product at its normal price (flash sale removed).
-  ProductModel withoutFlash() {
-    if (!isFlashSale) return this;
-    return ProductModel(
-      id: id,
-      name: name,
-      description: description,
-      descriptionId: descriptionId,
-      price: originalPrice ?? price,
-      originalPrice: normalOriginalPrice,
-      categoryId: categoryId,
-      brand: brand,
-      images: images,
-      specs: specs,
-      rating: rating,
-      reviewCount: reviewCount,
-      stock: stock,
-      isNew: isNew,
-      isOnSale: false,
-      sku: sku,
-      brandCode: brandCode,
-      subtype: subtype,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-    );
-  }
 
   bool get hasDiscount => originalPrice != null && originalPrice! > price;
   double get discountPercentage =>
@@ -140,11 +54,6 @@ class ProductModel {
     int? stock,
     bool? isNew,
     bool? isOnSale,
-    String? sku,
-    String? brandCode,
-    String? subtype,
-    DateTime? createdAt,
-    DateTime? updatedAt,
   }) {
     return ProductModel(
       id: id ?? this.id,
@@ -162,21 +71,10 @@ class ProductModel {
       stock: stock ?? this.stock,
       isNew: isNew ?? this.isNew,
       isOnSale: isOnSale ?? this.isOnSale,
-      sku: sku ?? this.sku,
-      brandCode: brandCode ?? this.brandCode,
-      subtype: subtype ?? this.subtype,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      flashSaleId: flashSaleId,
-      flashSaleEndsAt: flashSaleEndsAt,
-      flashStockLeft: flashStockLeft,
-      normalOriginalPrice: normalOriginalPrice,
     );
   }
 
   Map<String, dynamic> toMap() {
-    // Flash prices must never leak into the `products` table.
-    if (isFlashSale) return withoutFlash().toMap();
     return {
       'id': id,
       'name': name,
@@ -193,11 +91,6 @@ class ProductModel {
       'stock': stock,
       'is_new': isNew,
       'is_on_sale': isOnSale,
-      if (sku != null) 'sku': sku,
-      if (brandCode != null) 'brand_code': brandCode,
-      if (subtype != null) 'subtype': subtype,
-      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
-      if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
     };
   }
 
@@ -235,11 +128,6 @@ class ProductModel {
       stock: (map['stock'] as num?)?.toInt() ?? 10,
       isNew: map['is_new'] as bool? ?? false,
       isOnSale: map['is_on_sale'] as bool? ?? (origPrice != null && origPrice > price),
-      sku: map['sku']?.toString(),
-      brandCode: map['brand_code']?.toString(),
-      subtype: map['subtype']?.toString(),
-      createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : null,
-      updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) : null,
     );
   }
 }

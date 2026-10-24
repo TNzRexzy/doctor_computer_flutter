@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/data/models/review_model.dart';
+import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 
 class ReviewProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
@@ -27,9 +28,13 @@ class ReviewProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // 1. Start with mock reviews
     final Map<String, ReviewModel> reviewMap = {};
+    for (final r in mockReviews) {
+      reviewMap[r.id] = r;
+    }
 
-    // 1. Load custom reviews from SharedPreferences
+    // 2. Load custom reviews from SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
       final customJson = prefs.getString(_prefCustomReviewsKey);
@@ -154,9 +159,9 @@ class ReviewProvider extends ChangeNotifier {
       debugPrint('Error saving review locally: $e');
     }
 
-    // Supabase insert matching database schema
+    // Supabase insert
     try {
-      await supabase.from('reviews').insert(review.toSupabaseMap());
+      await supabase.from('reviews').insert(review.toMap());
     } catch (e) {
       debugPrint('Error inserting review to Supabase: $e');
     }
