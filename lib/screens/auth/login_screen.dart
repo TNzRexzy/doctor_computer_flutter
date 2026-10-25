@@ -6,6 +6,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/validators.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/services/biometric_service.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 
@@ -23,11 +24,39 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberEmail = false;
+  BiometricCredential? _biometricCredential;
 
   @override
   void initState() {
     super.initState();
     _loadSavedEmail();
+    _loadBiometricCredential();
+  }
+
+  /// Tombol sidik jari hanya muncul jika akun yang terakhir login di
+  /// perangkat ini sudah mendaftarkan sidik jari.
+  Future<void> _loadBiometricCredential() async {
+    final credential = await BiometricService.instance.lastUserCredential();
+    if (!mounted) return;
+    setState(() => _biometricCredential = credential);
+  }
+
+  void _loginWithFingerprint() async {
+    final auth = context.read<AuthProvider>();
+    final success = await auth.loginWithBiometric();
+    if (!mounted) return;
+    if (success) {
+      Navigator.pushReplacementNamed(context, AppRouter.mainNav);
+    } else {
+      final errorMsg = auth.errorMessage;
+      if (errorMsg != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg)),
+        );
+      }
+      // Kredensial bisa terhapus (password berubah / sidik jari dicabut).
+      _loadBiometricCredential();
+    }
   }
 
   Future<void> _loadSavedEmail() async {
@@ -217,6 +246,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
+              if (_biometricCredential != null) ...[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: isLoading ? null : _loginWithFingerprint,
+                  icon: Icon(Icons.fingerprint, size: 28, color: AppColors.primary),
+                  label: Text('Masuk dengan Sidik Jari (${_biometricCredential!.email})'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    minimumSize: const Size(double.infinity, 50),
+                    side: BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               Row(
                 children: [

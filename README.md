@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.2-beta
+* **Release Version:** 1.1.3-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -115,6 +115,34 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-025 | Cart item photos missing after the app is reopened | `CartProvider._fetchProductAsync` used raw `image_url` values (relative file names) without `AppImages.resolveProductImages` | Resolved (Images resolved through `AppImages`, same as the catalog) |
 | BUG-026 | Irrelevant sample notifications appeared on every login | `NotificationProvider` was seeded with four hard-coded demo notifications (fake order, voucher, reminders) | Resolved (List starts empty; notifications are created only by real events and stored per user) |
 | BUG-027 | Gemini API key and Supabase project values were visible in source code, `.env` and `.env.example` | Key was a `defaultValue` in `EnvConfig`; `.env` was tracked by git | Resolved (Key moved to Supabase table `app_config`; `EnvConfig` has no hardcoded values; `.env` is git-ignored and `.env.example` holds placeholders only) |
+| BUG-028 | Adding a product failed with `23503` on `fk_products_subtype` | A database-side default/trigger set `products.subtype` to a code missing from `product_subtypes`; the app never sends the column | Resolved (`20261031_fix_product_subtype_fk.sql` normalizes `subtype`/`brand_code` before insert; no app code changed) |
+
+---
+
+## Version 1.1.3-beta Changelog
+
+1. **Fingerprint login (all roles: client, cashier, admin):**
+   * New menu `Profil > Keamanan` (`lib/screens/profile/security_screen.dart`, route `AppRouter.security`) to register and remove fingerprints. Registration asks for the account password, then the real fingerprint scan through the Android system prompt (`local_auth`, `biometricOnly`, so PIN/pattern is rejected).
+   * New `lib/services/biometric_service.dart`: sensor status check, fingerprint prompt, registration/removal in `public.user_biometrics`, and `user_security_settings.biometric_enabled` sync.
+   * Credentials (email + password) are stored only on the device, encrypted by the Android Keystore (`flutter_secure_storage`); the database stores only a per-device registration record (random `biometric_token`), never the password.
+   * `LoginScreen` shows **Masuk dengan Sidik Jari** only when the account that last logged out has a fingerprint registered on that device. An account without a registered fingerprint shows no button after logout.
+   * After a fingerprint login the registration must still be active in the database, so a fingerprint removed from another device is rejected and its local credentials are cleared. If the password was changed, the stored credentials are discarded and the user must register again.
+   * Registrations are per device: logging in on another phone does not carry the fingerprint over.
+   * `AuthProvider`: added `loginWithBiometric()` and three `rememberLastUser` calls (`login`, `restoreSession`, `logout`); the existing login flow is unchanged.
+2. **Add product error `fk_products_subtype` (BUG-028):**
+   * A database-side default/trigger filled `products.subtype` with a code that does not exist in `product_subtypes`, so inserting a product failed with `23503`. The app never sends `subtype`/`brand_code`.
+   * Added `supabase/migrations/20261031_fix_product_subtype_fk.sql`: last-running `zz_` triggers that map an invalid `subtype` from the product category (fallback `GEN`) and null an invalid `brand_code` for `products`; invalid codes become `NULL` for `pc_parts`. No Flutter code changed.
+3. **Database Migration:**
+   * Added `supabase/migrations/20261031_biometric_login.sql` (`user_biometrics` and `user_security_settings` with own-row RLS, unique index on `biometric_token`).
+4. **Android / iOS configuration (required by `local_auth`):**
+   * `MainActivity` now extends `FlutterFragmentActivity`.
+   * `AndroidManifest.xml`: added `USE_BIOMETRIC` permission.
+   * `values/styles.xml` and `values-night/styles.xml`: `LaunchTheme`/`NormalTheme` parents changed to AppCompat.
+   * `ios/Runner/Info.plist`: added `NSFaceIDUsageDescription`.
+5. **Dependencies:** added `local_auth` and `flutter_secure_storage`.
+6. **Versioning:** Bumped app version to `1.1.3-beta+13` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+**Action required after updating:** run `20261031_fix_product_subtype_fk.sql` and `20261031_biometric_login.sql`, run `flutter pub get`, and do a full rebuild (native Android changes are not applied by hot reload).
 
 ---
 
@@ -212,6 +240,8 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 10. `supabase/migrations/20261029_user_notifications.sql` (per-user notification table with RLS for cross-device sync).
 
 11. `supabase/migrations/20261030_app_config.sql` (`app_config` table with RLS; store the Gemini API key here instead of in the app).
+12. `supabase/migrations/20261031_fix_product_subtype_fk.sql` (normalizes `subtype`/`brand_code` so adding a product no longer violates `fk_products_subtype`).
+13. `supabase/migrations/20261031_biometric_login.sql` (`user_biometrics` / `user_security_settings` with own-row RLS for fingerprint login).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 
@@ -274,3 +304,9 @@ The Gemini API key is not part of `.env`; it lives in the `app_config` table.
    ```bash
    flutter run --dart-define-from-file=.env
    ```
+
+6. Build a release APK (the env file is required, otherwise the app stops at startup):
+   ```bash
+   flutter build apk --release --dart-define-from-file=.env
+   ```
+   Output: `build/app/outputs/flutter-apk/app-release.apk`.

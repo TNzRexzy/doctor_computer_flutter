@@ -210,6 +210,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   _buildMenuItem(context, Icons.edit, 'Edit Profil', () => Navigator.pushNamed(context, AppRouter.editProfile)),
+                  _buildMenuItem(context, Icons.fingerprint, 'Keamanan', () => Navigator.pushNamed(context, AppRouter.security)),
                   _buildMenuItem(
                     context, 
                     Icons.dark_mode, 

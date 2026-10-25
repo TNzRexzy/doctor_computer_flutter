@@ -1,5 +1,6 @@
 package com.example.doctor_computer
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// local_auth (BiometricPrompt) membutuhkan FragmentActivity.
+class MainActivity : FlutterFragmentActivity()

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/models/blockchain/blockchain.dart';
+import 'package:doctor_computer/services/biometric_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -88,6 +89,7 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = _mapToUserModel(data);
       _isLoggedIn = true;
       await _saveSessionToPrefs(_currentUser!);
+      await BiometricService.instance.rememberLastUser(_currentUser!.id);
       notifyListeners();
     } catch (e) {
       debugPrint('restoreSession error: $e');
@@ -139,6 +141,7 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = _mapToUserModel(data);
       _isLoggedIn = true;
       await _saveSessionToPrefs(_currentUser!);
+      await BiometricService.instance.rememberLastUser(userId);
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -171,6 +174,68 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // ============================================
+  // LOGIN DENGAN SIDIK JARI
+  // ============================================
+  /// Login memakai sidik jari yang didaftarkan di perangkat ini untuk akun
+  /// yang terakhir login. Return `false` tanpa pesan error jika pengguna
+  /// hanya membatalkan prompt sidik jari.
+  Future<bool> loginWithBiometric() async {
+    final bio = BiometricService.instance;
+    _errorMessage = null;
+
+    final credential = await bio.lastUserCredential();
+    if (credential == null) {
+      _errorMessage = 'Sidik jari belum didaftarkan di perangkat ini.';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      final scanned = await bio.authenticate('Pindai sidik jari untuk masuk');
+      if (!scanned) return false;
+    } on BiometricException catch (e) {
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+
+    final success = await login(credential.email, credential.password);
+    if (!success) {
+      final message = (_errorMessage ?? '').toLowerCase();
+      if (message.contains('invalid login credentials')) {
+        // Password akun sudah berubah: kredensial tersimpan tidak berlaku lagi.
+        await bio.deleteCredential(credential.userId);
+        _errorMessage =
+            'Password akun sudah berubah. Masuk dengan password, lalu '
+            'daftarkan ulang sidik jari.';
+      }
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      final stillActive = _currentUser?.id == credential.userId &&
+          await bio.verifyRegistration(credential.userId, credential.token);
+      if (!stillActive) {
+        await bio.deleteCredential(credential.userId);
+        await logout();
+        _errorMessage =
+            'Sidik jari ini sudah dihapus dari akun. Masuk dengan password.';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      debugPrint('loginWithBiometric verify error: $e');
+      await logout();
+      _errorMessage = 'Gagal memverifikasi sidik jari. Periksa koneksi Anda.';
+      notifyListeners();
+      return false;
+    }
+
+    return true;
   }
 
   // ============================================
@@ -433,6 +498,12 @@ class AuthProvider extends ChangeNotifier {
   // LOGOUT
   // ============================================
   Future<bool> logout() async {
+    final loggingOutUserId = _currentUser?.id;
+    if (loggingOutUserId != null) {
+      // Tombol login sidik jari hanya muncul untuk akun yang terakhir keluar.
+      await BiometricService.instance.rememberLastUser(loggingOutUserId);
+    }
+
     try {
       await supabase.auth.signOut();
     } catch (_) {}
