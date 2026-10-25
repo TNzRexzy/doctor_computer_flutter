@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.8-beta
+* **Release Version:** 1.0.9-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -48,6 +48,7 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
   * Active shift status indicator (OPEN / CLOSED pill) in the dashboard header.
   * Close shift modal with expected drawer cash computation (`opening_cash + total_sales`), actual cash input, and automatic variance calculation (Pas, Lebih, Kurang).
   * Shift operations persist only on the server; offline actions fail explicitly rather than creating a local-only shift.
+* **Order Management Tab (`Pesanan`):** Cashiers can search all orders (order ID, status, or tracking number), filter by channel, and update the order status (`processing`, `shipped`, `delivered`, `cancelled`) with the same dialog used by admins, including courier and tracking number (resi) input.
 * **Store POS Order Log & Stock Checker:**
   * Filterable log of offline store transactions with search by transaction number.
   * Fast stock checker tab to assist store personnel in answering customer availability inquiries.
@@ -60,6 +61,7 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 
 ### 3. Omnichannel Admin Dashboard & Staff Provisioning
 * **Omnichannel Order Filtering:** Added channel filters (`Semua`, `Online`, `POS Kasir`) with visual indicators on orders.
+* **Order Status & Tracking Number (Resi):** Admins and cashiers update order status and enter the courier and resi through a shared dialog (`lib/widgets/common/order_update_dialog.dart`). A resi is required before an online order can be set to `shipped`. Customers only see a resi (and can copy it) after staff have entered it; otherwise the order tracking screen shows "Belum tersedia" and the copy button is disabled.
 * **Staff Provisioning Dialog:** Admin tab calls the authenticated `provision-staff` Edge Function, which creates Auth users with the service role and only then assigns a staff role.
 * **Role Alignment:** Updated user management to adhere strictly to database role constraints (`admin`, `cashier`, `client`).
 * **Omnichannel Analytics:** Statistics tab expanded to display revenue breakdowns (Total, Online vs POS) and live cashier shift monitoring.
@@ -103,6 +105,28 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-016 | PostgREST single-object coercion failure during login sync | Single-object query mode on duplicate records | Resolved (Migrated to `.limit(1)` queries across all session loaders) |
 | BUG-017 | Client-controlled blockchain EXP | Client blocks were accepted as the source of member points | Resolved for database balances (client writes revoked; points awarded by delivered-order RPC; minigame rewards disabled pending server verification) |
 | BUG-018 | Cashier shift open error 42501 (RLS violation) | `cashier_shifts` table only defined SELECT policy, lacking INSERT/UPDATE | Resolved (Authenticated shift RPCs; local-only shift fallback removed) |
+| BUG-019 | Cashier could not update order status or enter a tracking number | Cashier dashboard had no order management tab; no RPC to save the resi | Resolved (New `Pesanan` tab, shared update dialog, and `update_order_tracking` RPC) |
+| BUG-020 | Order tracking showed an auto-generated resi that could be copied | `OrderModel` defaulted `trackingNumber` to a hard-coded demo value | Resolved (Default removed; shows "Belum tersedia" with copy disabled until staff enter a resi) |
+| BUG-021 | POS checkout failed with PGRST203 (`Could not choose the best candidate function`) | Two overloads of `create_pos_order` existed (`varchar` and `text` parameters) | Resolved (Old overload dropped by `20261028_drop_old_create_pos_order.sql`) |
+| BUG-022 | Out-of-stock products could be added to the cart | `CartProvider.addToCart` did not validate stock | Resolved (Stock check in provider, disabled "Stok Habis" button, quantity capped at stock) |
+
+---
+
+## Version 1.0.9-beta Changelog
+
+1. **Order Management for Cashiers & Admins:**
+   * Added a `Pesanan` tab to the cashier dashboard (search, channel filter, status update).
+   * Added a shared order update dialog with courier and tracking number (resi) input; resi is mandatory for `shipped` online orders.
+   * Added the `update_order_tracking` RPC (`20261027_order_tracking_number.sql`), restricted to staff.
+2. **Order Tracking (Customer):**
+   * Removed the auto-generated demo resi; the tracking screen shows the resi entered by staff and allows copying it, or "Belum tersedia" with the copy button disabled.
+3. **POS Checkout Fix:**
+   * Dropped the duplicate legacy `create_pos_order(varchar, numeric, varchar, jsonb)` overload that caused PGRST203 (`20261028_drop_old_create_pos_order.sql`).
+4. **Stock Handling & Storefront UI:**
+   * Out-of-stock products can no longer be added to the cart; the product detail button becomes "Stok Habis" and cart quantities are capped at available stock.
+   * Product cards now show a stock badge (green / yellow for 5 or fewer / red "Stok Habis").
+   * Cart summary (coupon, subtotal, shipping estimate, total, checkout) is now a compact panel docked directly above the bottom navigation bar, and the duplicated bottom spacing was removed.
+5. **Versioning:** Bumped app version to `1.0.9-beta+9`.
 
 ---
 
@@ -136,6 +160,10 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 3. `supabase/migrations/20261024_harden_client_access.sql` (strict RLS, profile trigger, atomic order/stock RPCs, and cashier shifts).
 4. `supabase/migrations/20261024_seed_product_categories.sql` (seed product categories referenced by the product foreign key).
 5. `supabase/migrations/20261024_product_image_storage.sql` (public product image delivery and staff-only image upload/update/delete policies).
+6. `supabase/migrations/20261025_flash_sales_sync.sql` (flash sale timers stored in `flash_sales`).
+7. `supabase/migrations/20261026_member_exp_blockchain.sql` (member EXP ledger; replaces `update_order_status`).
+8. `supabase/migrations/20261027_order_tracking_number.sql` (staff-only `update_order_tracking` RPC for courier and resi).
+9. `supabase/migrations/20261028_drop_old_create_pos_order.sql` (removes the legacy duplicate `create_pos_order` overload; only needed if both overloads exist in your database).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 

@@ -375,12 +375,21 @@ class ProductDetailScreen extends StatelessWidget {
           children: [
             Expanded(
               child: GradientButton(
-                label: 'Tambah ke Keranjang',
+                label: product.stock <= 0 ? 'Stok Habis' : 'Tambah ke Keranjang',
                 icon: Icons.shopping_cart,
-                onPressed: () {
-                  context.read<CartProvider>().addToCart(product);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ditambahkan ke keranjang')),
+                isEnabled: product.stock > 0,
+                onPressed: () async {
+                  final cart = context.read<CartProvider>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final added = await cart.addToCart(product);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        added
+                            ? 'Ditambahkan ke keranjang'
+                            : 'Stok tidak mencukupi untuk menambah jumlah lagi',
+                      ),
+                    ),
                   );
                 },
               ),

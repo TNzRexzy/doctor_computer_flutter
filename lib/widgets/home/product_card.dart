@@ -109,6 +109,30 @@ class ProductCard extends StatelessWidget {
                   ),
                 ),
               Positioned(
+                bottom: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (product.stock <= 0
+                            ? AppColors.error
+                            : product.stock <= 5
+                                ? AppColors.warning
+                                : AppColors.success)
+                        .withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    product.stock <= 0 ? 'Stok Habis' : 'Stok: ${product.stock}',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 9,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
                 top: 4,
                 right: 4,
                 child: IconButton(

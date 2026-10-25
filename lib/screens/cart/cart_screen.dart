@@ -15,7 +15,6 @@ class CartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
-    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -143,9 +142,11 @@ class CartScreen extends StatelessWidget {
                                         padding: EdgeInsets.zero,
                                         visualDensity: VisualDensity.compact,
                                         icon: const Icon(Icons.add, size: 18),
-                                        onPressed: () {
-                                          provider.updateQuantity(item.product.id, item.quantity + 1);
-                                        },
+                                        onPressed: item.quantity >= item.product.stock
+                                            ? null
+                                            : () {
+                                                provider.updateQuantity(item.product.id, item.quantity + 1);
+                                              },
                                       ),
                                     ],
                                   ),
@@ -164,69 +165,88 @@ class CartScreen extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                   child: GlassCard(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Expanded(
-                          child: TextField(
-                            decoration: InputDecoration(
-                              hintText: 'Kode Kupon',
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                            ),
+                        SizedBox(
+                          height: 48,
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: TextField(
+                                  style: TextStyle(fontSize: 15),
+                                  decoration: InputDecoration(
+                                    hintText: 'Kode Kupon',
+                                    prefixIcon: Icon(Icons.local_offer_outlined, size: 20),
+                                    isDense: true,
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                ),
+                                onPressed: () {},
+                                child: const Text('Apply', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text('Apply'),
+                        const Divider(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Subtotal', style: AppTextStyles.caption),
+                            Text(formatRupiah(provider.totalPrice), style: AppTextStyles.caption),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Estimasi Ongkir', style: AppTextStyles.caption),
+                            Text('Rp 15.000', style: AppTextStyles.caption),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Total', style: AppTextStyles.caption),
+                                  Text(
+                                    formatRupiah(provider.totalPrice + 15000),
+                                    style: AppTextStyles.price.copyWith(color: AppColors.accent, fontSize: 17),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            GradientButton(
+                              label: 'Checkout',
+                              icon: Icons.payment,
+                              height: 44,
+                              width: 150,
+                              onPressed: () {
+                                Navigator.pushNamed(context, AppRouter.checkout);
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 ),
-                GlassCard(
-                  margin: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Subtotal'),
-                          Text(formatRupiah(provider.totalPrice)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Estimasi Ongkir'),
-                          Text('Rp 15.000'),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Total', style: AppTextStyles.titleMedium),
-                          Text(formatRupiah(provider.totalPrice + 15000), style: AppTextStyles.price.copyWith(color: AppColors.accent)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                  child: GradientButton(
-                    label: 'Checkout',
-                    icon: Icons.payment,
-                    onPressed: () {
-                      Navigator.pushNamed(context, AppRouter.checkout);
-                    },
-                  ),
-                ),
-                SizedBox(height: 85 + bottomInset),
+                const SizedBox(height: 8),
               ],
             );
           },

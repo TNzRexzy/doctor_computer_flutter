@@ -113,8 +113,14 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addToCart(ProductModel product, {int quantity = 1}) async {
+  /// Returns false (and does not add anything) when the product is out of stock
+  /// or the requested quantity would exceed the available stock.
+  Future<bool> addToCart(ProductModel product, {int quantity = 1}) async {
     final existingIndex = _items.indexWhere((item) => item.product.id == product.id);
+    final currentQty = existingIndex >= 0 ? _items[existingIndex].quantity : 0;
+    if (product.stock <= 0 || currentQty + quantity > product.stock) {
+      return false;
+    }
 
     if (existingIndex >= 0) {
       _items[existingIndex].quantity += quantity;
@@ -135,6 +141,7 @@ class CartProvider extends ChangeNotifier {
         debugPrint('Error persisting cart item to db: $e');
       }
     }
+    return true;
   }
 
   Future<void> removeFromCart(String productId) async {
@@ -163,6 +170,11 @@ class CartProvider extends ChangeNotifier {
 
     final index = _items.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
+      // Do not allow raising the quantity above the available stock.
+      if (quantity > _items[index].quantity &&
+          quantity > _items[index].product.stock) {
+        return;
+      }
       _items[index].quantity = quantity;
       notifyListeners();
       _saveCartToCache();
