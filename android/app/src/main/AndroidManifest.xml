@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Wajib untuk build release: tanpa ini aplikasi tidak bisa akses internet
+         (Supabase, gambar produk, Gemini) dan akan stuck di splash screen. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
         android:label="Doctor Computer"
         android:name="${applicationName}"
