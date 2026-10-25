@@ -279,6 +279,55 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
+  /// Admin/Cashier can input or update the courier and tracking number (resi)
+  Future<bool> updateOrderTracking(
+    String orderId, {
+    required String courier,
+    required String trackingNumber,
+  }) async {
+    _errorMessage = null;
+    try {
+      await supabase.rpc(
+        'update_order_tracking',
+        params: {
+          'p_order_id': orderId,
+          'p_courier': courier,
+          'p_tracking_number': trackingNumber,
+        },
+      );
+      final index = _orders.indexWhere((o) => o.id == orderId);
+      if (index >= 0) {
+        final order = _orders[index];
+        _orders[index] = OrderModel(
+          id: order.id,
+          items: order.items,
+          totalPrice: order.totalPrice,
+          status: order.status,
+          orderDate: order.orderDate,
+          shippingAddress: order.shippingAddress,
+          paymentMethod: order.paymentMethod,
+          trackingNumber: trackingNumber.trim(),
+          courier: courier.trim().isEmpty ? order.courier : courier.trim(),
+          serialNumber: order.serialNumber,
+          warrantyDurationMonths: order.warrantyDurationMonths,
+          channel: order.channel,
+          cashierId: order.cashierId,
+          rating: order.rating,
+          reviewComment: order.reviewComment,
+          ratedAt: order.ratedAt,
+          reviewMediaUrls: order.reviewMediaUrls,
+        );
+        notifyListeners();
+        await _saveOrdersToCache();
+      }
+      return true;
+    } catch (e) {
+      _errorMessage = 'Nomor resi gagal disimpan: $e';
+      debugPrint('Supabase order tracking update failed: $e');
+      return false;
+    }
+  }
+
   Future<OrderModel?> addOrder(
     OrderModel newOrder, {
     required String shippingMethod,

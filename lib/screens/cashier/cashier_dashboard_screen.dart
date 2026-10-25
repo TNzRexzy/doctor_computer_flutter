@@ -8,6 +8,7 @@ import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/admin/product_editor_dialog.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 
@@ -29,6 +30,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _managedProducts = [];
   List<Map<String, dynamic>> _posOrders = [];
+  List<Map<String, dynamic>> _allOrders = [];
 
   // POS Cart: Map of productId -> quantity
   final Map<String, int> _cart = {};
@@ -36,11 +38,13 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   String _productSearchQuery = '';
   String _selectedCategory = 'all';
   String _orderSearchQuery = '';
+  String _manageOrderSearchQuery = '';
+  String _manageOrderChannelFilter = 'all'; // 'all', 'online', 'pos'
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _loadCashierData();
   }
 
@@ -167,6 +171,29 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         _posOrders = List<Map<String, dynamic>>.from(filtered);
       } catch (e) {
         debugPrint('Notice loading POS orders: $e');
+      }
+
+      // 5. Fetch all orders (online + POS) for the Pesanan management tab
+      try {
+        List<dynamic> allRes;
+        try {
+          allRes = await supabase
+              .from('orders')
+              .select()
+              .order('order_date', ascending: false)
+              .limit(200);
+        } catch (_) {
+          allRes = await supabase
+              .from('orders')
+              .select()
+              .order('created_at', ascending: false)
+              .limit(200);
+        }
+        _allOrders = allRes
+            .map((o) => Map<String, dynamic>.from(o as Map))
+            .toList();
+      } catch (e) {
+        debugPrint('Notice loading all orders: $e');
       }
     } catch (e) {
       debugPrint('Error loading cashier data: $e');
@@ -1158,6 +1185,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
               icon: Icon(Icons.receipt_long),
               text: 'Riwayat Transaksi',
             ),
+            const Tab(icon: Icon(Icons.local_shipping), text: 'Pesanan'),
             const Tab(icon: Icon(Icons.inventory_2), text: 'Cek Stok'),
             const Tab(icon: Icon(Icons.edit_note), text: 'Kelola Produk'),
           ],
@@ -1171,6 +1199,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 _buildPOSTab(),
                 _buildShiftTab(),
                 _buildOrdersTab(),
+                _buildOrderManagementTab(),
                 _buildStockTab(),
                 _buildProductManagementTab(),
               ],
@@ -1893,6 +1922,241 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                       ),
                     );
                   },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // TAB: PESANAN (update status + input resi)
+  // ============================================================
+  Future<void> _showEditOrderDialog(Map<String, dynamic> order) async {
+    final result = await showOrderUpdateDialog(context, order);
+    if (!mounted || result == null || result.isEmpty) return;
+
+    final orderId = order['id']?.toString() ?? '';
+    final idx = _allOrders.indexWhere((o) => o['id']?.toString() == orderId);
+    if (idx != -1) {
+      _allOrders[idx] = Map<String, dynamic>.from(_allOrders[idx])
+        ..addAll(result);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Pesanan berhasil diperbarui'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+    setState(() {});
+  }
+
+  Widget _buildOrderManagementTab() {
+    final filtered = _allOrders.where((o) {
+      final id = o['id']?.toString().toLowerCase() ?? '';
+      final status = o['status']?.toString().toLowerCase() ?? '';
+      final resi = o['tracking_number']?.toString().toLowerCase() ?? '';
+      final channel = o['channel']?.toString().toLowerCase() ?? 'online';
+      final q = _manageOrderSearchQuery.toLowerCase();
+      final matchesSearch =
+          q.isEmpty || id.contains(q) || status.contains(q) || resi.contains(q);
+      final matchesChannel =
+          _manageOrderChannelFilter == 'all' ||
+          channel == _manageOrderChannelFilter;
+      return matchesSearch && matchesChannel;
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Cari Order ID, status, atau resi...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _manageOrderSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () =>
+                          setState(() => _manageOrderSearchQuery = ''),
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
+            ),
+            onChanged: (val) => setState(() => _manageOrderSearchQuery = val),
+          ),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            children: [
+              FilterChip(
+                label: const Text('Semua Saluran'),
+                selected: _manageOrderChannelFilter == 'all',
+                onSelected: (_) =>
+                    setState(() => _manageOrderChannelFilter = 'all'),
+              ),
+              const SizedBox(width: 8),
+              FilterChip(
+                avatar: const Icon(Icons.language, size: 14),
+                label: const Text('Online App'),
+                selected: _manageOrderChannelFilter == 'online',
+                onSelected: (_) =>
+                    setState(() => _manageOrderChannelFilter = 'online'),
+              ),
+              const SizedBox(width: 8),
+              FilterChip(
+                avatar: const Icon(Icons.point_of_sale, size: 14),
+                label: const Text('POS Kasir (In-Store)'),
+                selected: _manageOrderChannelFilter == 'pos',
+                onSelected: (_) =>
+                    setState(() => _manageOrderChannelFilter = 'pos'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.receipt_long,
+                        size: 64,
+                        color: AppColors.textTertiary,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Belum ada pesanan yang sesuai',
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadCashierData,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final order = filtered[index];
+                      final status =
+                          order['status']?.toString() ?? 'processing';
+                      final channel =
+                          order['channel']?.toString().toLowerCase() ??
+                          'online';
+                      final isPos = channel == 'pos';
+                      final cashierId = order['cashier_id']?.toString();
+                      final resi = order['tracking_number']?.toString() ?? '';
+                      final courier = order['courier']?.toString() ?? '';
+
+                      final statusColor = status == 'delivered'
+                          ? AppColors.success
+                          : status == 'shipped'
+                          ? AppColors.accent
+                          : status == 'cancelled'
+                          ? AppColors.error
+                          : AppColors.warning;
+
+                      return GlassCard(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: Icon(
+                            isPos ? Icons.point_of_sale : Icons.receipt,
+                            color: isPos ? AppColors.accent : statusColor,
+                          ),
+                          title: Text(
+                            'Order: ${order['id'] ?? '-'}',
+                            style: AppTextStyles.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total: Rp ${_formatNumber(order['total_price'])}  •  Metode: ${order['payment_method'] ?? '-'}',
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  Chip(
+                                    label: Text(
+                                      status.toUpperCase(),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    backgroundColor: statusColor,
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  Chip(
+                                    avatar: Icon(
+                                      isPos ? Icons.store : Icons.language,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
+                                    label: Text(
+                                      isPos ? 'POS KASIR' : 'ONLINE',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    backgroundColor: isPos
+                                        ? const Color(0xFF8B5CF6)
+                                        : AppColors.primary,
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  if (cashierId != null && cashierId.isNotEmpty)
+                                    Chip(
+                                      label: Text(
+                                        'Kasir: ${cashierId.length > 8 ? cashierId.substring(0, 8) : cashierId}',
+                                        style: const TextStyle(fontSize: 9),
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  if (resi.isNotEmpty)
+                                    Chip(
+                                      avatar: const Icon(
+                                        Icons.local_shipping,
+                                        size: 12,
+                                      ),
+                                      label: Text(
+                                        'Resi: $resi${courier.isNotEmpty ? ' ($courier)' : ''}',
+                                        style: const TextStyle(fontSize: 9),
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            tooltip: 'Update pesanan',
+                            onPressed: () => _showEditOrderDialog(order),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
         ),
       ],

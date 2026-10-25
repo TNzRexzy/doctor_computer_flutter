@@ -110,7 +110,13 @@ class OrderTrackingScreen extends StatelessWidget {
                         children: [
                           Text('Nomor Resi:', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                           const SizedBox(height: 2),
-                          Text(order.trackingNumber, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            order.trackingNumber.trim().isEmpty ? 'Belum tersedia' : order.trackingNumber,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: order.trackingNumber.trim().isEmpty ? AppColors.textTertiary : null,
+                            ),
+                          ),
                         ],
                       ),
                       OutlinedButton.icon(
@@ -120,7 +126,7 @@ class OrderTrackingScreen extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.copy, size: 16),
                         label: const Text('Salin Resi'),
-                        onPressed: () {
+                        onPressed: order.trackingNumber.trim().isEmpty ? null : () {
                           Clipboard.setData(ClipboardData(text: order.trackingNumber));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Nomor resi berhasil disalin!')),

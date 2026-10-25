@@ -7,12 +7,11 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
-import 'package:doctor_computer/providers/order_provider.dart';
-import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/review_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/common/product_image_picker.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1218,6 +1217,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       padding: EdgeInsets.zero,
                                       visualDensity: VisualDensity.compact,
                                     ),
+                                  if ((order['tracking_number']?.toString() ?? '')
+                                      .isNotEmpty)
+                                    Chip(
+                                      avatar: const Icon(
+                                        Icons.local_shipping,
+                                        size: 12,
+                                      ),
+                                      label: Text(
+                                        'Resi: ${order['tracking_number']}${(order['courier']?.toString() ?? '').isNotEmpty ? ' (${order['courier']})' : ''}',
+                                        style: const TextStyle(fontSize: 9),
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
                                 ],
                               ),
                             ],
@@ -1236,99 +1249,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  void _showEditOrderStatusDialog(Map<String, dynamic> order) {
-    String selectedStatus = order['status']?.toString() ?? 'processing';
+  Future<void> _showEditOrderStatusDialog(Map<String, dynamic> order) async {
+    final result = await showOrderUpdateDialog(context, order);
+    if (!mounted || result == null || result.isEmpty) return;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(
-            'Update Status Pesanan',
-            style: AppTextStyles.titleMedium,
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Order ID: ${order['id']}', style: AppTextStyles.bodySmall),
-              const SizedBox(height: 16),
-              ...['processing', 'shipped', 'delivered', 'cancelled'].map(
-                (status) => RadioListTile<String>(
-                  value: status,
-                  groupValue: selectedStatus,
-                  title: Text(status.toUpperCase()),
-                  activeColor: AppColors.primary,
-                  onChanged: (val) {
-                    if (val != null) {
-                      setDialogState(() => selectedStatus = val);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
-              onPressed: () async {
-                final nav = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-                final orderId = order['id']?.toString() ?? '';
-
-                OrderStatus newStatus = OrderStatus.processing;
-                for (final s in OrderStatus.values) {
-                  if (s.name.toLowerCase() == selectedStatus.toLowerCase()) {
-                    newStatus = s;
-                    break;
-                  }
-                }
-
-                final success = await context
-                    .read<OrderProvider>()
-                    .updateOrderStatus(orderId, newStatus);
-                if (!ctx.mounted) return;
-                if (!success) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        context.read<OrderProvider>().errorMessage ??
-                            'Status pesanan gagal diperbarui.',
-                      ),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                  return;
-                }
-
-                // Update local list
-                final idx = _orders.indexWhere(
-                  (o) => o['id']?.toString() == orderId,
-                );
-                if (idx != -1) {
-                  _orders[idx] = Map<String, dynamic>.from(_orders[idx]);
-                  _orders[idx]['status'] = selectedStatus;
-                }
-
-                nav.pop();
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Status pesanan berhasil diperbarui'),
-                  ),
-                );
-                if (mounted) setState(() {});
-              },
-              child: const Text('Update'),
-            ),
-          ],
-        ),
-      ),
+    final orderId = order['id']?.toString() ?? '';
+    final idx = _orders.indexWhere((o) => o['id']?.toString() == orderId);
+    if (idx != -1) {
+      _orders[idx] = Map<String, dynamic>.from(_orders[idx])..addAll(result);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pesanan berhasil diperbarui')),
     );
+    setState(() {});
   }
 
   // ============================================================
