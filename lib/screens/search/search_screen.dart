@@ -7,6 +7,7 @@ import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/services/gemini_service.dart';
+import 'package:doctor_computer/services/product_search.dart';
 import 'package:doctor_computer/widgets/home/category_grid.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
@@ -24,6 +25,8 @@ class _SearchScreenState extends State<SearchScreen> {
   final FocusNode _focusNode = FocusNode();
   bool _isAiMode = false;
   bool _isAiSearching = false;
+  bool _aiHasSearched = false;
+  int _aiRequestId = 0;
   String _aiExplanation = '';
   List<ProductModel> _aiRecommendations = [];
 
@@ -45,9 +48,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _onSearchChanged() {
-    if (!_isAiMode) {
-      context.read<ProductProvider>().setSearchQuery(_searchController.text);
-    }
+    // Rebuild so the standard results and the clear button follow the text.
+    if (mounted) setState(() {});
   }
 
   void _triggerAiSearch(String query) async {
@@ -57,13 +59,20 @@ class _SearchScreenState extends State<SearchScreen> {
       _isAiSearching = true;
     });
 
-    final catalog = context.read<ProductProvider>().allProducts;
-    final result = await GeminiService().searchWithAI(query: query, catalog: catalog);
+    final requestId = ++_aiRequestId;
+    final productProvider = context.read<ProductProvider>();
+    final result = await GeminiService().searchWithAI(
+      query: query,
+      catalog: productProvider.allProducts,
+      categories: productProvider.categories,
+    );
 
-    if (!mounted) return;
+    // Ignore outdated answers when a newer search was started meanwhile.
+    if (!mounted || requestId != _aiRequestId) return;
     setState(() {
       _aiExplanation = result['explanation'] as String? ?? '';
       _aiRecommendations = (result['recommendations'] as List).cast<ProductModel>();
+      _aiHasSearched = true;
       _isAiSearching = false;
     });
   }
@@ -73,11 +82,6 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _focusNode.dispose();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<ProductProvider>().setSearchQuery('');
-      }
-    });
     super.dispose();
   }
 
@@ -118,7 +122,10 @@ class _SearchScreenState extends State<SearchScreen> {
                                   _searchController.clear();
                                   setState(() {
                                     _aiExplanation = '';
-                                    _aiRecommendations.clear();
+                                    _aiRecommendations = [];
+                                    _aiHasSearched = false;
+                                    _aiRequestId++;
+                                    _isAiSearching = false;
                                   });
                                 },
                               )
@@ -171,7 +178,6 @@ class _SearchScreenState extends State<SearchScreen> {
                           setState(() {
                             _isAiMode = false;
                           });
-                          context.read<ProductProvider>().setSearchQuery(_searchController.text);
                         },
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
@@ -266,7 +272,7 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    if (_aiRecommendations.isEmpty) {
+    if (_aiRecommendations.isEmpty && !_aiHasSearched) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -351,8 +357,10 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
             ),
           ),
-        Text('Rekomendasi Komponen & Produk AI (${_aiRecommendations.length}):', style: AppTextStyles.titleSmall),
-        const SizedBox(height: 12),
+        if (_aiRecommendations.isNotEmpty) ...[
+          Text('Rekomendasi Komponen & Produk AI (${_aiRecommendations.length}):', style: AppTextStyles.titleSmall),
+          const SizedBox(height: 12),
+        ],
         ..._aiRecommendations.map((product) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10.0),
@@ -439,52 +447,11 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         }
 
-        final query = _searchController.text.toLowerCase().trim();
-        List<ProductModel> results = List<ProductModel>.from(provider.filteredProducts);
-
-        // Add categoryId matching: if someone types 'SSD', also match by categoryId 'storage'
-        final categoryKeywords = {
-          'ssd': 'storage',
-          'hdd': 'storage',
-          'nvme': 'storage',
-          'storage': 'storage',
-          'laptop': 'laptop',
-          'monitor': 'monitor',
-          'keyboard': 'keyboard',
-          'mouse': 'mouse',
-          'headset': 'headset',
-          'router': 'networking',
-          'wifi': 'networking',
-          'desktop': 'desktop',
-        };
-
-        String? matchedCat;
-        for (final entry in categoryKeywords.entries) {
-          if (query.contains(entry.key)) {
-            matchedCat = entry.value;
-            break;
-          }
-        }
-
-        final existingIds = results.map((p) => p.id).toSet();
-        if (matchedCat != null) {
-          final catProducts = provider.allProducts.where((p) => p.categoryId.toLowerCase() == matchedCat).toList();
-          for (final p in catProducts) {
-            if (!existingIds.contains(p.id)) {
-              results.add(p);
-              existingIds.add(p.id);
-            }
-          }
-        } else {
-          // Direct categoryId matching if query contains or matches category ID
-          final directCatProducts = provider.allProducts.where((p) => p.categoryId.toLowerCase().contains(query)).toList();
-          for (final p in directCatProducts) {
-            if (!existingIds.contains(p.id)) {
-              results.add(p);
-              existingIds.add(p.id);
-            }
-          }
-        }
+        final results = ProductSearch.search(
+          _searchController.text,
+          provider.allProducts,
+          categories: provider.categories,
+        ).products;
 
         if (results.isEmpty) {
           return Center(

@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.0-beta
+* **Release Version:** 1.1.2-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -19,7 +19,7 @@ Doctor Computer utilizes a decoupled, reactive architecture adhering to clean Fl
 * **Omnichannel POS & Shift Engine:** Authenticated PostgreSQL RPCs calculate prices, lock/decrement inventory, persist order items, and reconcile cashier shifts atomically.
 * **Loyalty Points:** Customer points and tiers are database-owned; 500 points are awarded once when an online order is marked delivered. Client-generated hash-chain/minigame data is not authoritative, and minigame EXP is disabled until server-side score verification is implemented.
 * **Geospatial & Mapping Engine:** OpenStreetMap tile integration via `flutter_map` with real-time reverse geocoding through Nominatim HTTP endpoints.
-* **Artificial Intelligence Engine:** Context-aware assistant calls a Supabase Edge Function; the Gemini API key stays in server-side secrets.
+* **Artificial Intelligence Engine:** Doctor AI (floating round chat) and AI Smart Search call the Gemini API with automatic fallback between Flash models when a quota limit is hit; the Gemini API key is stored in the Supabase table `app_config` (`key = 'GEMINI_API_KEY'`, see `supabase/migrations/20261030_app_config.sql`) and is not hardcoded in the app (the `gemini-chat` Edge Function remains available as server-side alternative).
 
 ---
 
@@ -74,7 +74,7 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 * **Database Persistence:** Confirmed location results automatically update the logged-in user profile in Supabase (`latitude`, `longitude`, `address`, `city`).
 
 ### 5. Artificial Intelligence Engine & Semantic Search Refactoring
-* **Context-Aware Customer Support:** Gemini requests go through the authenticated `gemini-chat` Edge Function. The API key is configured as an Edge Function secret and is never loaded into the Flutter client.
+* **Context-Aware Customer Support:** Gemini requests are sent directly from the app with automatic Flash-model fallback. The Gemini API key is no longer hardcoded: it is read at runtime from the Supabase table `app_config` (`key = 'GEMINI_API_KEY'`, readable by logged-in users only, writable by admins only). The authenticated `gemini-chat` Edge Function (key stored as an Edge Function secret) remains available as a server-side fallback.
 * **Category-Prioritized Smart Search:** Refactored search index matching to enforce category exclusivity before textual relevance.
 * **Deterministic Bottleneck & FPS Calculator:** Deployed an 8-game benchmark evaluation database across 10 hardware performance tiers with color-coded performance thresholds.
 
@@ -114,6 +114,26 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-024 | POS product cards had no photo / only some products showed one | No image widget on the card; single URL attempt without the public-URL fallback | Resolved (`_PosImageChain` tries several candidate URLs in order, then shows a placeholder) |
 | BUG-025 | Cart item photos missing after the app is reopened | `CartProvider._fetchProductAsync` used raw `image_url` values (relative file names) without `AppImages.resolveProductImages` | Resolved (Images resolved through `AppImages`, same as the catalog) |
 | BUG-026 | Irrelevant sample notifications appeared on every login | `NotificationProvider` was seeded with four hard-coded demo notifications (fake order, voucher, reminders) | Resolved (List starts empty; notifications are created only by real events and stored per user) |
+| BUG-027 | Gemini API key and Supabase project values were visible in source code, `.env` and `.env.example` | Key was a `defaultValue` in `EnvConfig`; `.env` was tracked by git | Resolved (Key moved to Supabase table `app_config`; `EnvConfig` has no hardcoded values; `.env` is git-ignored and `.env.example` holds placeholders only) |
+
+---
+
+## Version 1.1.2-beta Changelog
+
+1. **Gemini API key no longer hardcoded:**
+   * Removed the hardcoded `GEMINI_API_KEY` default from `lib/core/config/env_config.dart`.
+   * Added `lib/services/app_config_service.dart`, which reads the key from the Supabase table `app_config` (cached for 30 minutes, retried after 30 seconds when empty/failed).
+   * `GeminiService` now loads the key through `AppConfigService` (`_generate` and `_searchWithGemini`). Without a key (or when the user is not logged in) the app falls back to the `gemini-chat` Edge Function and then the local search / answer engine.
+2. **Database Migration:**
+   * Added `supabase/migrations/20261030_app_config.sql` (table `app_config`, RLS: authenticated users can read, only admins can write, anon has no access; seeds an empty `GEMINI_API_KEY` row).
+3. **Environment configuration:**
+   * `EnvConfig` no longer contains the Supabase URL, publishable key or storage URL as defaults. Values come from `.env` via `flutter run --dart-define-from-file=.env`.
+   * Added `EnvConfig.assertConfigured()` (called in `main()`), which fails at startup with a clear message when the build was started without the env file.
+   * `AppImages.getPublicFallbackUrl` now derives the storage URL from `SUPABASE_URL` instead of a hardcoded project domain.
+   * `.env` removed of the Gemini key and added to `.gitignore`; `.env.example` now contains placeholders only.
+4. **Versioning:** Bumped app version to `1.1.2-beta+12` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+**Action required after updating:** run `20261030_app_config.sql`, store the new Gemini key in `app_config`, revoke the old key in Google AI Studio (it was present in the repository history), and run `git rm --cached .env` so the local `.env` is no longer tracked.
 
 ---
 
@@ -191,6 +211,8 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 9. `supabase/migrations/20261028_drop_old_create_pos_order.sql` (removes the legacy duplicate `create_pos_order` overload; only needed if both overloads exist in your database).
 10. `supabase/migrations/20261029_user_notifications.sql` (per-user notification table with RLS for cross-device sync).
 
+11. `supabase/migrations/20261030_app_config.sql` (`app_config` table with RLS; store the Gemini API key here instead of in the app).
+
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 
 Deploy the two Edge Functions and configure their secrets:
@@ -201,11 +223,20 @@ supabase functions deploy provision-staff
 supabase secrets set GEMINI_API_KEY=YOUR_GEMINI_KEY
 ```
 
-`provision-staff` also requires the Supabase service-role secret in the Edge Function environment. Never place either secret in Flutter assets or `--dart-define` values. Set public app configuration at build time when overriding defaults:
+The Edge Function secret above is only needed for the server-side fallback. The in-app Gemini calls use the key stored in the database:
+
+```sql
+UPDATE public.app_config SET value = 'YOUR_GEMINI_KEY' WHERE key = 'GEMINI_API_KEY';
+```
+
+`provision-staff` also requires the Supabase service-role secret in the Edge Function environment. Never place the service-role secret in Flutter assets or `--dart-define` values. Public app configuration (Supabase URL, publishable key, storage URL) is not hardcoded; it is supplied at build time from `.env`:
 
 ```bash
-flutter run --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co --dart-define=SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_KEY
+cp .env.example .env   # fill in your Supabase values
+flutter run --dart-define-from-file=.env
 ```
+
+The Gemini API key is not part of `.env`; it lives in the `app_config` table.
 
 ---
 
@@ -223,17 +254,23 @@ flutter run --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co --dart-d
    flutter doctor
    ```
 
-2. Install dependencies:
+2. Create your local environment file (it is git-ignored):
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_STORAGE_URL`.
+
+3. Install dependencies:
    ```bash
    flutter pub get
    ```
 
-3. Run static code analysis:
+4. Run static code analysis:
    ```bash
    flutter analyze lib
    ```
 
-4. Launch target application:
+5. Launch target application:
    ```bash
-   flutter run
+   flutter run --dart-define-from-file=.env
    ```

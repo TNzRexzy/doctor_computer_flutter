@@ -5,7 +5,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
-import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
+import 'package:doctor_computer/widgets/ai_chat/doctor_ai_floating.dart';
 
 class WarrantyCheckScreen extends StatefulWidget {
   final String? initialSerial;
@@ -263,10 +263,7 @@ class _WarrantyCheckScreenState extends State<WarrantyCheckScreen> {
                   icon: const Icon(Icons.support_agent, size: 18),
                   label: const Text('Klaim Garansi'),
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen()),
-                    );
+                    DoctorAiController.instance.open();
                   },
                 ),
               ),

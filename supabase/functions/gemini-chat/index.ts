@@ -66,37 +66,58 @@ Deno.serve(async (request) => {
     return role && text ? [{ role, parts: [{ text }] }] : [];
   });
 
-  try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": geminiApiKey,
+  // Gemini requires the conversation to start with a "user" turn.
+  while (history.length > 0 && history[0].role === "model") history.shift();
+
+  // Flash models in order of preference. When one hits its quota (429), is
+  // overloaded (5xx) or no longer exists (404), the next one is tried.
+  const models = [
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+  ];
+
+  for (const model of models) {
+    try {
+      const generationConfig: Record<string, unknown> = { maxOutputTokens: 1500 };
+      if (model.startsWith("gemini-3")) {
+        generationConfig.thinkingConfig = { thinkingLevel: "low" };
+      }
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": geminiApiKey,
+          },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [...history, { role: "user", parts: [{ text: query }] }],
+            generationConfig,
+          }),
         },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: [...history, { role: "user", parts: [{ text: query }] }],
-          generationConfig: { maxOutputTokens: 700 },
-        }),
-      },
-    );
-    if (!response.ok) {
-      console.error(`Gemini API returned HTTP ${response.status}.`);
-      return respond(502, { error: "AI provider request failed" });
+      );
+      if (!response.ok) {
+        console.error(`Gemini ${model} returned HTTP ${response.status}.`);
+        if (response.status === 401) break;
+        continue; // quota / overload / missing model -> try the next model
+      }
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts
+        ?.filter((part: { thought?: boolean }) => part.thought !== true)
+        .map((part: { text?: string }) => part.text ?? "")
+        .join("")
+        .trim();
+      if (!text) continue;
+      return respond(200, { text, model });
+    } catch (error) {
+      console.error(`Gemini ${model} request failed:`, error);
     }
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts
-      ?.map((part: { text?: string }) => part.text ?? "")
-      .join("")
-      .trim();
-    if (!text) {
-      return respond(502, { error: "AI provider returned no response" });
-    }
-    return respond(200, { text });
-  } catch (error) {
-    console.error("Gemini provider request failed:", error);
-    return respond(502, { error: "AI provider request failed" });
   }
+  return respond(502, { error: "AI provider request failed" });
 });

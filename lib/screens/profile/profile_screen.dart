@@ -9,7 +9,7 @@ import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
-import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
+import 'package:doctor_computer/widgets/ai_chat/doctor_ai_floating.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 import 'package:doctor_computer/screens/member/member_screen.dart';
 import 'package:doctor_computer/providers/blockchain_provider.dart';
@@ -178,7 +178,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   _buildMenuItem(context, Icons.smart_toy, 'Tanya Dokter AI (Customer Service)', () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen()));
+                    DoctorAiController.instance.open();
                   }),
                   _buildMenuItem(context, Icons.verified_user, 'Cek Masa Garansi Aktif', () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const WarrantyCheckScreen()));

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/providers/theme_provider.dart';
 import 'package:doctor_computer/core/theme/app_theme.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
+import 'package:doctor_computer/widgets/ai_chat/doctor_ai_floating.dart';
 
 class DoctorComputerApp extends StatelessWidget {
   const DoctorComputerApp({super.key});
@@ -20,6 +21,9 @@ class DoctorComputerApp extends StatelessWidget {
           darkTheme: AppTheme.darkTheme,
           initialRoute: AppRouter.splash,
           onGenerateRoute: AppRouter.generateRoute,
+          navigatorObservers: [DoctorAiRouteObserver.instance],
+          builder: (context, child) =>
+              DoctorAiFloatingHost(child: child ?? const SizedBox.shrink()),
         );
       },
     );

@@ -14,7 +14,6 @@ import 'package:doctor_computer/widgets/common/badge_icon.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/screens/notifications/notifications_screen.dart';
-import 'package:doctor_computer/screens/ai_chat/ai_customer_service_screen.dart';
 import 'package:doctor_computer/screens/member/member_screen.dart';
 import 'package:doctor_computer/screens/warranty/warranty_check_screen.dart';
 import 'package:doctor_computer/screens/main_nav_screen.dart';
@@ -354,20 +353,6 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 100),
             ],
           ),
-        ),
-      ),
-      floatingActionButton: Padding(
-        padding: EdgeInsets.only(bottom: 75.0 + MediaQuery.of(context).padding.bottom),
-        child: FloatingActionButton.extended(
-          backgroundColor: AppColors.primary,
-          icon: const Icon(Icons.smart_toy, color: Colors.white),
-          label: const Text('Tanya Dokter AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AiCustomerServiceScreen()),
-            );
-          },
         ),
       ),
     );

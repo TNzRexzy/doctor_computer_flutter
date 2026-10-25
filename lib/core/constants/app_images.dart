@@ -62,7 +62,7 @@ class AppImages {
     }
     final normalizedPath = cleanPath.startsWith('/') ? cleanPath.substring(1) : cleanPath;
     final encodedPath = Uri.encodeComponent(normalizedPath).replaceAll('%2F', '/');
-    return 'https://nvipwcrydrnogrbsnhud.storage.supabase.co/storage/v1/object/public/${EnvConfig.storageBucket}/$encodedPath';
+    return '${EnvConfig.supabaseUrl}/storage/v1/object/public/${EnvConfig.storageBucket}/$encodedPath';
   }
 
   // --- Promo Banners (Sourced from Supabase Storage Bucket) ---

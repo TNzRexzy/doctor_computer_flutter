@@ -17,6 +17,7 @@ import 'package:doctor_computer/app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  EnvConfig.assertConfigured();
 
   try {
     await Supabase.initialize(

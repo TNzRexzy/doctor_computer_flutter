@@ -1,20 +1,315 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doctor_computer/services/app_config_service.dart';
+import 'package:doctor_computer/data/models/category_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
+import 'package:doctor_computer/services/product_search.dart';
+
+/// Result of one attempt against a single Gemini model.
+class _GeminiOutcome {
+  final String? text;
+
+  /// True when retrying with another model cannot help (e.g. invalid API key).
+  final bool fatal;
+
+  const _GeminiOutcome._(this.text, this.fatal);
+  const _GeminiOutcome.ok(String text) : this._(text, false);
+  const _GeminiOutcome.next() : this._(null, false);
+  const _GeminiOutcome.stop() : this._(null, true);
+}
 
 class GeminiService {
   static final GeminiService _instance = GeminiService._internal();
   factory GeminiService() => _instance;
   GeminiService._internal();
 
+  static const String _endpoint =
+      'https://generativelanguage.googleapis.com/v1beta/models';
+
+  /// Models in order of preference. When one runs out of quota, is overloaded
+  /// or no longer exists, the next "flash" model in this list is used
+  /// automatically.
+  static const List<String> models = [
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+  ];
+
+  /// Models that recently failed (quota / overload) are skipped until this time.
+  final Map<String, DateTime> _blockedUntil = {};
+
+  /// Name of the model that produced the latest successful answer.
+  String? lastUsedModel;
+
+  static const String _chatSystemInstruction =
+      'Anda adalah "Dokter AI", asisten customer service resmi toko komputer '
+      '"Doctor Computer". Jawab dalam Bahasa Indonesia yang ramah, ringkas '
+      '(maksimal sekitar 6 kalimat atau daftar poin pendek) dan akurat. '
+      'Layanan toko: penjualan laptop, PC, komponen & periferal, jasa rakit PC '
+      '(Standard Rp250.000, Performance Tuning Rp500.000), cek garansi, '
+      'pelacakan pesanan, membership (Bronze, Silver, Gold, Platinum) dan fitur '
+      'PC Builder di aplikasi. Jangan mengarang harga, stok, atau status '
+      'pesanan tertentu; arahkan pengguna ke menu aplikasi (Cari, PC Builder, '
+      'Pesanan Saya, Cek Garansi). Jika pertanyaan di luar topik komputer atau '
+      'toko, tolak dengan sopan. Jangan memakai heading markdown; boleh memakai '
+      '**teks tebal** dan poin dengan tanda "•".';
+
+  static const String _searchSystemInstruction =
+      'Anda adalah mesin pencari produk untuk toko komputer "Doctor Computer". '
+      'Dari katalog JSON yang diberikan, pilih produk yang PALING relevan '
+      'dengan kebutuhan pengguna (jenis produk, kegunaan, spesifikasi, merek). '
+      'Patuhi anggaran jika disebut (harga dalam rupiah, "10 jutaan" berarti '
+      'sekitar 10.000.000). Hanya gunakan id yang ada di katalog; jangan '
+      'mengarang produk. Pilih maksimal 8 produk, urut dari paling relevan. '
+      'Jika tidak ada yang cocok, kembalikan ids kosong. '
+      'Balas HANYA JSON valid dengan format: '
+      '{"explanation":"1-2 kalimat Bahasa Indonesia yang menjelaskan alasan '
+      'pilihan","ids":["id1","id2"]}';
+
+  // ---------------------------------------------------------------------------
+  // Gemini REST client with automatic model fallback
+  // ---------------------------------------------------------------------------
+
+  void _block(String model, Duration duration) {
+    _blockedUntil[model] = DateTime.now().add(duration);
+  }
+
+  /// Calls Gemini, switching to the next model whenever the current one hits
+  /// quota limits (HTTP 429), is overloaded (5xx) or is unavailable (404).
+  /// Returns null when no model could answer.
+  Future<String?> _generate({
+    required String systemInstruction,
+    required List<Map<String, dynamic>> contents,
+    int maxOutputTokens = 1500,
+    bool jsonOutput = false,
+  }) async {
+    final apiKey = (await AppConfigService().getGeminiApiKey()).trim();
+    if (apiKey.isEmpty) return null;
+
+    final now = DateTime.now();
+    final available = models.where((m) {
+      final until = _blockedUntil[m];
+      return until == null || until.isBefore(now);
+    }).toList();
+    // If every model is cooling down, still try them all rather than give up.
+    final queue = available.isNotEmpty ? available : List<String>.from(models);
+
+    for (final model in queue) {
+      final outcome = await _callModel(
+        model: model,
+        apiKey: apiKey,
+        systemInstruction: systemInstruction,
+        contents: contents,
+        maxOutputTokens: maxOutputTokens,
+        jsonOutput: jsonOutput,
+      );
+      if (outcome.text != null) {
+        lastUsedModel = model;
+        _blockedUntil.remove(model);
+        return outcome.text;
+      }
+      if (outcome.fatal) return null;
+      debugPrint('Gemini: switching from $model to the next model...');
+    }
+    return null;
+  }
+
+  Future<_GeminiOutcome> _callModel({
+    required String model,
+    required String apiKey,
+    required String systemInstruction,
+    required List<Map<String, dynamic>> contents,
+    required int maxOutputTokens,
+    required bool jsonOutput,
+    bool withThinkingConfig = true,
+  }) async {
+    final generationConfig = <String, dynamic>{
+      'maxOutputTokens': maxOutputTokens,
+    };
+    if (jsonOutput) generationConfig['responseMimeType'] = 'application/json';
+    final useThinking = withThinkingConfig && model.startsWith('gemini-3');
+    if (useThinking) {
+      generationConfig['thinkingConfig'] = {'thinkingLevel': 'low'};
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_endpoint/$model:generateContent'),
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: jsonEncode({
+              'systemInstruction': {
+                'parts': [
+                  {'text': systemInstruction},
+                ],
+              },
+              'contents': contents,
+              'generationConfig': generationConfig,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final status = response.statusCode;
+      final body = utf8.decode(response.bodyBytes);
+
+      if (status == 200) {
+        final text = _extractText(body);
+        if (text != null && text.isNotEmpty) return _GeminiOutcome.ok(text);
+        debugPrint('Gemini $model returned an empty answer.');
+        _block(model, const Duration(seconds: 20));
+        return const _GeminiOutcome.next();
+      }
+
+      final message = _errorMessage(body);
+      final lower = message.toLowerCase();
+      debugPrint('Gemini $model -> HTTP $status: $message');
+
+      // Some models reject thinkingConfig: retry the same model without it.
+      if (status == 400 && useThinking && lower.contains('thinking')) {
+        return await _callModel(
+          model: model,
+          apiKey: apiKey,
+          systemInstruction: systemInstruction,
+          contents: contents,
+          maxOutputTokens: maxOutputTokens,
+          jsonOutput: jsonOutput,
+          withThinkingConfig: false,
+        );
+      }
+
+      final keyProblem =
+          lower.contains('api key') || lower.contains('api_key');
+      if ((status == 400 || status == 401 || status == 403) && keyProblem) {
+        return const _GeminiOutcome.stop();
+      }
+
+      if (status == 429) {
+        // Quota / rate limit reached for this model -> use another flash model.
+        final perDay = lower.contains('perday') || lower.contains('per day');
+        _block(model, perDay ? const Duration(hours: 1) : const Duration(seconds: 60));
+        return const _GeminiOutcome.next();
+      }
+      if (status == 404) {
+        _block(model, const Duration(hours: 6));
+        return const _GeminiOutcome.next();
+      }
+      if (status == 403) {
+        _block(model, const Duration(minutes: 30));
+        return const _GeminiOutcome.next();
+      }
+      if (status >= 500) {
+        _block(model, const Duration(seconds: 30));
+        return const _GeminiOutcome.next();
+      }
+      if (status == 400 && lower.contains('model')) {
+        _block(model, const Duration(hours: 1));
+        return const _GeminiOutcome.next();
+      }
+      // Other client errors would fail the same way on every model.
+      return const _GeminiOutcome.stop();
+    } catch (e) {
+      debugPrint('Gemini $model request failed: $e');
+      _block(model, const Duration(seconds: 15));
+      return const _GeminiOutcome.next();
+    }
+  }
+
+  String? _extractText(String body) {
+    final data = jsonDecode(body);
+    if (data is! Map) return null;
+    final candidates = data['candidates'];
+    if (candidates is! List || candidates.isEmpty) return null;
+    final first = candidates.first;
+    if (first is! Map) return null;
+    final content = first['content'];
+    if (content is! Map) return null;
+    final parts = content['parts'];
+    if (parts is! List) return null;
+    final buffer = StringBuffer();
+    for (final part in parts) {
+      if (part is Map && part['thought'] != true && part['text'] is String) {
+        buffer.write(part['text']);
+      }
+    }
+    return buffer.toString().trim();
+  }
+
+  String _errorMessage(String body) {
+    try {
+      final data = jsonDecode(body);
+      if (data is Map && data['error'] is Map) {
+        final error = data['error'] as Map;
+        return '${error['status'] ?? ''} ${error['message'] ?? ''}'.trim();
+      }
+    } catch (_) {}
+    return body.length > 200 ? body.substring(0, 200) : body;
+  }
+
+  /// Gemini needs alternating roles that start with "user".
+  List<Map<String, dynamic>> _buildContents(
+    List<Map<String, String>> history,
+    String query,
+  ) {
+    final contents = <Map<String, dynamic>>[];
+
+    void add(String role, String text) {
+      final clean = text.trim();
+      if (clean.isEmpty) return;
+      final safe = clean.length > 2000 ? clean.substring(0, 2000) : clean;
+      if (contents.isNotEmpty && contents.last['role'] == role) {
+        final part = (contents.last['parts'] as List).first as Map;
+        part['text'] = '${part['text']}\n$safe';
+      } else {
+        contents.add({
+          'role': role,
+          'parts': [
+            {'text': safe},
+          ],
+        });
+      }
+    }
+
+    final recent = history.length > 12
+        ? history.sublist(history.length - 12)
+        : history;
+    for (final entry in recent) {
+      final role = entry['role'] == 'user' ? 'user' : 'model';
+      if (contents.isEmpty && role == 'model') continue;
+      add(role, entry['text'] ?? '');
+    }
+    add('user', query);
+    return contents;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Doctor AI chat
+  // ---------------------------------------------------------------------------
+
   /// Generate AI reply for Customer Service Chat
   Future<String> getCustomerServiceResponse(
     String userQuery,
     List<Map<String, String>> history,
   ) async {
+    // 1) Direct Gemini call (with automatic flash-model fallback on quota limit).
+    final direct = await _generate(
+      systemInstruction: _chatSystemInstruction,
+      contents: _buildContents(history, userQuery),
+    );
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    // 2) Server-side Edge Function (used when no client key is configured).
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'gemini-chat',
@@ -31,109 +326,189 @@ class GeminiService {
       );
     }
 
-    // Smart Domain Expert Fallback Engine
+    // 3) Smart Domain Expert Fallback Engine
     return _generateFallbackCustomerService(userQuery);
   }
 
-  /// AI-powered Smart Search
+  // ---------------------------------------------------------------------------
+  // AI Smart Search
+  // ---------------------------------------------------------------------------
+
+  /// AI-powered Smart Search: Gemini picks the best products from the catalog,
+  /// with a ranked local search as fallback when the AI is unavailable.
   Future<Map<String, dynamic>> searchWithAI({
     required String query,
     required List<ProductModel> catalog,
+    List<CategoryModel> categories = const [],
   }) async {
-    final lower = query.toLowerCase().trim();
-    List<ProductModel> matches = [];
-    String explanation = '';
+    final trimmed = query.trim();
+    final local = ProductSearch.search(
+      trimmed,
+      catalog,
+      categories: categories,
+      limit: 8,
+    );
 
-    // Step 1: Exact category match first
-    final categoryKeywords = {
-      'ssd': 'storage',
-      'hdd': 'storage',
-      'nvme': 'storage',
-      'laptop': 'laptop',
-      'monitor': 'monitor',
-      'keyboard': 'keyboard',
-      'mouse': 'mouse',
-      'headset': 'headset',
-      'router': 'networking',
-      'wifi': 'networking',
-      'desktop': 'desktop',
+    String? aiExplanation;
+    if (trimmed.isNotEmpty && catalog.isNotEmpty) {
+      try {
+        final ai = await _searchWithGemini(trimmed, catalog, local.products);
+        if (ai != null) {
+          final products = ai['products'] as List<ProductModel>;
+          aiExplanation = ai['explanation'] as String?;
+          if (products.isNotEmpty) {
+            return {
+              'explanation': (aiExplanation != null && aiExplanation.isNotEmpty)
+                  ? aiExplanation
+                  : 'Rekomendasi produk untuk "$trimmed".',
+              'recommendations': products,
+              'source': 'ai',
+            };
+          }
+        }
+      } catch (e) {
+        debugPrint('Gemini smart search failed; using local search: $e');
+      }
+    }
+
+    if (local.products.isNotEmpty) {
+      final budgetNote = local.maxPrice != null
+          ? ' (anggaran sampai Rp${_formatThousands(local.maxPrice!)})'
+          : '';
+      return {
+        'explanation': local.partial
+            ? 'Menampilkan produk yang paling mendekati "$trimmed"$budgetNote.'
+            : 'Hasil pencarian untuk "$trimmed"$budgetNote.',
+        'recommendations': local.products,
+        'source': 'local',
+      };
+    }
+
+    return {
+      'explanation': (aiExplanation != null && aiExplanation.isNotEmpty)
+          ? aiExplanation
+          : 'Tidak ditemukan produk yang cocok dengan "$trimmed". Coba kata kunci atau anggaran lain.',
+      'recommendations': <ProductModel>[],
+      'source': 'none',
     };
+  }
 
-    String? matchedCategory;
-    for (final entry in categoryKeywords.entries) {
-      if (lower.contains(entry.key)) {
-        matchedCategory = entry.value;
-        break;
+  String _formatThousands(double value) {
+    final digits = value.round().toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  Future<Map<String, dynamic>?> _searchWithGemini(
+    String query,
+    List<ProductModel> catalog,
+    List<ProductModel> localHits,
+  ) async {
+    if ((await AppConfigService().getGeminiApiKey()).trim().isEmpty) return null;
+
+    // Keep the prompt small: locally matched items first, then top rated.
+    const maxItems = 250;
+    List<ProductModel> candidates = catalog;
+    if (catalog.length > maxItems) {
+      final seen = <String>{};
+      candidates = [];
+      for (final p in localHits) {
+        if (seen.add(p.id)) candidates.add(p);
+      }
+      final rest = List<ProductModel>.from(catalog)
+        ..sort((a, b) => b.rating.compareTo(a.rating));
+      for (final p in rest) {
+        if (candidates.length >= maxItems) break;
+        if (seen.add(p.id)) candidates.add(p);
       }
     }
 
-    if (matchedCategory != null) {
-      // Filter by category FIRST, then by query relevance
-      matches = catalog.where((p) {
-        return p.categoryId.toLowerCase() == matchedCategory;
-      }).toList();
+    final compact = candidates.map((p) {
+      final specs = p.specs.entries
+          .take(5)
+          .map((e) {
+            final value = e.value.length > 30
+                ? e.value.substring(0, 30)
+                : e.value;
+            return '${e.key}: $value';
+          })
+          .join('; ');
+      return {
+        'id': p.id,
+        'n': p.name,
+        'b': p.brand,
+        'c': p.categoryId,
+        'p': p.price.round(),
+        'stok': p.stock,
+        's': specs,
+      };
+    }).toList();
 
-      // Further filter by query terms within that category
-      final queryTerms = lower.split(' ').where((t) => t.length > 2).toList();
-      if (queryTerms.length > 1) {
-        final refined = matches.where((p) {
-          final searchable = '${p.name} ${p.brand} ${p.description}'
-              .toLowerCase();
-          return queryTerms.any((term) => searchable.contains(term));
-        }).toList();
-        if (refined.isNotEmpty) matches = refined;
+    final text = await _generate(
+      systemInstruction: _searchSystemInstruction,
+      contents: [
+        {
+          'role': 'user',
+          'parts': [
+            {
+              'text':
+                  'Kebutuhan pengguna: "$query"\n\nKatalog produk (JSON; id, n=nama, b=merek, c=kategori, p=harga rupiah, s=spesifikasi):\n${jsonEncode(compact)}',
+            },
+          ],
+        },
+      ],
+      maxOutputTokens: 1024,
+      jsonOutput: true,
+    );
+    if (text == null) return null;
+
+    final decoded = _decodeJsonObject(text);
+    if (decoded == null) return null;
+
+    final rawIds = decoded['ids'] ?? decoded['product_ids'];
+    final byId = {for (final p in catalog) p.id: p};
+    final products = <ProductModel>[];
+    if (rawIds is List) {
+      for (final id in rawIds) {
+        final product = byId[id.toString()];
+        if (product != null && !products.contains(product)) {
+          products.add(product);
+        }
+        if (products.length >= 8) break;
       }
-
-      explanation =
-          'Menampilkan produk kategori ${matchedCategory.toUpperCase()} yang sesuai dengan pencarian "$query".';
-    } else if (lower.contains('gaming') ||
-        lower.contains('game') ||
-        lower.contains('rtx') ||
-        lower.contains('fps')) {
-      // Gaming intent - but be smarter
-      matches = catalog.where((p) {
-        final n = p.name.toLowerCase();
-        final cat = p.categoryId.toLowerCase();
-        return n.contains('gaming') ||
-            n.contains('rtx') ||
-            cat == 'laptop' &&
-                (n.contains('tuf') ||
-                    n.contains('rog') ||
-                    n.contains('legion') ||
-                    n.contains('katana'));
-      }).toList();
-      explanation =
-          'Rekomendasi produk gaming berdasarkan analisis kebutuhan Anda.';
-    } else if (lower.contains('budget') ||
-        lower.contains('murah') ||
-        lower.contains('terjangkau')) {
-      final sorted = List<ProductModel>.from(catalog)
-        ..sort((a, b) => a.price.compareTo(b.price));
-      matches = sorted.take(6).toList();
-      explanation =
-          'Produk dengan harga terjangkau untuk memaksimalkan anggaran Anda.';
-    } else {
-      // General search: match name, brand, description
-      matches = catalog.where((p) {
-        final searchable = '${p.name} ${p.brand}'.toLowerCase();
-        return searchable.contains(lower);
-      }).toList();
-
-      if (matches.isEmpty) {
-        // Try partial matching
-        final terms = lower.split(' ').where((t) => t.length > 2);
-        matches = catalog.where((p) {
-          final searchable = '${p.name} ${p.brand} ${p.description}'
-              .toLowerCase();
-          return terms.any((term) => searchable.contains(term));
-        }).toList();
-      }
-      explanation = matches.isEmpty
-          ? 'Tidak ditemukan produk yang cocok dengan "$query". Coba kata kunci lain.'
-          : 'Hasil pencarian untuk "$query".';
     }
 
-    return {'explanation': explanation, 'recommendations': matches};
+    return {
+      'explanation': decoded['explanation']?.toString() ?? '',
+      'products': products,
+    };
+  }
+
+  Map<String, dynamic>? _decodeJsonObject(String raw) {
+    var cleaned = raw.trim();
+    cleaned = cleaned
+        .replaceAll(RegExp(r'^```(?:json)?', caseSensitive: false), '')
+        .replaceAll(RegExp(r'```$'), '')
+        .trim();
+    try {
+      final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      final start = cleaned.indexOf('{');
+      final end = cleaned.lastIndexOf('}');
+      if (start != -1 && end > start) {
+        try {
+          final decoded = jsonDecode(cleaned.substring(start, end + 1));
+          if (decoded is Map) return Map<String, dynamic>.from(decoded);
+        } catch (_) {}
+      }
+    }
+    return null;
   }
 
   /// AI Bottleneck Calculator
