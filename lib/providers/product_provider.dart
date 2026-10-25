@@ -26,13 +26,29 @@ class ProductProvider extends ChangeNotifier {
   List<CategoryModel> _categories = [];
   List<ProductModel> _allProducts = [];
 
-  DateTime _flashSaleEndTime = DateTime.now().add(const Duration(hours: 8));
-  bool _isFlashSaleActive = true;
+  // Flash sale timer state comes from the Supabase `flash_sales` table.
+  // Until it is loaded (or when no flash sale exists) the sale counts as ended.
+  DateTime _flashSaleEndTime = DateTime.now();
+  bool _isFlashSaleActive = false;
+  RealtimeChannel? _flashSaleChannel;
+
+  /// Only used as the end time of a NEW flash sale when no timer is running yet.
+  static const Duration _defaultNewFlashSaleDuration = Duration(hours: 8);
 
   bool _isLoading = false;
 
   ProductProvider() {
     _loadData();
+    _subscribeFlashSaleRealtime();
+  }
+
+  @override
+  void dispose() {
+    final channel = _flashSaleChannel;
+    if (channel != null) {
+      supabase.removeChannel(channel);
+    }
+    super.dispose();
   }
 
   List<CategoryModel> get categories =>
@@ -271,20 +287,18 @@ class ProductProvider extends ChangeNotifier {
           }
         }
 
-        // 5. Load flash sale timer config
-        final endTimeStr = prefs.getString(_prefFlashSaleEndTimeKey);
-        if (endTimeStr != null && endTimeStr.isNotEmpty) {
-          final parsed = DateTime.tryParse(endTimeStr);
-          if (parsed != null) {
-            _flashSaleEndTime = parsed;
-          }
-        }
-        _isFlashSaleActive = prefs.getBool(_prefFlashSaleActiveKey) ?? true;
+        // 5. Flash sale timer no longer lives in local cache (see
+        // _loadFlashSaleConfig). Drop the legacy keys so they can't be reused.
+        await prefs.remove(_prefFlashSaleEndTimeKey);
+        await prefs.remove(_prefFlashSaleActiveKey);
       } catch (e) {
         debugPrint('Error applying product cache in ProductProvider: $e');
       }
 
       _allProducts = productMap.values.toList();
+
+      // 6. Flash sale timer & status straight from Supabase
+      await _loadFlashSaleConfig();
     } catch (e) {
       debugPrint('Error loading Supabase products: $e');
       if (_categories.isEmpty) _categories = List.from(mockCategories);
@@ -424,7 +438,11 @@ class ProductProvider extends ChangeNotifier {
       originalPrice: newOrigPrice,
     );
 
-    return await updateProduct(updated);
+    final ok = await updateProduct(updated);
+    if (ok) {
+      await _syncFlashSaleRow(updated, isOnSale);
+    }
+    return ok;
   }
 
   /// Deletes a product from Supabase before removing it from local caches.
@@ -459,35 +477,169 @@ class ProductProvider extends ChangeNotifier {
     return true;
   }
 
-  /// Updates Flash Sale end time in real-time and persists it across sessions.
-  Future<void> updateFlashSaleTime(DateTime newEndTime) async {
-    _flashSaleEndTime = newEndTime;
-    _isFlashSaleActive = newEndTime.isAfter(DateTime.now());
-    notifyListeners();
+  // ============================================================
+  // FLASH SALE (Supabase table: public.flash_sales)
+  // ============================================================
 
+  /// Reads the global flash sale timer from Supabase.
+  /// End time = latest `ends_at`; active = at least one row has `is_active`.
+  /// No rows => flash sale is treated as ended (no more hardcoded 8 hours).
+  Future<void> _loadFlashSaleConfig() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _prefFlashSaleEndTimeKey,
-        newEndTime.toIso8601String(),
-      );
-      await prefs.setBool(_prefFlashSaleActiveKey, _isFlashSaleActive);
+      final List rows = await supabase
+          .from('flash_sales')
+          .select('ends_at, is_active')
+          .order('ends_at', ascending: false);
+
+      DateTime? latestEnd;
+      bool anyActive = false;
+      for (final row in rows) {
+        final end = DateTime.tryParse(row['ends_at']?.toString() ?? '');
+        if (end == null) continue;
+        final localEnd = end.toLocal();
+        if (latestEnd == null || localEnd.isAfter(latestEnd)) {
+          latestEnd = localEnd;
+        }
+        if (row['is_active'] == true) anyActive = true;
+      }
+
+      _flashSaleEndTime = latestEnd ?? DateTime.now();
+      _isFlashSaleActive = latestEnd != null && anyActive;
+      notifyListeners();
     } catch (e) {
-      debugPrint('Error saving flash sale timer settings: $e');
+      debugPrint('Error loading flash sale config from Supabase: $e');
     }
   }
 
-  /// Sets whether Flash Sale is active or paused.
-  Future<void> setFlashSaleActive(bool active) async {
+  /// Keeps every device in sync when the flash_sales table changes.
+  void _subscribeFlashSaleRealtime() {
+    try {
+      _flashSaleChannel = supabase
+          .channel('public:flash_sales')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'flash_sales',
+            callback: (_) => _loadFlashSaleConfig(),
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('Error subscribing to flash_sales realtime: $e');
+    }
+  }
+
+  /// Creates / removes the flash_sales row of one product.
+  Future<void> _syncFlashSaleRow(ProductModel product, bool isOnSale) async {
+    try {
+      if (isOnSale) {
+        final now = DateTime.now();
+        final timerRunning = _flashSaleEndTime.isAfter(now);
+        final end = timerRunning
+            ? _flashSaleEndTime
+            : now.add(_defaultNewFlashSaleDuration);
+        final active = timerRunning ? _isFlashSaleActive : true;
+
+        await supabase.from('flash_sales').upsert({
+          'product_id': product.id,
+          'original_price': product.originalPrice ?? product.price,
+          'flash_price': product.price,
+          'flash_stock': product.stock,
+          'ends_at': end.toUtc().toIso8601String(),
+          'is_active': active,
+          'created_by': supabase.auth.currentUser?.id,
+          'updated_at': now.toUtc().toIso8601String(),
+        }, onConflict: 'product_id');
+      } else {
+        await supabase
+            .from('flash_sales')
+            .delete()
+            .eq('product_id', product.id);
+      }
+      await _loadFlashSaleConfig();
+    } catch (e) {
+      debugPrint('Error syncing flash sale row: $e');
+    }
+  }
+
+  /// Saves the global flash sale end time/status to Supabase.
+  /// Local state is updated first (instant UI) and rolled back on failure.
+  Future<bool> _persistFlashSaleConfig({
+    required DateTime endTime,
+    required bool active,
+  }) async {
+    final previousEnd = _flashSaleEndTime;
+    final previousActive = _isFlashSaleActive;
+    _flashSaleEndTime = endTime;
     _isFlashSaleActive = active;
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefFlashSaleActiveKey, active);
+      final endIso = endTime.toUtc().toIso8601String();
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      final saleProducts = allProducts.where((p) => p.isOnSale).toList();
+
+      // Make sure every product on sale has a row (covers legacy data).
+      if (saleProducts.isNotEmpty) {
+        await supabase.from('flash_sales').upsert(
+          saleProducts
+              .map(
+                (p) => {
+                  'product_id': p.id,
+                  'original_price': p.originalPrice ?? p.price,
+                  'flash_price': p.price,
+                  'flash_stock': p.stock,
+                  'ends_at': endIso,
+                  'is_active': active,
+                  'created_by': supabase.auth.currentUser?.id,
+                },
+              )
+              .toList(),
+          onConflict: 'product_id',
+          ignoreDuplicates: true,
+        );
+      }
+
+      final values = {
+        'ends_at': endIso,
+        'is_active': active,
+        'updated_at': nowIso,
+      };
+      final List updated = saleProducts.isNotEmpty
+          ? await supabase
+                .from('flash_sales')
+                .update(values)
+                .inFilter('product_id', saleProducts.map((p) => p.id).toList())
+                .select('id')
+          : await supabase
+                .from('flash_sales')
+                .update(values)
+                .not('id', 'is', null)
+                .select('id');
+
+      if (updated.isEmpty) {
+        throw StateError('Tidak ada baris flash_sales yang berhasil diubah.');
+      }
+      return true;
     } catch (e) {
-      debugPrint('Error saving flash sale active flag: $e');
+      debugPrint('Error saving flash sale config to Supabase: $e');
+      _flashSaleEndTime = previousEnd;
+      _isFlashSaleActive = previousActive;
+      notifyListeners();
+      return false;
     }
+  }
+
+  /// Updates Flash Sale end time and saves it to Supabase (realtime for all devices).
+  Future<bool> updateFlashSaleTime(DateTime newEndTime) {
+    return _persistFlashSaleConfig(
+      endTime: newEndTime,
+      active: newEndTime.isAfter(DateTime.now()),
+    );
+  }
+
+  /// Sets whether Flash Sale is active or paused (saved to Supabase).
+  Future<bool> setFlashSaleActive(bool active) {
+    return _persistFlashSaleConfig(endTime: _flashSaleEndTime, active: active);
   }
 
   IconData _mapIcon(String iconName) {

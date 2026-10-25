@@ -574,12 +574,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       activeColor: AppColors.error,
                       contentPadding: EdgeInsets.zero,
                       onChanged: (val) async {
-                        await productProvider.setFlashSaleActive(val);
+                        final ok = await productProvider.setFlashSaleActive(val);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Flash Sale ${val ? "diaktifkan" : "dinonaktifkan"}',
+                                ok
+                                    ? 'Flash Sale ${val ? "diaktifkan" : "dinonaktifkan"}'
+                                    : 'Gagal menyimpan ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
                               ),
                             ),
                           );
@@ -803,9 +805,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final messenger = ScaffoldMessenger.of(context);
         final productProvider = context.read<ProductProvider>();
         final newEnd = DateTime.now().add(duration);
-        await productProvider.updateFlashSaleTime(newEnd);
+        final ok = await productProvider.updateFlashSaleTime(newEnd);
         messenger.showSnackBar(
-          SnackBar(content: Text('Waktu Flash Sale diperpanjang $label')),
+          SnackBar(
+            content: Text(
+              ok
+                  ? 'Waktu Flash Sale diperpanjang $label'
+                  : 'Gagal menyimpan waktu ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
+            ),
+          ),
         );
       },
     );
@@ -854,11 +862,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
 
-    await productProvider.updateFlashSaleTime(finalDateTime);
+    final ok = await productProvider.updateFlashSaleTime(finalDateTime);
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Waktu Flash Sale berhasil diperbarui secara realtime'),
+        content: Text(
+          ok
+              ? 'Waktu Flash Sale berhasil diperbarui secara realtime'
+              : 'Gagal menyimpan waktu ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
+        ),
       ),
     );
   }
