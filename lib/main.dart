@@ -86,7 +86,23 @@ Future<void> main() async {
             return bp;
           },
         ),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) {
+            final np = NotificationProvider();
+            if (authProvider.currentUser?.id != null) {
+              np.setUserId(authProvider.currentUser!.id);
+            }
+            return np;
+          },
+          update: (_, auth, notifProvider) {
+            final np = notifProvider ?? NotificationProvider();
+            final newId = auth.currentUser?.id;
+            if (newId != np.userId) {
+              np.setUserId(newId);
+            }
+            return np;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProxyProvider<AuthProvider, OrderProvider>(
           create: (_) {

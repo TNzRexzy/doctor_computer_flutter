@@ -1,9 +1,11 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/mock/mock_products.dart';
+import 'package:doctor_computer/core/constants/app_images.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -76,12 +78,13 @@ class CartProvider extends ChangeNotifier {
 
       if (data != null) {
         final rawImages = data['image_url'];
-        List<String> images = [];
-        if (rawImages is List) {
-          images = rawImages.map((e) => e.toString()).toList();
-        } else if (rawImages is String && rawImages.isNotEmpty) {
-          images = [rawImages];
-        }
+        final List<String> images = AppImages.resolveProductImages(
+          rawImages,
+          data['id']?.toString() ?? productId,
+          productName: data['name']?.toString() ?? '',
+          categoryId: data['category_id']?.toString(),
+          brand: data['brand']?.toString(),
+        );
 
         return ProductModel(
           id: data['id']?.toString() ?? productId,
@@ -116,7 +119,9 @@ class CartProvider extends ChangeNotifier {
   /// Returns false (and does not add anything) when the product is out of stock
   /// or the requested quantity would exceed the available stock.
   Future<bool> addToCart(ProductModel product, {int quantity = 1}) async {
-    final existingIndex = _items.indexWhere((item) => item.product.id == product.id);
+    final existingIndex = _items.indexWhere(
+      (item) => item.product.id == product.id,
+    );
     final currentQty = existingIndex >= 0 ? _items[existingIndex].quantity : 0;
     if (product.stock <= 0 || currentQty + quantity > product.stock) {
       return false;
@@ -135,7 +140,9 @@ class CartProvider extends ChangeNotifier {
         await supabase.from('cart_items').upsert({
           'user_id': _userId!,
           'product_id': product.id,
-          'quantity': existingIndex >= 0 ? _items[existingIndex].quantity : quantity,
+          'quantity': existingIndex >= 0
+              ? _items[existingIndex].quantity
+              : quantity,
         }, onConflict: 'user_id,product_id');
       } catch (e) {
         debugPrint('Error persisting cart item to db: $e');
@@ -200,10 +207,7 @@ class CartProvider extends ChangeNotifier {
 
     if (_userId != null) {
       try {
-        await supabase
-            .from('cart_items')
-            .delete()
-            .eq('user_id', _userId!);
+        await supabase.from('cart_items').delete().eq('user_id', _userId!);
       } catch (e) {
         debugPrint('Error clearing cart in db: $e');
       }
@@ -226,7 +230,12 @@ class CartProvider extends ChangeNotifier {
           final map = item as Map<String, dynamic>;
           final product = await _fetchProductAsync(map['product_id'] ?? '');
           if (product != null) {
-            _items.add(CartItemModel(product: product, quantity: (map['quantity'] as num? ?? 1).toInt()));
+            _items.add(
+              CartItemModel(
+                product: product,
+                quantity: (map['quantity'] as num? ?? 1).toInt(),
+              ),
+            );
           }
         }
         notifyListeners();
@@ -241,10 +250,9 @@ class CartProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = 'user_cart_$_userId';
-      final data = _items.map((i) => {
-        'product_id': i.product.id,
-        'quantity': i.quantity,
-      }).toList();
+      final data = _items
+          .map((i) => {'product_id': i.product.id, 'quantity': i.quantity})
+          .toList();
       await prefs.setString(key, jsonEncode(data));
     } catch (e) {
       debugPrint('Error saving cart to cache: $e');

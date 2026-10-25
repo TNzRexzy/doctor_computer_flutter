@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.0.9-beta
+* **Release Version:** 1.1.0-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -36,7 +36,8 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 ### 1. Dedicated Cashier & POS Dashboard (`CashierDashboardScreen`)
 * **Dedicated Route & Headquarters:** Added `AppRouter.cashierDashboard` (`/cashier-dashboard`) with direct access from the user profile for `cashier` and `admin` roles.
 * **Point of Sale (POS) Cashier Interface:**
-  * Real-time product search and category filters (Laptops, PC Parts, Monitors, Accessories, Audio).
+  * Real-time product search and dynamic category filters (chips are built from the categories stored in the database that are actually used by products).
+  * Product photos on every POS product card, with multi-URL fallback (product `image_url`, uploaded asset matched by name, `products/<id>.jpg`, public storage URL) and a placeholder icon when no image can be loaded.
   * Live stock availability badges (Ready, Low Stock `< 5`, Out of Stock).
   * Interactive POS cart drawer with quantity increments and inventory ceiling validation.
   * Payment modal supporting **Cash (Tunai)**, **QRIS**, and **Debit BCA**.
@@ -109,6 +110,30 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-020 | Order tracking showed an auto-generated resi that could be copied | `OrderModel` defaulted `trackingNumber` to a hard-coded demo value | Resolved (Default removed; shows "Belum tersedia" with copy disabled until staff enter a resi) |
 | BUG-021 | POS checkout failed with PGRST203 (`Could not choose the best candidate function`) | Two overloads of `create_pos_order` existed (`varchar` and `text` parameters) | Resolved (Old overload dropped by `20261028_drop_old_create_pos_order.sql`) |
 | BUG-022 | Out-of-stock products could be added to the cart | `CartProvider.addToCart` did not validate stock | Resolved (Stock check in provider, disabled "Stok Habis" button, quantity capped at stock) |
+| BUG-023 | POS category chips never filtered products | Chips used hard-coded IDs (`laptops`, `pc_parts`, `monitors`, ...) that do not exist in `categories` | Resolved (Chips are generated from database categories used by the loaded products) |
+| BUG-024 | POS product cards had no photo / only some products showed one | No image widget on the card; single URL attempt without the public-URL fallback | Resolved (`_PosImageChain` tries several candidate URLs in order, then shows a placeholder) |
+| BUG-025 | Cart item photos missing after the app is reopened | `CartProvider._fetchProductAsync` used raw `image_url` values (relative file names) without `AppImages.resolveProductImages` | Resolved (Images resolved through `AppImages`, same as the catalog) |
+| BUG-026 | Irrelevant sample notifications appeared on every login | `NotificationProvider` was seeded with four hard-coded demo notifications (fake order, voucher, reminders) | Resolved (List starts empty; notifications are created only by real events and stored per user) |
+
+---
+
+## Version 1.1.0-beta Changelog
+
+1. **POS Cashier Dashboard (`lib/screens/cashier/cashier_dashboard_screen.dart`):**
+   * Fixed category filters: chips are now built dynamically from database categories used by the loaded products (previously hard-coded IDs that matched nothing).
+   * Added product photos to POS product cards using `AppImages.resolveProductImages`, with a multi-URL fallback chain (`_PosImageChain`) and placeholder icon.
+   * Cleaned `unnecessary_underscores` lint notices in the new image code.
+2. **Cart (`lib/providers/cart_provider.dart`):**
+   * Cart item images are now resolved through `AppImages.resolveProductImages` when the cart is restored from cache/database, so photos still appear after the app is closed and reopened.
+3. **Notifications:**
+   * Removed the four hard-coded demo notifications that appeared on every login.
+   * Notifications are now stored per user: local cache in `SharedPreferences` (key `user_notifications_<userId>`) plus cross-device sync with the new Supabase table `user_notifications` (RLS: each user can only read/insert/update/delete their own rows).
+   * `NotificationProvider` is now a `ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>` in `lib/main.dart` and loads/clears notifications when the user logs in, logs out, or switches account.
+   * Added `toMap` / `fromMap` to `AppNotificationModel`.
+   * Notification sources: successful checkout (order), PC Quiz / Memory Match / Speed Repair completion (minigame), and the manual "Simpan Peringatan" button in the bottleneck calculator when bottleneck is above 15%.
+4. **Database Migration:**
+   * Added `supabase/migrations/20261029_user_notifications.sql` (table, index, RLS policies).
+5. **Versioning:** Bumped app version to `1.1.0-beta+10` (`pubspec.yaml`, `AppConstants.appVersion`).
 
 ---
 
@@ -164,6 +189,7 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 7. `supabase/migrations/20261026_member_exp_blockchain.sql` (member EXP ledger; replaces `update_order_status`).
 8. `supabase/migrations/20261027_order_tracking_number.sql` (staff-only `update_order_tracking` RPC for courier and resi).
 9. `supabase/migrations/20261028_drop_old_create_pos_order.sql` (removes the legacy duplicate `create_pos_order` overload; only needed if both overloads exist in your database).
+10. `supabase/migrations/20261029_user_notifications.sql` (per-user notification table with RLS for cross-device sync).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 

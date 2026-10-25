@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
@@ -11,6 +12,7 @@ import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/admin/product_editor_dialog.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
+import 'package:doctor_computer/core/constants/app_images.dart';
 
 class CashierDashboardScreen extends StatefulWidget {
   const CashierDashboardScreen({super.key});
@@ -1295,11 +1297,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
           child: Row(
             children: [
               _buildCategoryChip('all', 'Semua'),
-              _buildCategoryChip('laptops', 'Laptop'),
-              _buildCategoryChip('pc_parts', 'PC Parts'),
-              _buildCategoryChip('monitors', 'Monitor'),
-              _buildCategoryChip('accessories', 'Aksesoris'),
-              _buildCategoryChip('audio', 'Audio'),
+              ..._posCategoryOptions().map(
+                (c) => _buildCategoryChip(c.key, c.value),
+              ),
             ],
           ),
         ),
@@ -1395,7 +1395,17 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                                     ),
                                 ],
                               ),
-                              const Spacer(),
+                              const SizedBox(height: 6),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: _buildPosProductImage(p),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
                               Text(
                                 p['name']?.toString() ?? '-',
                                 style: const TextStyle(
@@ -1594,6 +1604,57 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         ),
       ],
     );
+  }
+
+  /// Daftar kategori untuk chip POS: diambil dari kategori di database
+  /// (ProductProvider) dan hanya yang benar-benar dipakai produk di kasir.
+  List<MapEntry<String, String>> _posCategoryOptions() {
+    final used = <String>{};
+    for (final p in _products) {
+      final c = p['category_id']?.toString().toLowerCase() ?? '';
+      if (c.isNotEmpty) used.add(c);
+    }
+    final labels = <String, String>{};
+    try {
+      for (final c in context.read<ProductProvider>().categories) {
+        final label = c.nameId.isNotEmpty ? c.nameId : c.name;
+        labels[c.id.toLowerCase()] = label;
+      }
+    } catch (_) {}
+    final result = <MapEntry<String, String>>[];
+    for (final id in used) {
+      result.add(MapEntry(id, labels[id] ?? id));
+    }
+    result.sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+    return result;
+  }
+
+  Widget _buildPosProductImage(Map<String, dynamic> p) {
+    final pid = p['id']?.toString() ?? '';
+    final name = p['name']?.toString() ?? '';
+    final brand = p['brand']?.toString();
+    final candidates = <String>[];
+    void add(String? u) {
+      final v = u?.trim() ?? '';
+      if (v.isEmpty) return;
+      if (!candidates.contains(v)) candidates.add(v);
+      final alt = AppImages.getPublicFallbackUrl(v);
+      if (alt.isNotEmpty && !candidates.contains(alt)) candidates.add(alt);
+    }
+
+    for (final u in AppImages.resolveProductImages(
+      p['image_url'] ?? p['images'],
+      pid,
+      productName: name,
+      categoryId: p['category_id']?.toString(),
+      brand: brand,
+    )) {
+      add(u);
+    }
+    final matched = AppImages.matchUploadedImage(name, brand);
+    if (matched != null) add(AppImages.getBucketUrl(matched));
+    if (pid.isNotEmpty) add(AppImages.getProductImageUrl(pid));
+    return _PosImageChain(urls: candidates);
   }
 
   Widget _buildCategoryChip(String catId, String label) {
@@ -2436,6 +2497,41 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         ),
         Text(title, style: AppTextStyles.caption),
       ],
+    );
+  }
+}
+
+/// Menampilkan gambar produk POS dengan mencoba beberapa URL kandidat
+/// secara berurutan sampai ada yang berhasil dimuat.
+class _PosImageChain extends StatelessWidget {
+  final List<String> urls;
+  final int index;
+
+  const _PosImageChain({required this.urls, this.index = 0});
+
+  Widget _placeholder() => Container(
+    color: Colors.grey.withValues(alpha: 0.12),
+    alignment: Alignment.center,
+    child: const Icon(Icons.image_outlined, color: Colors.grey),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (index >= urls.length) return _placeholder();
+    final url = urls[index];
+    final next = _PosImageChain(urls: urls, index: index + 1);
+    if (url.startsWith('assets/')) {
+      return Image.asset(
+        url,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => next,
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.contain,
+      placeholder: (_, _) => _placeholder(),
+      errorWidget: (_, _, _) => next,
     );
   }
 }
