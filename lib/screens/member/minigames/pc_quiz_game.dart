@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
+import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 
 class PcQuizGame extends StatefulWidget {
   const PcQuizGame({super.key});
@@ -75,14 +77,20 @@ class _PcQuizGameState extends State<PcQuizGame> {
   Future<void> _finishQuiz() async {
     final passed = _score >= 2;
     if (passed) {
-      if (mounted) {
-        context.read<NotificationProvider>().addNotification(
-          title: 'Kuis PC selesai',
-          message:
-              'Skor Anda $_score/${_questions.length}. EXP belum diberikan sebelum hasil diverifikasi server.',
-          type: 'minigame',
-        );
-      }
+      // EXP is awarded and saved by the server (award_minigame_exp RPC)
+      final award = await context.read<BlockchainProvider>().awardMinigameExp(
+        game: 'pc_quiz',
+        result: {'score': _score},
+      );
+      if (!mounted) return;
+      context.read<AuthProvider>().restoreSession();
+      final awardText = BlockchainProvider.describeAward(award);
+
+      context.read<NotificationProvider>().addNotification(
+        title: 'Kuis PC selesai',
+        message: 'Skor Anda $_score/${_questions.length}. $awardText',
+        type: 'minigame',
+      );
 
       if (!mounted) return;
       showDialog(
@@ -101,7 +109,7 @@ class _PcQuizGameState extends State<PcQuizGame> {
               ),
               const SizedBox(height: 12),
               Text(
-                'EXP belum diberikan sebelum hasil kuis diverifikasi server.',
+                awardText,
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),

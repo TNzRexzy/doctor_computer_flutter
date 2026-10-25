@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
+import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 
 class MemoryMatchGame extends StatefulWidget {
   const MemoryMatchGame({super.key});
@@ -124,16 +126,20 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
       _isCompleted = true;
     });
 
-    // Send notification
-    if (mounted) {
-      context.read<NotificationProvider>().addNotification(
-        title: 'Minigame selesai',
-        message: 'EXP minigame belum diberikan karena hasil permainan belum diverifikasi server.',
-        type: 'minigame',
-      );
-    }
-
+    // EXP is awarded and saved by the server (award_minigame_exp RPC)
+    final award = await context.read<BlockchainProvider>().awardMinigameExp(
+      game: 'memory_match',
+      result: {'moves': _moves},
+    );
     if (!mounted) return;
+    context.read<AuthProvider>().restoreSession();
+    final awardText = BlockchainProvider.describeAward(award);
+
+    context.read<NotificationProvider>().addNotification(
+      title: 'Minigame selesai',
+      message: awardText,
+      type: 'minigame',
+    );
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -156,7 +162,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
             ),
             const SizedBox(height: 12),
             Text(
-              'EXP minigame belum diberikan karena hasil permainan belum diverifikasi server.',
+              awardText,
               style: AppTextStyles.caption.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -223,7 +229,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                         Icon(Icons.star, color: AppColors.warning, size: 16),
                         const SizedBox(width: 4),
                         Text(
-                          'Tanpa EXP',
+                          'Dapat EXP',
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.warning,
                             fontWeight: FontWeight.bold,

@@ -57,7 +57,10 @@ class MemberScreen extends StatelessWidget {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<BlockchainProvider>().refreshWallet(),
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +183,7 @@ class MemberScreen extends StatelessWidget {
                 children: [
                   Text('Minigames', style: AppTextStyles.titleMedium),
                   Text(
-                    'EXP dinonaktifkan',
+                    'EXP aktif',
                     style: AppTextStyles.caption.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -290,8 +293,8 @@ class MemberScreen extends StatelessWidget {
               const SizedBox(height: 12),
 
               Text(
-                'Poin belanja diberikan server setelah pesanan dikonfirmasi selesai. '
-                'Poin minigame sementara dinonaktifkan sampai hasilnya dapat diverifikasi server.',
+                'Poin belanja (+500) diberikan server setelah pesanan dikonfirmasi selesai. '
+                'EXP minigame disimpan server dengan batas harian. Tarik layar ke bawah untuk menyegarkan.',
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -299,6 +302,7 @@ class MemberScreen extends StatelessWidget {
               const SizedBox(height: 24),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -348,7 +352,7 @@ class MemberScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          'EXP nonaktif',
+                          'EXP aktif',
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.warning,
                             fontWeight: FontWeight.bold,

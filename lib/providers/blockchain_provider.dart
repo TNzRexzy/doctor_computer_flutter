@@ -9,6 +9,7 @@ class BlockchainProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   UserWallet _wallet = UserWallet(userId: 'guest', userName: 'Pengguna Baru');
   bool _isLoading = false;
+  bool _isAdminWallet = false;
 
   UserWallet get wallet => _wallet;
   List<Block> get blockchain => _wallet.blockchain;
@@ -26,6 +27,7 @@ class BlockchainProvider extends ChangeNotifier {
     bool isAdmin = false,
   }) async {
     _isLoading = true;
+    _isAdminWallet = isAdmin;
     notifyListeners();
 
     try {
@@ -98,6 +100,65 @@ class BlockchainProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Reloads points and ledger blocks from Supabase for the current user.
+  Future<void> refreshWallet() async {
+    if (_wallet.userId.isEmpty || _wallet.userId == 'guest') return;
+    await initWallet(
+      _wallet.userId,
+      _wallet.userName,
+      isAdmin: _isAdminWallet,
+    );
+  }
+
+  /// Asks the server to award EXP for a finished minigame. The server decides the
+  /// amount (fixed per game, cooldown, daily cap) and writes the ledger block.
+  /// Returns the server response: `awarded_exp`, `reason`, `total_points`, `tier`.
+  Future<Map<String, dynamic>> awardMinigameExp({
+    required String game,
+    Map<String, dynamic> result = const {},
+  }) async {
+    if (_wallet.userId == 'guest') {
+      return {'awarded_exp': 0, 'reason': 'not_logged_in'};
+    }
+    try {
+      final response = await _supabase.rpc(
+        'award_minigame_exp',
+        params: {'p_game': game, 'p_result': result},
+      );
+      final map = response is Map
+          ? Map<String, dynamic>.from(response)
+          : <String, dynamic>{'awarded_exp': 0, 'reason': 'invalid_response'};
+      await refreshWallet();
+      return map;
+    } catch (e) {
+      debugPrint('[BlockchainProvider] award_minigame_exp failed: $e');
+      return {'awarded_exp': 0, 'reason': 'error', 'message': e.toString()};
+    }
+  }
+
+  /// Human readable text for the result of [awardMinigameExp].
+  static String describeAward(Map<String, dynamic> award) {
+    final exp = (award['awarded_exp'] as num?)?.toInt() ?? 0;
+    if (exp > 0) {
+      final upgraded = award['tier_upgraded'] == true
+          ? ' Tier naik ke ${award['tier']}!'
+          : '';
+      return '+$exp EXP tersimpan ke database.$upgraded';
+    }
+    switch (award['reason']) {
+      case 'cooldown':
+        return 'EXP belum bertambah: tunggu sebentar sebelum memainkan game ini lagi.';
+      case 'daily_cap':
+        return 'Batas EXP minigame hari ini sudah tercapai. Coba lagi besok.';
+      case 'not_passed':
+        return 'Skor belum cukup untuk mendapat EXP.';
+      case 'not_logged_in':
+        return 'Login dulu agar EXP bisa tersimpan.';
+      default:
+        return 'EXP gagal disimpan ke database. Pastikan migrasi 20261026 sudah dijalankan.';
     }
   }
 

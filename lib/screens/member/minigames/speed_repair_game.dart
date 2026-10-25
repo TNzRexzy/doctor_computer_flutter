@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
+import 'package:doctor_computer/providers/blockchain_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
 
 class SpeedRepairGame extends StatefulWidget {
   const SpeedRepairGame({super.key});
@@ -60,13 +62,20 @@ class _SpeedRepairGameState extends State<SpeedRepairGame> {
 
   Future<void> _checkResult() async {
     if (_clicks >= _targetClicks) {
-      if (mounted) {
-        context.read<NotificationProvider>().addNotification(
-          title: 'PC berhasil di-service',
-          message: 'EXP belum diberikan karena hasil minigame belum diverifikasi server.',
-          type: 'minigame',
-        );
-      }
+      // EXP is awarded and saved by the server (award_minigame_exp RPC)
+      final award = await context.read<BlockchainProvider>().awardMinigameExp(
+        game: 'speed_repair',
+        result: {'clicks': _clicks},
+      );
+      if (!mounted) return;
+      context.read<AuthProvider>().restoreSession();
+      final awardText = BlockchainProvider.describeAward(award);
+
+      context.read<NotificationProvider>().addNotification(
+        title: 'PC berhasil di-service',
+        message: awardText,
+        type: 'minigame',
+      );
 
       if (!mounted) return;
       showDialog(
@@ -85,7 +94,7 @@ class _SpeedRepairGameState extends State<SpeedRepairGame> {
               ),
               const SizedBox(height: 12),
               Text(
-                'EXP belum diberikan karena hasil minigame belum diverifikasi server.',
+                awardText,
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),
