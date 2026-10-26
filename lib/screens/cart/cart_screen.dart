@@ -9,8 +9,23 @@ import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
+
+  @override
+  State<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends State<CartScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<CartProvider>().loadAvailableVouchers();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,11 +41,25 @@ class CartScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.shopping_cart_outlined, size: 80, color: AppColors.textTertiary),
+                    Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 80,
+                      color: AppColors.textTertiary,
+                    ),
                     const SizedBox(height: 16),
-                    Text('Keranjang Kosong', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
+                    Text(
+                      'Keranjang Kosong',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    Text('Mulai belanja sekarang', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textTertiary)),
+                    Text(
+                      'Mulai belanja sekarang',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -42,7 +71,12 @@ class CartScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       Text('Keranjang', style: AppTextStyles.heading3),
-                      Text(' (${provider.itemCount} items)', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        ' (${provider.itemCount} items)',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -58,13 +92,19 @@ class CartScreen extends StatelessWidget {
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           color: AppColors.error,
-                          child: Icon(Icons.delete, color: AppColors.textPrimary),
+                          child: Icon(
+                            Icons.delete,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         onDismissed: (_) {
                           provider.removeFromCart(item.product.id);
                         },
                         child: GlassCard(
-                          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 6.0,
+                          ),
                           padding: const EdgeInsets.all(10),
                           child: Row(
                             children: [
@@ -98,9 +138,15 @@ class CartScreen extends StatelessWidget {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    Text(item.product.brand, style: AppTextStyles.caption),
+                                    Text(
+                                      item.product.brand,
+                                      style: AppTextStyles.caption,
+                                    ),
                                     const SizedBox(height: 6),
-                                    Text(formatRupiah(item.product.price), style: AppTextStyles.priceSmall),
+                                    Text(
+                                      formatRupiah(item.product.price),
+                                      style: AppTextStyles.priceSmall,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -111,15 +157,26 @@ class CartScreen extends StatelessWidget {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 28,
+                                          minHeight: 28,
+                                        ),
                                         padding: EdgeInsets.zero,
                                         visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.remove, size: 18),
+                                        icon: const Icon(
+                                          Icons.remove,
+                                          size: 18,
+                                        ),
                                         onPressed: () {
                                           if (item.quantity > 1) {
-                                            provider.updateQuantity(item.product.id, item.quantity - 1);
+                                            provider.updateQuantity(
+                                              item.product.id,
+                                              item.quantity - 1,
+                                            );
                                           } else {
-                                            provider.removeFromCart(item.product.id);
+                                            provider.removeFromCart(
+                                              item.product.id,
+                                            );
                                           }
                                         },
                                       ),
@@ -128,24 +185,36 @@ class CartScreen extends StatelessWidget {
                                         height: 26,
                                         decoration: BoxDecoration(
                                           color: AppColors.surface,
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Center(
                                           child: Text(
                                             '${item.quantity}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
                                           ),
                                         ),
                                       ),
                                       IconButton(
-                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 28,
+                                          minHeight: 28,
+                                        ),
                                         padding: EdgeInsets.zero,
                                         visualDensity: VisualDensity.compact,
                                         icon: const Icon(Icons.add, size: 18),
-                                        onPressed: item.quantity >= item.product.stock
+                                        onPressed:
+                                            item.quantity >= item.product.stock
                                             ? null
                                             : () {
-                                                provider.updateQuantity(item.product.id, item.quantity + 1);
+                                                provider.updateQuantity(
+                                                  item.product.id,
+                                                  item.quantity + 1,
+                                                );
                                               },
                                       ),
                                     ],
@@ -153,7 +222,10 @@ class CartScreen extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     formatRupiah(item.subtotal),
-                                    style: AppTextStyles.caption.copyWith(color: AppColors.accent, fontWeight: FontWeight.bold),
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.accent,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -171,48 +243,145 @@ class CartScreen extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          height: 48,
-                          child: Row(
+                        if (provider.isLoadingAvailableVouchers &&
+                            provider.availableVouchers.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        else if (provider.availableVouchers.isEmpty)
+                          Row(
                             children: [
-                              const Expanded(
-                                child: TextField(
-                                  style: TextStyle(fontSize: 15),
-                                  decoration: InputDecoration(
-                                    hintText: 'Kode Kupon',
-                                    prefixIcon: Icon(Icons.local_offer_outlined, size: 20),
-                                    isDense: true,
-                                    border: InputBorder.none,
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+                              Expanded(
+                                child: Text(
+                                  provider.availableVoucherError ??
+                                      'Belum ada voucher yang memenuhi syarat.',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color:
+                                        provider.availableVoucherError == null
+                                        ? AppColors.textSecondary
+                                        : AppColors.error,
                                   ),
                                 ),
                               ),
-                              TextButton(
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                                ),
-                                onPressed: () {},
-                                child: const Text('Apply', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              IconButton(
+                                tooltip: 'Muat ulang voucher',
+                                onPressed: provider.isLoadingAvailableVouchers
+                                    ? null
+                                    : provider.loadAvailableVouchers,
+                                icon: const Icon(Icons.refresh),
                               ),
                             ],
+                          )
+                        else
+                          DropdownButtonFormField<String>(
+                            value: provider.appliedVoucherCode,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Pilih voucher yang tersedia',
+                              prefixIcon: Icon(
+                                Icons.local_offer_outlined,
+                                size: 20,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                            ),
+                            hint: const Text('Pilih voucher'),
+                            items: provider.availableVouchers.map((voucher) {
+                              final type =
+                                  voucher['discount_type']?.toString() ??
+                                  'fixed';
+                              final value =
+                                  (voucher['discount_value'] as num?)
+                                      ?.toDouble() ??
+                                  0;
+                              final discount = type == 'percent'
+                                  ? '${value.toStringAsFixed(0)}%'
+                                  : formatRupiah(value);
+                              final minimum =
+                                  (voucher['min_purchase'] as num?)
+                                      ?.toDouble() ??
+                                  0;
+                              final code = voucher['code'].toString();
+                              return DropdownMenuItem<String>(
+                                value: code,
+                                child: Text(
+                                  '${voucher['title']} • $discount • Min. ${formatRupiah(minimum)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: provider.isApplyingVoucher
+                                ? null
+                                : (code) {
+                                    if (code == null) {
+                                      provider.clearVoucher();
+                                    } else {
+                                      provider.applyVoucher(code);
+                                    }
+                                  },
                           ),
-                        ),
+                        if (provider.isApplyingVoucher) ...[
+                          const SizedBox(height: 4),
+                          const LinearProgressIndicator(minHeight: 2),
+                        ],
+                        if (provider.voucherMessage != null) ...[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              provider.voucherMessage!,
+                              style: AppTextStyles.caption.copyWith(
+                                color: provider.voucherDiscount <= 0
+                                    ? AppColors.error
+                                    : AppColors.success,
+                              ),
+                            ),
+                          ),
+                        ],
                         const Divider(height: 10),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Subtotal', style: AppTextStyles.caption),
-                            Text(formatRupiah(provider.totalPrice), style: AppTextStyles.caption),
+                            Text(
+                              formatRupiah(provider.totalPrice),
+                              style: AppTextStyles.caption,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Estimasi Ongkir', style: AppTextStyles.caption),
+                            Text(
+                              'Estimasi Ongkir',
+                              style: AppTextStyles.caption,
+                            ),
                             Text('Rp 15.000', style: AppTextStyles.caption),
                           ],
                         ),
+                        if (provider.voucherDiscount > 0) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Diskon voucher',
+                                style: AppTextStyles.caption,
+                              ),
+                              Text(
+                                '- ${formatRupiah(provider.voucherDiscount)}',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -222,8 +391,15 @@ class CartScreen extends StatelessWidget {
                                 children: [
                                   Text('Total', style: AppTextStyles.caption),
                                   Text(
-                                    formatRupiah(provider.totalPrice + 15000),
-                                    style: AppTextStyles.price.copyWith(color: AppColors.accent, fontSize: 17),
+                                    formatRupiah(
+                                      provider.totalPrice +
+                                          15000 -
+                                          provider.voucherDiscount,
+                                    ),
+                                    style: AppTextStyles.price.copyWith(
+                                      color: AppColors.accent,
+                                      fontSize: 17,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -237,7 +413,10 @@ class CartScreen extends StatelessWidget {
                               height: 44,
                               width: 150,
                               onPressed: () {
-                                Navigator.pushNamed(context, AppRouter.checkout);
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRouter.checkout,
+                                );
                               },
                             ),
                           ],

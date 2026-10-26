@@ -331,6 +331,7 @@ class OrderProvider extends ChangeNotifier {
   Future<OrderModel?> addOrder(
     OrderModel newOrder, {
     required String shippingMethod,
+    String? voucherCode,
   }) async {
     if (_userId == null) {
       _errorMessage = 'Silakan login sebelum membuat pesanan.';
@@ -338,9 +339,7 @@ class OrderProvider extends ChangeNotifier {
     }
     _errorMessage = null;
     try {
-      final response = await supabase.rpc(
-        'create_customer_order',
-        params: {
+      final params = {
           'p_items': newOrder.items
               .map(
                 (item) => {
@@ -352,8 +351,13 @@ class OrderProvider extends ChangeNotifier {
           'p_shipping_address': newOrder.shippingAddress,
           'p_payment_method': newOrder.paymentMethod,
           'p_shipping_method': shippingMethod,
-        },
-      );
+        };
+      final response = voucherCode != null && voucherCode.trim().isNotEmpty
+          ? await supabase.rpc(
+              'create_customer_order_with_voucher',
+              params: {...params, 'p_voucher_code': voucherCode.trim()},
+            )
+          : await supabase.rpc('create_customer_order', params: params);
       if (response is! Map) {
         throw const FormatException(
           'Respons create_customer_order tidak valid.',

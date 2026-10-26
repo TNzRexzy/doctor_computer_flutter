@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -12,17 +13,44 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class CartProvider extends ChangeNotifier {
   final List<CartItemModel> _items = [];
   String? _userId;
+  String? _appliedVoucherCode;
+  String? _voucherMessage;
+  double _voucherDiscount = 0;
+  double _voucherSubtotal = 0;
+  bool _isApplyingVoucher = false;
+  List<Map<String, dynamic>> _availableVouchers = [];
+  bool _isLoadingAvailableVouchers = false;
+  String? _availableVoucherError;
+  double? _availableVoucherSubtotal;
+  int _voucherListRequest = 0;
 
   List<CartItemModel> get items => List.unmodifiable(_items);
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
   double get totalPrice => _items.fold(0, (sum, item) => sum + item.subtotal);
+  String? get appliedVoucherCode => _appliedVoucherCode;
+  String? get voucherMessage => _voucherMessage;
+  bool get isApplyingVoucher => _isApplyingVoucher;
+  List<Map<String, dynamic>> get availableVouchers =>
+      List.unmodifiable(_availableVouchers);
+  bool get isLoadingAvailableVouchers => _isLoadingAvailableVouchers;
+  String? get availableVoucherError => _availableVoucherError;
+  double get voucherDiscount =>
+      _appliedVoucherCode != null && _voucherSubtotal == totalPrice
+      ? _voucherDiscount
+      : 0;
 
   String? get userId => _userId;
   set userId(String? id) {
     if (_userId == id) return;
     _userId = id;
     _items.clear();
-    notifyListeners();
+    clearVoucher(notify: false);
+    _voucherListRequest++;
+    _isLoadingAvailableVouchers = false;
+    _availableVoucherSubtotal = null;
+    _availableVouchers = [];
+    _availableVoucherError = null;
+    _notifyCartChanged();
     _loadCartFromCache().then((_) => _syncCartFromDb());
   }
 
@@ -65,7 +93,7 @@ class CartProvider extends ChangeNotifier {
           changed = true;
         }
       }
-      if (changed) notifyListeners();
+      if (changed) _notifyCartChanged();
     } catch (e) {
       debugPrint('Error refreshing cart prices: $e');
     }
@@ -75,8 +103,134 @@ class CartProvider extends ChangeNotifier {
     if (_userId == id) return;
     _userId = id;
     _items.clear();
-    notifyListeners();
+    clearVoucher(notify: false);
+    _voucherListRequest++;
+    _isLoadingAvailableVouchers = false;
+    _availableVoucherSubtotal = null;
+    _availableVouchers = [];
+    _availableVoucherError = null;
+    _notifyCartChanged();
     _loadCartFromCache().then((_) => _syncCartFromDb());
+  }
+
+  Future<void> loadAvailableVouchers() async {
+    final subtotal = totalPrice;
+    final requestId = ++_voucherListRequest;
+    _isLoadingAvailableVouchers = true;
+    _availableVoucherError = null;
+    notifyListeners();
+
+    try {
+      final response = await supabase.rpc(
+        'list_available_vouchers',
+        params: {'p_subtotal': subtotal},
+      );
+      if (response is! List) {
+        throw const FormatException(
+          'Respons daftar voucher yang tersedia tidak valid.',
+        );
+      }
+      final vouchers = response
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+      if (requestId != _voucherListRequest) return;
+      if (subtotal != totalPrice) {
+        _availableVoucherSubtotal = null;
+        _availableVouchers = [];
+      } else {
+        _availableVoucherSubtotal = subtotal;
+        _availableVouchers = vouchers;
+      }
+    } catch (error) {
+      if (requestId != _voucherListRequest) return;
+      _availableVouchers = [];
+      _availableVoucherSubtotal = subtotal;
+      _availableVoucherError = 'Voucher gagal dimuat: $error';
+      debugPrint('Error loading available vouchers: $error');
+    } finally {
+      if (requestId == _voucherListRequest) {
+        _isLoadingAvailableVouchers = false;
+        notifyListeners();
+        if (subtotal != totalPrice) {
+          unawaited(loadAvailableVouchers());
+        }
+      }
+    }
+  }
+
+  Future<void> applyVoucher(String code) async {
+    final normalizedCode = code.trim().toUpperCase();
+    if (normalizedCode.isEmpty) {
+      _appliedVoucherCode = null;
+      _voucherDiscount = 0;
+      _voucherMessage = 'Masukkan kode voucher terlebih dahulu.';
+      notifyListeners();
+      return;
+    }
+
+    final subtotal = totalPrice;
+    _isApplyingVoucher = true;
+    _voucherMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await supabase.rpc(
+        'validate_voucher',
+        params: {'p_code': normalizedCode, 'p_subtotal': subtotal},
+      );
+      if (response is! Map) {
+        throw const FormatException('Respons validasi voucher tidak valid.');
+      }
+      final result = Map<String, dynamic>.from(response);
+      if (subtotal != totalPrice) {
+        _appliedVoucherCode = null;
+        _voucherDiscount = 0;
+        _voucherMessage =
+            'Isi keranjang berubah. Silakan gunakan voucher lagi.';
+      } else if (result['success'] == true) {
+        _appliedVoucherCode = normalizedCode;
+        _voucherDiscount =
+            (result['discount_amount'] as num?)?.toDouble() ?? 0;
+        _voucherSubtotal = subtotal;
+        _voucherMessage =
+            result['message']?.toString() ?? 'Voucher berhasil digunakan.';
+      } else {
+        _appliedVoucherCode = null;
+        _voucherDiscount = 0;
+        _voucherMessage =
+            result['message']?.toString() ?? 'Voucher tidak dapat digunakan.';
+      }
+    } catch (error) {
+      _appliedVoucherCode = null;
+      _voucherDiscount = 0;
+      _voucherMessage = 'Voucher gagal diperiksa: $error';
+      debugPrint('Error validating voucher: $error');
+    } finally {
+      _isApplyingVoucher = false;
+      notifyListeners();
+    }
+  }
+
+  void clearVoucher({bool notify = true}) {
+    _appliedVoucherCode = null;
+    _voucherMessage = null;
+    _voucherDiscount = 0;
+    _voucherSubtotal = 0;
+    if (notify) notifyListeners();
+  }
+
+  void _notifyCartChanged() {
+    if (_appliedVoucherCode != null && _voucherSubtotal != totalPrice) {
+      _appliedVoucherCode = null;
+      _voucherDiscount = 0;
+      _voucherMessage =
+          'Isi keranjang berubah. Silakan gunakan voucher lagi.';
+    }
+    if (_availableVoucherSubtotal != totalPrice &&
+        !_isLoadingAvailableVouchers) {
+      unawaited(loadAvailableVouchers());
+    }
+    notifyListeners();
   }
 
   Future<void> _syncCartFromDb() async {
@@ -102,7 +256,7 @@ class CartProvider extends ChangeNotifier {
           _items.add(CartItemModel(product: product, quantity: qty));
         }
       }
-      notifyListeners();
+      _notifyCartChanged();
     } catch (e) {
       debugPrint('Error loading cart from db: $e');
     }
@@ -172,7 +326,7 @@ class CartProvider extends ChangeNotifier {
     } else {
       _items.add(CartItemModel(product: product, quantity: quantity));
     }
-    notifyListeners();
+    _notifyCartChanged();
     _saveCartToCache();
 
     if (_userId != null) {
@@ -193,7 +347,7 @@ class CartProvider extends ChangeNotifier {
 
   Future<void> removeFromCart(String productId) async {
     _items.removeWhere((item) => item.product.id == productId);
-    notifyListeners();
+    _notifyCartChanged();
     _saveCartToCache();
 
     if (_userId != null) {
@@ -223,7 +377,7 @@ class CartProvider extends ChangeNotifier {
         return;
       }
       _items[index].quantity = quantity;
-      notifyListeners();
+      _notifyCartChanged();
       _saveCartToCache();
     }
 
@@ -242,6 +396,7 @@ class CartProvider extends ChangeNotifier {
 
   Future<void> clearCart() async {
     _items.clear();
+    clearVoucher(notify: false);
     notifyListeners();
     _saveCartToCache();
 

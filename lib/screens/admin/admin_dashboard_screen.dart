@@ -29,6 +29,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _orders = [];
+  List<Map<String, dynamic>> _vouchers = [];
   List<Map<String, dynamic>> _shifts = [];
   bool _isLoading = true;
   final supabase = Supabase.instance.client;
@@ -46,7 +47,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     super.initState();
     final user = context.read<AuthProvider>().currentUser;
     final isAdmin = user?.role == UserRole.admin;
-    _tabController = TabController(length: isAdmin ? 6 : 4, vsync: this);
+    _tabController = TabController(length: isAdmin ? 7 : 4, vsync: this);
     _loadData();
 
     _flashSaleTicker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -156,6 +157,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final usersRes = await supabase.from('users').select();
         _users = List<Map<String, dynamic>>.from(usersRes);
 
+        try {
+          final voucherRes = await supabase
+              .from('vouchers')
+              .select()
+              .order('created_at', ascending: false);
+          _vouchers = List<Map<String, dynamic>>.from(voucherRes);
+        } catch (e) {
+          debugPrint('Notice loading vouchers: $e');
+          _vouchers = [];
+        }
+
         // Cashier shifts - admin monitoring
         try {
           final shiftsRes = await supabase
@@ -197,6 +209,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               icon: Icon(Icons.local_fire_department),
               text: 'Flash Sale',
             ),
+            if (isAdmin)
+              const Tab(
+                icon: Icon(Icons.confirmation_num_outlined),
+                text: 'Voucher',
+              ),
             const Tab(icon: Icon(Icons.receipt_long), text: 'Pesanan'),
             const Tab(icon: Icon(Icons.star_rate), text: 'Ulasan'),
             if (isAdmin) const Tab(icon: Icon(Icons.people), text: 'Pengguna'),
@@ -212,6 +229,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               children: [
                 _buildProductsTab(),
                 _buildFlashSaleTab(),
+                if (isAdmin) _buildVouchersTab(),
                 _buildOrdersTab(),
                 _buildReviewsTab(),
                 if (isAdmin) _buildUsersTab(),
@@ -573,7 +591,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       activeColor: AppColors.error,
                       contentPadding: EdgeInsets.zero,
                       onChanged: (val) async {
-                        final ok = await productProvider.setFlashSaleActive(val);
+                        final ok = await productProvider.setFlashSaleActive(
+                          val,
+                        );
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -808,9 +828,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              ok
-                  ? 'Waktu Flash Sale diperpanjang $label'
-                  : 'Gagal menyimpan waktu ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
+              ok ? 'Waktu Flash Sale diperpanjang $label' : 'Gagal menyimpan waktu ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
             ),
           ),
         );
@@ -866,9 +884,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          ok
-              ? 'Waktu Flash Sale berhasil diperbarui secara realtime'
-              : 'Gagal menyimpan waktu ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
+          ok ? 'Waktu Flash Sale berhasil diperbarui secara realtime' : 'Gagal menyimpan waktu ke database. Pastikan ada produk flash sale & policy flash_sales sudah dipasang.',
         ),
       ),
     );
@@ -1217,7 +1233,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       padding: EdgeInsets.zero,
                                       visualDensity: VisualDensity.compact,
                                     ),
-                                  if ((order['tracking_number']?.toString() ?? '')
+                                  if ((order['tracking_number']?.toString() ??
+                                          '')
                                       .isNotEmpty)
                                     Chip(
                                       avatar: const Icon(
@@ -1268,6 +1285,483 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // TAB 4: REVIEWS TAB
   // ============================================================
   Widget _buildReviewsTab() => const ReviewManagementTab();
+
+  Widget _buildVouchersTab() {
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${_vouchers.length} voucher',
+                  style: AppTextStyles.titleMedium,
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: _showVoucherDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('Buat Voucher'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_vouchers.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: Text(
+                  'Belum ada voucher.',
+                  style: AppTextStyles.bodyMedium,
+                ),
+              ),
+            ),
+          ..._vouchers.map((voucher) {
+            final code = voucher['code']?.toString() ?? '';
+            final active = voucher['is_active'] == true;
+            final used = _parseInt(voucher['used_count']);
+            final limit = voucher['usage_limit'] == null
+                ? null
+                : _parseInt(voucher['usage_limit']);
+            final exhausted = limit != null && used >= limit;
+            final expiryDate = DateTime.tryParse(
+              voucher['expires_at']?.toString() ?? '',
+            );
+            final lastValidDate = expiryDate?.toLocal().subtract(
+              const Duration(days: 1),
+            );
+            final expired =
+                expiryDate != null && !expiryDate.isAfter(DateTime.now());
+            final type = voucher['discount_type']?.toString() ?? 'fixed';
+            final value = _parseDouble(voucher['discount_value']);
+            final discount = type == 'percent'
+                ? '${value.toStringAsFixed(0)}%'
+                : 'Rp ${_formatNumber(value)}';
+
+            return GlassCard(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          code,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          expired
+                              ? 'Kedaluwarsa'
+                              : exhausted
+                              ? 'Kuota habis'
+                              : active
+                              ? 'Aktif'
+                              : 'Nonaktif',
+                        ),
+                        backgroundColor: expired || exhausted || !active
+                            ? AppColors.error.withValues(alpha: 0.12)
+                            : AppColors.success.withValues(alpha: 0.12),
+                        labelStyle: TextStyle(
+                          color: expired || exhausted || !active
+                              ? AppColors.error
+                              : AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${voucher['title'] ?? ''} • Diskon $discount',
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Terpakai: $used/${limit ?? 'tanpa batas'}'
+                    ' • Min. belanja Rp ${_formatNumber(voucher['min_purchase'])}'
+                    ' • Maks. per akun: ${_parseInt(voucher['per_user_limit'])}',
+                    style: AppTextStyles.caption,
+                  ),
+                  Text(
+                    'Berlaku sampai ${_voucherDateLabel(lastValidDate?.toString())}',
+                    style: AppTextStyles.caption,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _showVoucherDialog(voucher),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _setVoucherActive(voucher, !active),
+                        icon: Icon(
+                          active ? Icons.block : Icons.check_circle_outline,
+                        ),
+                        label: Text(active ? 'Nonaktifkan' : 'Aktifkan'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: active
+                              ? AppColors.error
+                              : AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  String _voucherDateLabel(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '');
+    if (date == null) return '-';
+    final local = date.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
+
+  Future<void> _setVoucherActive(
+    Map<String, dynamic> voucher,
+    bool active,
+  ) async {
+    try {
+      await supabase
+          .from('vouchers')
+          .update({'is_active': active})
+          .eq('id', voucher['id'].toString());
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            active ? 'Voucher berhasil diaktifkan.' : 'Voucher dinonaktifkan.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Status voucher gagal diperbarui: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showVoucherDialog([Map<String, dynamic>? existing]) async {
+    final formKey = GlobalKey<FormState>();
+    final codeController = TextEditingController(
+      text: existing?['code']?.toString() ?? '',
+    );
+    final titleController = TextEditingController(
+      text: existing?['title']?.toString() ?? '',
+    );
+    final valueController = TextEditingController(
+      text: existing?['discount_value']?.toString() ?? '',
+    );
+    final minPurchaseController = TextEditingController(
+      text: existing?['min_purchase']?.toString() ?? '0',
+    );
+    final maxDiscountController = TextEditingController(
+      text: existing?['max_discount']?.toString() ?? '',
+    );
+    final usageLimitController = TextEditingController(
+      text: existing?['usage_limit']?.toString() ?? '',
+    );
+    final perUserLimitController = TextEditingController(
+      text: existing?['per_user_limit']?.toString() ?? '1',
+    );
+    var discountType = existing?['discount_type']?.toString() ?? 'percent';
+    var startsAt =
+        DateTime.tryParse(existing?['starts_at']?.toString() ?? '')
+            ?.toLocal() ??
+        DateTime.now();
+    final savedExpiry = DateTime.tryParse(
+      existing?['expires_at']?.toString() ?? '',
+    )?.toLocal();
+    var expiresAt =
+        savedExpiry?.subtract(const Duration(days: 1)) ??
+        DateTime.now().add(const Duration(days: 7));
+    var saveError = '';
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'Buat Voucher' : 'Edit Voucher'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: codeController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Kode voucher',
+                      ),
+                      validator: (value) {
+                        final code = value?.trim() ?? '';
+                        if (code.isEmpty ||
+                            !RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(code)) {
+                          return 'Gunakan huruf, angka, tanda _ atau -';
+                        }
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nama / judul promo',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Nama promo wajib diisi'
+                          : null,
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: discountType,
+                      decoration: const InputDecoration(
+                        labelText: 'Jenis diskon',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'percent',
+                          child: Text('Persentase (%)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'fixed',
+                          child: Text('Nominal (Rp)'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => discountType = value);
+                        }
+                      },
+                    ),
+                    TextFormField(
+                      controller: valueController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: discountType == 'percent'
+                            ? 'Diskon (%)'
+                            : 'Diskon (Rp)',
+                      ),
+                      validator: (value) {
+                        final amount = double.tryParse(value ?? '');
+                        if (amount == null ||
+                            amount <= 0 ||
+                            (discountType == 'percent' && amount > 100)) {
+                          return discountType == 'percent'
+                              ? 'Masukkan nilai 0 sampai 100'
+                              : 'Masukkan nominal diskon yang valid';
+                        }
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: minPurchaseController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Minimal belanja (Rp)',
+                      ),
+                      validator: (value) =>
+                          double.tryParse(value ?? '') == null ||
+                              double.parse(value!) < 0
+                          ? 'Minimal belanja tidak valid'
+                          : null,
+                    ),
+                    if (discountType == 'percent')
+                      TextFormField(
+                        controller: maxDiscountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Maksimal diskon (Rp, opsional)',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return null;
+                          }
+                          final amount = double.tryParse(value);
+                          return amount == null || amount <= 0
+                              ? 'Maksimal diskon tidak valid'
+                              : null;
+                        },
+                      ),
+                    TextFormField(
+                      controller: usageLimitController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Kuota pemakaian (kosong = tanpa batas)',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) return null;
+                        final limit = int.tryParse(value);
+                        return limit == null || limit < 1
+                            ? 'Kuota minimal 1'
+                            : null;
+                      },
+                    ),
+                    TextFormField(
+                      controller: perUserLimitController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Batas pemakaian per akun',
+                      ),
+                      validator: (value) {
+                        final limit = int.tryParse(value ?? '');
+                        return limit == null || limit < 1
+                            ? 'Batas per akun minimal 1'
+                            : null;
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mulai berlaku'),
+                      subtitle: Text(_voucherDateLabel(startsAt.toString())),
+                      trailing: const Icon(Icons.calendar_month),
+                      onTap: () async {
+                        final selected = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: startsAt,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (selected != null) {
+                          setDialogState(() => startsAt = selected);
+                        }
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Tanggal berakhir'),
+                      subtitle: Text(_voucherDateLabel(expiresAt.toString())),
+                      trailing: const Icon(Icons.event_busy),
+                      onTap: () async {
+                        final selected = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: expiresAt,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (selected != null) {
+                          setDialogState(() => expiresAt = selected);
+                        }
+                      },
+                    ),
+                    if (saveError.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          saveError,
+                          style: TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                if (!expiresAt.add(const Duration(days: 1)).isAfter(startsAt)) {
+                  setDialogState(
+                    () => saveError =
+                        'Tanggal berakhir harus setelah tanggal mulai.',
+                  );
+                  return;
+                }
+                final data = <String, dynamic>{
+                  'code': codeController.text.trim().toUpperCase(),
+                  'title': titleController.text.trim(),
+                  'discount_type': discountType,
+                  'discount_value': double.parse(valueController.text.trim()),
+                  'max_discount':
+                      discountType == 'percent' &&
+                          maxDiscountController.text.trim().isNotEmpty
+                      ? double.parse(maxDiscountController.text.trim())
+                      : null,
+                  'min_purchase': double.parse(
+                    minPurchaseController.text.trim(),
+                  ),
+                  'usage_limit': usageLimitController.text.trim().isEmpty
+                      ? null
+                      : int.parse(usageLimitController.text.trim()),
+                  'per_user_limit': int.parse(
+                    perUserLimitController.text.trim(),
+                  ),
+                  'starts_at': startsAt.toUtc().toIso8601String(),
+                  'expires_at': expiresAt
+                      .add(const Duration(days: 1))
+                      .toUtc()
+                      .toIso8601String(),
+                };
+                try {
+                  final id = existing?['id']?.toString();
+                  if (id == null) {
+                    await supabase.from('vouchers').insert(data);
+                  } else {
+                    await supabase.from('vouchers').update(data).eq('id', id);
+                  }
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, true);
+                  }
+                } catch (error) {
+                  setDialogState(
+                    () => saveError = 'Voucher gagal disimpan: $error',
+                  );
+                }
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    codeController.dispose();
+    titleController.dispose();
+    valueController.dispose();
+    minPurchaseController.dispose();
+    maxDiscountController.dispose();
+    usageLimitController.dispose();
+    perUserLimitController.dispose();
+    if (saved == true && mounted) {
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Voucher berhasil disimpan.')),
+      );
+    }
+  }
 
   // ============================================================
   // TAB 5: USERS TAB (ADMIN ONLY)

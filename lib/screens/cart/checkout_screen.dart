@@ -102,7 +102,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final orderRequest = OrderModel(
       id: '',
       items: List<CartItemModel>.from(cart.items),
-      totalPrice: cart.totalPrice + (shipping['price'] as double),
+      totalPrice:
+          cart.totalPrice +
+          (shipping['price'] as double) -
+          cart.voucherDiscount,
       status: OrderStatus.processing,
       orderDate: DateTime.now(),
       shippingAddress: fullAddress.isNotEmpty
@@ -115,6 +118,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final order = await context.read<OrderProvider>().addOrder(
       orderRequest,
       shippingMethod: shipping['name'] as String,
+      voucherCode: cart.appliedVoucherCode,
     );
     if (!mounted) return;
     setState(() => _isProcessing = false);
@@ -351,8 +355,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       value: index,
                       groupValue: _selectedShipping,
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setState(() => _selectedShipping = val);
+                        }
                       },
                       title: Text(method['name'] as String),
                       subtitle: Text(method['days'] as String),
@@ -391,6 +396,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   .shippingMethods[_selectedShipping]['price']
                               as double;
                       final total = cart.totalPrice + shippingPrice;
+                      final voucherDiscount = cart.voucherDiscount;
 
                       return Column(
                         children: [
@@ -415,6 +421,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               ),
                             ],
                           ),
+                          if (voucherDiscount > 0) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Voucher ${cart.appliedVoucherCode ?? ''}',
+                                  style: AppTextStyles.bodyMedium,
+                                ),
+                                Text(
+                                  '- ${formatRupiah(voucherDiscount)}',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           const Divider(height: 24),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -424,7 +448,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 style: AppTextStyles.titleMedium,
                               ),
                               Text(
-                                formatRupiah(total),
+                                formatRupiah(total - voucherDiscount),
                                 style: AppTextStyles.price,
                               ),
                             ],
