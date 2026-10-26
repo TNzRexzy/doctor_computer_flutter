@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -35,6 +36,12 @@ class ProductProvider extends ChangeNotifier {
   /// Only used as the end time of a NEW flash sale when no timer is running yet.
   static const Duration _defaultNewFlashSaleDuration = Duration(hours: 8);
 
+  /// Naik setiap kali harga produk flash sale dikembalikan ke normal
+  /// (timer berakhir). Dipakai `CartProvider` untuk menyegarkan harga keranjang.
+  static final ValueNotifier<int> flashSaleExpired = ValueNotifier<int>(0);
+  Timer? _flashSaleExpiryTimer;
+  bool _isExpiringFlashSale = false;
+
   bool _isLoading = false;
 
   ProductProvider() {
@@ -44,6 +51,7 @@ class ProductProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _flashSaleExpiryTimer?.cancel();
     final channel = _flashSaleChannel;
     if (channel != null) {
       supabase.removeChannel(channel);
@@ -60,6 +68,9 @@ class ProductProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   DateTime get flashSaleEndTime => _flashSaleEndTime;
   bool get isFlashSaleActive => _isFlashSaleActive;
+
+  /// `true` jika waktu flash sale sudah lewat (atau belum ada flash sale).
+  bool get isFlashSaleExpired => !_flashSaleEndTime.isAfter(DateTime.now());
 
   Duration get flashSaleRemainingTime {
     final now = DateTime.now();
@@ -516,8 +527,156 @@ class ProductProvider extends ChangeNotifier {
       _flashSaleEndTime = latestEnd ?? DateTime.now();
       _isFlashSaleActive = latestEnd != null && anyActive;
       notifyListeners();
+      _scheduleFlashSaleExpiry();
     } catch (e) {
       debugPrint('Error loading flash sale config from Supabase: $e');
+    }
+  }
+
+  // ------------------------------------------------------------
+  // FLASH SALE EXPIRY: harga kembali normal saat timer berakhir
+  // ------------------------------------------------------------
+
+  /// Menjadwalkan pengembalian harga tepat saat timer berakhir. Jika timer
+  /// sudah berakhir dan masih ada produk berstatus flash sale di perangkat
+  /// ini, pengembalian dijalankan langsung.
+  void _scheduleFlashSaleExpiry() {
+    _flashSaleExpiryTimer?.cancel();
+    final remaining = _flashSaleEndTime.difference(DateTime.now());
+    if (remaining > Duration.zero) {
+      // +2 detik: memberi toleransi selisih jam perangkat dan server.
+      _flashSaleExpiryTimer = Timer(
+        remaining + const Duration(seconds: 2),
+        expireFlashSales,
+      );
+    } else if (_allProducts.any((p) => p.isOnSale)) {
+      expireFlashSales();
+    }
+  }
+
+  /// Memanggil RPC `expire_flash_sales`: produk dengan flash sale yang sudah
+  /// berakhir kembali ke harga normal dan keluar dari flash sale (di database,
+  /// sehingga keranjang/checkout juga memakai harga normal). Hasilnya
+  /// diterapkan ke daftar produk, cache lokal admin/kasir, dan keranjang.
+  Future<void> expireFlashSales() async {
+    if (_isExpiringFlashSale) return;
+    _isExpiringFlashSale = true;
+    try {
+      final res = await supabase.rpc('expire_flash_sales');
+      final prices = <String, double>{};
+      if (res is List) {
+        for (final row in res) {
+          if (row is Map && row['product_id'] != null) {
+            prices[row['product_id'].toString()] =
+                (row['price'] as num?)?.toDouble() ?? 0.0;
+          }
+        }
+      }
+
+      // Cache lokal admin/kasir bisa masih menyimpan status flash sale lama.
+      // Samakan dengan database untuk produk yang sudah tidak flash sale.
+      if (isFlashSaleExpired) {
+        final staleIds = _allProducts
+            .where((p) => p.isOnSale && !prices.containsKey(p.id))
+            .map((p) => p.id)
+            .toList();
+        if (staleIds.isNotEmpty) {
+          final List rows = await supabase
+              .from('products')
+              .select('id, price, is_on_sale')
+              .inFilter('id', staleIds);
+          for (final row in rows) {
+            if (row['is_on_sale'] == false) {
+              prices[row['id'].toString()] =
+                  (row['price'] as num?)?.toDouble() ?? 0.0;
+            }
+          }
+        }
+      }
+
+      if (prices.isEmpty) return;
+
+      _allProducts = _allProducts.map((p) {
+        final normalPrice = prices[p.id];
+        return normalPrice == null ? p : _withoutSale(p, normalPrice);
+      }).toList();
+      notifyListeners();
+      await _clearSaleFromLocalCache(prices);
+      flashSaleExpired.value++;
+    } catch (e) {
+      debugPrint('Error expiring flash sales: $e');
+    } finally {
+      _isExpiringFlashSale = false;
+    }
+  }
+
+  ProductModel _withoutSale(ProductModel p, double normalPrice) {
+    return ProductModel(
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      descriptionId: p.descriptionId,
+      price: normalPrice,
+      originalPrice: null,
+      categoryId: p.categoryId,
+      brand: p.brand,
+      images: p.images,
+      specs: p.specs,
+      rating: p.rating,
+      reviewCount: p.reviewCount,
+      stock: p.stock,
+      isNew: p.isNew,
+      isOnSale: false,
+    );
+  }
+
+  /// Menghapus harga/status flash sale dari cache lokal (override & produk
+  /// custom) supaya tidak diterapkan kembali saat aplikasi dibuka lagi.
+  Future<void> _clearSaleFromLocalCache(Map<String, double> prices) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final overridesJson = prefs.getString(_prefProductOverridesKey);
+      if (overridesJson != null && overridesJson.isNotEmpty) {
+        final overrides = Map<String, dynamic>.from(jsonDecode(overridesJson));
+        var changed = false;
+        for (final entry in prices.entries) {
+          final current = overrides[entry.key];
+          if (current is Map) {
+            final map = Map<String, dynamic>.from(current);
+            map['price'] = entry.value;
+            map['original_price'] = null;
+            map['is_on_sale'] = false;
+            overrides[entry.key] = map;
+            changed = true;
+          }
+        }
+        if (changed) {
+          await prefs.setString(_prefProductOverridesKey, jsonEncode(overrides));
+        }
+      }
+
+      final customJson = prefs.getString(_prefCustomProductsKey);
+      if (customJson != null && customJson.isNotEmpty) {
+        final List list = jsonDecode(customJson);
+        var changed = false;
+        for (var i = 0; i < list.length; i++) {
+          final item = list[i];
+          if (item is Map && prices.containsKey(item['id']?.toString())) {
+            final map = Map<String, dynamic>.from(item);
+            map['price'] = prices[item['id'].toString()];
+            map['original_price'] = null;
+            map['is_on_sale'] = false;
+            list[i] = map;
+            changed = true;
+          }
+        }
+        if (changed) {
+          await prefs.setString(_prefCustomProductsKey, jsonEncode(list));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error clearing flash sale from local cache: $e');
     }
   }
 
@@ -629,6 +788,7 @@ class ProductProvider extends ChangeNotifier {
       if (updated.isEmpty) {
         throw StateError('Tidak ada baris flash_sales yang berhasil diubah.');
       }
+      _scheduleFlashSaleExpiry();
       return true;
     } catch (e) {
       debugPrint('Error saving flash sale config to Supabase: $e');

@@ -3,6 +3,8 @@ class ReviewModel {
   final String id;
   final String userId;
   final String userName;
+  /// Foto profil pembeli (null jika pembeli belum punya foto).
+  final String? userImageUrl;
   final String productId;
   final String? orderId;
   final double rating;
@@ -17,6 +19,7 @@ class ReviewModel {
     required this.id,
     required this.userId,
     required this.userName,
+    this.userImageUrl,
     required this.productId,
     this.orderId,
     required this.rating,
@@ -32,6 +35,7 @@ class ReviewModel {
     String? id,
     String? userId,
     String? userName,
+    String? userImageUrl,
     String? productId,
     String? orderId,
     double? rating,
@@ -46,6 +50,7 @@ class ReviewModel {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       userName: userName ?? this.userName,
+      userImageUrl: userImageUrl ?? this.userImageUrl,
       productId: productId ?? this.productId,
       orderId: orderId ?? this.orderId,
       rating: rating ?? this.rating,
@@ -90,6 +95,9 @@ class ReviewModel {
       id: map['id']?.toString() ?? '',
       userId: map['user_id']?.toString() ?? '',
       userName: map['user_name']?.toString() ?? 'Pengguna',
+      userImageUrl: (map['user_image_url']?.toString().trim().isEmpty ?? true)
+          ? null
+          : map['user_image_url'].toString().trim(),
       productId: map['product_id']?.toString() ?? '',
       orderId: map['order_id']?.toString(),
       rating: (map['rating'] as num?)?.toDouble() ?? 5.0,

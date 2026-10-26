@@ -48,12 +48,37 @@ class ReviewProvider extends ChangeNotifier {
       _reviews = res
           .map((item) => ReviewModel.fromMap(item as Map<String, dynamic>))
           .toList();
+      await _attachBuyerPhotos();
     } catch (e) {
       debugPrint('Error loading reviews from Supabase: $e');
     }
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Menambahkan foto profil pembeli ke setiap ulasan dari view
+  /// `review_author_avatars`. Jika view belum ada / gagal dibaca, ulasan
+  /// tetap tampil tanpa foto.
+  Future<void> _attachBuyerPhotos() async {
+    try {
+      final List rows = await supabase
+          .from('review_author_avatars')
+          .select('review_id, profile_image_url');
+      final photos = <String, String>{};
+      for (final row in rows) {
+        final id = row['review_id']?.toString();
+        final url = row['profile_image_url']?.toString().trim();
+        if (id != null && url != null && url.isNotEmpty) photos[id] = url;
+      }
+      _reviews = _reviews
+          .map((r) => photos.containsKey(r.id)
+              ? r.copyWith(userImageUrl: photos[r.id])
+              : r)
+          .toList();
+    } catch (e) {
+      debugPrint('Buyer photos unavailable: $e');
+    }
   }
 
   /// Mengirim atau mengubah ulasan satu item pesanan lewat RPC

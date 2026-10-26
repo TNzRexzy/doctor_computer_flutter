@@ -99,7 +99,12 @@ class PcBuilderProvider extends ChangeNotifier {
           .select();
 
       if (res.isNotEmpty) {
-        _allParts = res.map((p) => _mapPart(p)).toList();
+        // Hanya komponen PC asli: baris dengan kategori di luar 8 slot
+        // (mis. Laptop 'cat-010', Peripherals 'cat-009') dilewati.
+        _allParts = res
+            .map((p) => _mapPart(p))
+            .whereType<PcPartModel>()
+            .toList();
         // Also combine with mock parts to ensure all categories have choices
         for (var mock in mockPcParts) {
           if (!_allParts.any((p) => p.name == mock.name)) {
@@ -118,9 +123,9 @@ class PcBuilderProvider extends ChangeNotifier {
     }
   }
 
-  PcPartModel _mapPart(dynamic p) {
+  PcPartModel? _mapPart(dynamic p) {
     final categoryStr = (p['category']?.toString() ?? '').toLowerCase();
-    PcPartCategory category = PcPartCategory.cpu;
+    PcPartCategory? category;
 
     if (categoryStr == 'cat-001' || categoryStr == 'cpu' || categoryStr.contains('processor')) {
       category = PcPartCategory.cpu;
@@ -139,6 +144,9 @@ class PcBuilderProvider extends ChangeNotifier {
     } else if (categoryStr == 'cat-008' || categoryStr == 'pc_case' || categoryStr == 'case' || categoryStr.contains('casing')) {
       category = PcPartCategory.pcCase;
     }
+
+    // Kategori tidak dikenali (bukan komponen rakitan) -> jangan ditampilkan.
+    if (category == null) return null;
 
     final specsRaw = p['specs'];
     Map<String, String> specsMap = {};

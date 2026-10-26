@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/services/profile_photo_service.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
@@ -46,95 +48,139 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _showImageUrlDialog() {
-    final urlController = TextEditingController(
-      text: context.read<AuthProvider>().currentUser?.profileImageUrl ?? '',
-    );
-    final sampleAvatars = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&fit=crop',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&fit=crop',
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&fit=crop',
-    ];
+  /// Dialog ubah foto: pilih file JPG/PNG/GIF dari perangkat lalu unggah.
+  void _showPhotoUploadDialog() {
+    PickedProfilePhoto? picked;
+    String? error;
+    bool saving = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Ubah Foto Profil'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Masukkan URL foto atau pilih avatar cepat:', style: TextStyle(fontSize: 13)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(
-                    labelText: 'URL Gambar (JPG/PNG)',
-                    hintText: 'https://example.com/photo.jpg',
-                    border: OutlineInputBorder(),
+        builder: (context, setDialogState) {
+          final user = this.context.read<AuthProvider>().currentUser;
+          final currentUrl = user?.profileImageUrl;
+          ImageProvider? preview;
+          if (picked != null) {
+            preview = MemoryImage(picked!.bytes);
+          } else if (currentUrl != null && currentUrl.isNotEmpty) {
+            preview = NetworkImage(currentUrl);
+          }
+
+          return AlertDialog(
+            title: const Text('Ubah Foto Profil'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 48,
+                    backgroundColor: AppColors.surface,
+                    backgroundImage: preview,
+                    child: preview == null
+                        ? Icon(Icons.person, size: 44, color: AppColors.textTertiary)
+                        : null,
                   ),
-                ),
-                const SizedBox(height: 14),
-                const Text('Pilihan Avatar Instan:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: sampleAvatars.map((url) {
-                    final isSelected = urlController.text == url;
-                    return GestureDetector(
-                      onTap: () {
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            try {
+                              final result = await ProfilePhotoService.pick();
+                              if (result != null) {
+                                setDialogState(() {
+                                  picked = result;
+                                  error = null;
+                                });
+                              }
+                            } on FormatException catch (e) {
+                              setDialogState(() => error = e.message);
+                            } catch (e) {
+                              setDialogState(() => error = 'Gagal membuka galeri.');
+                            }
+                          },
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Pilih Foto dari Perangkat'),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Format JPG, PNG, atau GIF. Maksimal 5 MB.',
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      style: AppTextStyles.caption.copyWith(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: (picked == null || saving)
+                    ? null
+                    : () async {
+                        final auth = this.context.read<AuthProvider>();
+                        final messenger = ScaffoldMessenger.of(this.context);
+                        final nav = Navigator.of(ctx);
+                        final userId =
+                            Supabase.instance.client.auth.currentUser?.id ??
+                                auth.currentUser?.id;
+                        if (userId == null) {
+                          setDialogState(() => error = 'Sesi login tidak ditemukan.');
+                          return;
+                        }
                         setDialogState(() {
-                          urlController.text = url;
+                          saving = true;
+                          error = null;
                         });
+                        try {
+                          final oldUrl = auth.currentUser?.profileImageUrl;
+                          final url = await ProfilePhotoService.upload(picked!, userId);
+                          final success = await auth.updateProfileImage(url);
+                          if (!success) {
+                            await ProfilePhotoService.deleteByUrl(url);
+                            setDialogState(() {
+                              saving = false;
+                              error = 'Gagal menyimpan foto profil.';
+                            });
+                            return;
+                          }
+                          await ProfilePhotoService.deleteByUrl(oldUrl);
+                          nav.pop();
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Foto profil diperbarui')),
+                          );
+                          if (mounted) setState(() {});
+                        } catch (e) {
+                          debugPrint('Upload profile photo failed: $e');
+                          setDialogState(() {
+                            saving = false;
+                            error = 'Unggah gagal. Periksa koneksi Anda lalu coba lagi.';
+                          });
+                        }
                       },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? AppColors.primary : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: CircleAvatar(
-                          radius: 22,
-                          backgroundImage: NetworkImage(url),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final url = urlController.text.trim();
-                if (url.isNotEmpty) {
-                  final auth = context.read<AuthProvider>();
-                  final nav = Navigator.of(ctx);
-                  final messenger = ScaffoldMessenger.of(context);
-                  final success = await auth.updateProfileImage(url);
-                  if (mounted) {
-                    nav.pop();
-                    messenger.showSnackBar(
-                      SnackBar(content: Text(success ? 'Foto profil diperbarui' : 'Gagal memperbarui foto')),
-                    );
-                    setState(() {}); // Refresh UI
-                  }
-                }
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        ),
+                child: saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Simpan'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -210,7 +256,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         bottom: 0,
                         right: 0,
                         child: GestureDetector(
-                          onTap: () => _showImageUrlDialog(),
+                          onTap: () => _showPhotoUploadDialog(),
                           child: CircleAvatar(
                             radius: 16,
                             backgroundColor: AppColors.primary,

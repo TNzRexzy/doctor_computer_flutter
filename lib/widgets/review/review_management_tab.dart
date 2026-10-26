@@ -176,7 +176,14 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                child: Text(
+                backgroundImage: (review.userImageUrl != null &&
+                        review.userImageUrl!.isNotEmpty)
+                    ? NetworkImage(review.userImageUrl!)
+                    : null,
+                child: (review.userImageUrl != null &&
+                        review.userImageUrl!.isNotEmpty)
+                    ? null
+                    : Text(
                   review.userName.isNotEmpty
                       ? review.userName[0].toUpperCase()
                       : '?',

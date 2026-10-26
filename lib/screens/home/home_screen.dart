@@ -42,10 +42,12 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Row(
@@ -90,9 +92,19 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+                ],
+              ),
+            ),
+            // Search bar tetap menempel di atas saat Home di-scroll.
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedSearchBarDelegate(
+                child: Container(
+                  color: AppColors.background,
+                  alignment: Alignment.center,
+                  child:
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: GestureDetector(
                   onTap: () => Navigator.pushNamed(context, AppRouter.search),
                   child: Container(
@@ -114,7 +126,14 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: PromoBannerCarousel(),
@@ -363,11 +382,32 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 100),
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// Delegate untuk search bar Home yang menempel (pinned) di bagian atas.
+class _PinnedSearchBarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  const _PinnedSearchBarDelegate({required this.child});
+
+  static const double _extent = 68;
+
+  @override
+  double get minExtent => _extent;
+
+  @override
+  double get maxExtent => _extent;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
+
+  @override
+  bool shouldRebuild(covariant _PinnedSearchBarDelegate oldDelegate) => true;
+}

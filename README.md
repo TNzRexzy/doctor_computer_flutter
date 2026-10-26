@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.5-beta
+* **Release Version:** 1.1.6-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -120,6 +120,47 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-030 | Category icons were identical (CPU, GPU, RAM, etc. all showed the generic icon) | `_mapIcon` matched only the `categories.icon` column with loose substring checks, so unknown values fell back to the default icon | Resolved (icon resolved from category id/name/name_id/icon with whole-word matching and a distinct icon per hardware type) |
 | BUG-031 | A rounded box still appeared behind the bottom navigation bar | `BottomNavBar` drew a filled, bordered, shadowed container | Resolved (container is transparent; only icons and labels are shown) |
 | BUG-032 | Bottom navigation bar vanished after tapping `Lihat Semua` on Home (Kategori / Produk Terlaris) | The button pushed a new catalog route above `MainNavScreen` | Resolved (button switches to the Kategori tab of `MainNavScreen`, so the navigation bar stays visible) |
+| BUG-033 | Non-PC products (e.g. ASUS VivoBook 15 OLED laptop, peripherals) appeared in the CPU / GPU / Motherboard / etc. part pickers of Rakit PC | `PcBuilderProvider._mapPart` defaulted every unrecognized `pc_parts.category` (e.g. `cat-009`, `cat-010`) to `PcPartCategory.cpu` | Resolved (rows with a category outside the 8 build slots are skipped, so each picker lists only its own component type) |
+| BUG-034 | Search bar on Home scrolled away with the page | Whole Home body was a single `SingleChildScrollView` | Resolved (`CustomScrollView` with a pinned `SliverPersistentHeader` for the search bar) |
+| BUG-035 | Price summary, AI Bottleneck banner and `Tambah ke Keranjang` button scrolled with the Rakit PC part list | All were placed inside / above the scrolling list | Resolved (AI Bottleneck banner, a compact price summary and the cart button are pinned at the bottom, directly above the navigation bar, in a smaller size) |
+| BUG-036 | After the Flash Sale timer ended, products stayed in Flash Sale at the flash price, could still be added to the cart, and the product page still said "PROMO FLASH SALE SEDANG BERLANGSUNG" | The flash price is stored in `products.price`/`is_on_sale`; nothing restored the normal price when `flash_sales.ends_at` passed, and checkout reads the price from `products` | Resolved (RPC `expire_flash_sales` restores the normal price and removes the product from Flash Sale; the app triggers it when the timer ends and checkout runs it before pricing; cart and product page refresh automatically) |
+
+---
+
+## Version 1.1.6-beta Changelog
+
+1. **Sticky search bar on Home (BUG-034):**
+   * `HomeScreen` now uses a `CustomScrollView`. The greeting/notification header scrolls normally, while the `Cari produk...` search bar stays pinned at the top when scrolling.
+2. **Rakit PC layout (BUG-035):**
+   * The **AI Bottleneck Calculator** banner (and compatibility warnings) moved to the bottom of the screen, above the price summary.
+   * **Ringkasan Harga** (subtotal, service tier, total estimate) and the **Tambah ke Keranjang** button are pinned directly above the navigation bar and no longer scroll with the component list; the button sits right below **Total Estimasi**.
+   * The pinned area was made smaller (banner, summary card, segmented button, total and button heights/fonts) so the component list keeps enough room. The summary uses the `compact` mode of `PriceSummaryCard`, which also hides the per-component list (default `compact: false` is unchanged).
+3. **Component pickers only show real PC parts (BUG-033):**
+   * Items such as `ASUS VivoBook 15 OLED` (a laptop) were listed as CPU because unknown categories fell back to CPU. `PcBuilderProvider` now ignores `pc_parts` rows whose category is not one of the 8 slots (CPU, GPU, Motherboard, RAM, Storage, PSU, Case, Cooler), so every picker shows only its own component type.
+   * The database rows are not modified; they are simply not offered in Rakit PC.
+4. **Buyer profile picture in reviews:**
+   * Review cards on the product page show the buyer's profile picture only when the buyer has one; without a photo nothing is shown (no placeholder). The seller review tab (admin/cashier) shows the photo when available and keeps the initial-letter avatar otherwise.
+   * `ReviewModel.userImageUrl` is filled by `ReviewProvider` from the new view `review_author_avatars` (review id + profile image URL only, so the `users` table stays private). If the view is missing, reviews still load without photos.
+5. **Profile photo upload (all roles: client, cashier, admin):**
+   * `Profil > Edit Profil > camera icon` no longer asks for an image URL. The user picks a **JPG, PNG or GIF** file from the device (max. 5 MB), sees a preview, and taps **Simpan** to upload it.
+   * New `lib/services/profile_photo_service.dart`: file type is detected from the file contents (not the file name), then the file is uploaded to the public bucket `profile-photos` under `<user_id>/<timestamp>.<ext>`. GIFs are uploaded as-is (no compression), so animation is kept. The previous uploaded photo is deleted after a successful change; photos that were set earlier through a URL are left untouched.
+   * The photo is saved through the existing `AuthProvider.updateProfileImage`, so the Profile page, the navigation bar avatar and reviews use the new picture.
+6. **Database Migration:**
+   * Added `supabase/migrations/20261102_profile_photo_upload.sql`: bucket `profile-photos` (JPG/PNG/GIF, 5 MB, users can upload/delete only inside their own folder) and the view `review_author_avatars`.
+   * Added `supabase/migrations/20261103_flash_sale_expiry.sql`: function `expire_flash_sales()` and an updated `create_order_internal` (identical to the previous version plus one `PERFORM public.expire_flash_sales();` line).
+7. **Flash Sale ends correctly (BUG-036):**
+   * When the Flash Sale timer reaches zero, products leave Flash Sale and return to their **normal price** (the stored original price). The `Flash Sale` section on Home, the `FLASH SALE` tags and the `PROMO FLASH SALE SEDANG BERLANGSUNG` label disappear, and the product can only be added to the cart at the normal price.
+   * New RPC `expire_flash_sales()` does the work in the database (so prices are correct for everyone, not only on one device): for every `flash_sales` row whose `ends_at` has passed, the product gets `price = original price`, `original_price = NULL`, `is_on_sale = false`, and the finished `flash_sales` row is removed. It is idempotent and safe to call repeatedly.
+   * `ProductProvider` schedules the call for the moment the timer ends (and also runs it when the app opens after the sale already ended), then updates the product list and the admin/cashier local cache so the old flash price is not re-applied from `SharedPreferences`.
+   * `CartProvider.refreshPrices()` re-reads prices of items already in the cart when a Flash Sale ends, so cart totals drop to the normal price. Items from the PC builder are skipped.
+   * `ProductDetailScreen` now reads the latest product from `ProductProvider` and shows the promo label only while the timer is still running.
+   * Checkout safety: `create_order_internal` (used by online checkout and POS) calls `expire_flash_sales()` before calculating prices, so an order is never charged a flash price after the sale ended. A POS cart that still holds the old flash price is rejected with `Cart prices changed. Refresh the cart and try again.`; re-add the item to continue.
+   * Products marked as on sale that have **no** `flash_sales` row are not changed by this fix (they have no end time). Setting them as Flash Sale from the admin dashboard creates the row.
+8. **Versioning:** Bumped app version to `1.1.6-beta+16` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+No new dependency is required (`image_picker` is already used).
+
+**Action required after updating:** run `20261102_profile_photo_upload.sql` and `20261103_flash_sale_expiry.sql` (in this order) in the Supabase SQL Editor, then rebuild the app. Without the first, photo upload fails and review photos are not shown; without the second, products stay at the flash price after the timer ends.
 
 ---
 

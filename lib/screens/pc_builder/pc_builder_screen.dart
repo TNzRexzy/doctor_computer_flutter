@@ -48,104 +48,6 @@ class PcBuilderScreen extends StatelessWidget {
                 ],
               ),
             ),
-             Consumer<PcBuilderProvider>(
-              builder: (context, provider, child) {
-                final cpu = provider.selectedParts[PcPartCategory.cpu];
-                final gpu = provider.selectedParts[PcPartCategory.gpu];
-                final ram = provider.selectedParts[PcPartCategory.ram];
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                  child: Column(
-                    children: [
-                      // AI Bottleneck Banner
-                      InkWell(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => AiBottleneckSheet(cpu: cpu, gpu: gpu, ram: ram),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary.withValues(alpha: 0.15),
-                                AppColors.accent.withValues(alpha: 0.15),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.speed, color: AppColors.primary, size: 22),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'AI Bottleneck Calculator',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                    Text(
-                                      (cpu != null && gpu != null)
-                                          ? 'Analisis seimbang: ${cpu.name.split(' ').take(2).join(' ')} + ${gpu.name.split(' ').take(2).join(' ')}'
-                                          : 'Pilih CPU & GPU untuk menghitung bottleneck',
-                                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'Cek AI',
-                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (provider.compatibilityIssues.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            children: provider.compatibilityIssues.map((issue) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 4.0),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.warning, color: AppColors.error, size: 16),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: Text(issue, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              },
-            ),
             Expanded(
               child: Consumer<PcBuilderProvider>(
                 builder: (context, provider, child) {
@@ -177,18 +79,137 @@ class PcBuilderScreen extends StatelessWidget {
                             );
                           }),
                           const SizedBox(height: 16),
-                          PriceSummaryCard(
-                            selectedParts: provider.selectedParts,
-                            totalPartsPrice: provider.totalPartsPrice,
-                            buildFee: provider.buildFee,
-                            grandTotal: provider.grandTotal,
-                            serviceTier: provider.serviceTier,
-                            onServiceTierChanged: (tier) {
-                              provider.setServiceTier(tier);
-                            },
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            // AI Bottleneck Calculator: dipindah ke bawah, tepat di atas ringkasan harga.
+            Consumer<PcBuilderProvider>(
+              builder: (context, provider, child) {
+                final cpu = provider.selectedParts[PcPartCategory.cpu];
+                final gpu = provider.selectedParts[PcPartCategory.gpu];
+                final ram = provider.selectedParts[PcPartCategory.ram];
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: Column(
+                    children: [
+                      // AI Bottleneck Banner
+                      InkWell(
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => AiBottleneckSheet(cpu: cpu, gpu: gpu, ram: ram),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.15),
+                                AppColors.accent.withValues(alpha: 0.15),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
                           ),
-                          const SizedBox(height: 16),
-                          GradientButton(
+                          child: Row(
+                            children: [
+                              Icon(Icons.speed, color: AppColors.primary, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'AI Bottleneck Calculator',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    Text(
+                                      (cpu != null && gpu != null)
+                                          ? 'Analisis seimbang: ${cpu.name.split(' ').take(2).join(' ')} + ${gpu.name.split(' ').take(2).join(' ')}'
+                                          : 'Pilih CPU & GPU untuk menghitung bottleneck',
+                                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Cek AI',
+                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (provider.compatibilityIssues.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            children: provider.compatibilityIssues.map((issue) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4.0),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.warning, color: AppColors.error, size: 14),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(issue, style: AppTextStyles.caption.copyWith(color: AppColors.error))),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+            // Ringkasan harga: tetap di atas navbar, tidak ikut scroll.
+            Consumer<PcBuilderProvider>(
+              builder: (context, provider, child) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                  PriceSummaryCard(
+                    compact: true,
+                    selectedParts: provider.selectedParts,
+                    totalPartsPrice: provider.totalPartsPrice,
+                    buildFee: provider.buildFee,
+                    grandTotal: provider.grandTotal,
+                    serviceTier: provider.serviceTier,
+                    onServiceTierChanged: (tier) {
+                      provider.setServiceTier(tier);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  // Tombol tetap di bawah total estimasi (tidak ikut scroll).
+                  GradientButton(
+                            height: 44,
                             label: 'Tambah ke Keranjang',
                             icon: Icons.shopping_cart,
                             isEnabled: provider.selectedParts.containsKey(PcPartCategory.cpu) &&
@@ -264,13 +285,10 @@ class PcBuilderScreen extends StatelessWidget {
                               );
                             },
                           ),
-                          const SizedBox(height: 100),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         ),

@@ -202,18 +202,19 @@ class _ProductReviewsSectionState extends State<ProductReviewsSection> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                  child: Text(
-                    r.userName.isNotEmpty ? r.userName[0].toUpperCase() : '?',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
+                if (r.userImageUrl != null && r.userImageUrl!.isNotEmpty) ...[
+                  // Foto profil pembeli hanya tampil jika pembeli punya foto.
+                  ClipOval(
+                    child: Image.network(
+                      r.userImageUrl!,
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const SizedBox(width: 28, height: 28),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: Text(
                     r.userName,

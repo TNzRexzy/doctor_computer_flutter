@@ -4,6 +4,7 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
+import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/wishlist_provider.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
 import 'package:doctor_computer/widgets/review/product_reviews_section.dart';
@@ -20,6 +21,12 @@ class ProductDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
+
+    // Pakai data produk terbaru dari provider (harga kembali normal saat
+    // flash sale berakhir) dan sembunyikan label promo jika timer sudah habis.
+    final productProvider = context.watch<ProductProvider>();
+    final product = productProvider.getProductById(this.product.id) ?? this.product;
+    final flashSaleRunning = product.isOnSale && !productProvider.isFlashSaleExpired;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -84,7 +91,7 @@ class ProductDetailScreen extends StatelessWidget {
                                 ],
                               ),
                               SizedBox(height: 16),
-                              if (product.isOnSale) ...[
+                              if (flashSaleRunning) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(

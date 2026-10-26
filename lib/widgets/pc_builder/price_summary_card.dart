@@ -14,6 +14,9 @@ class PriceSummaryCard extends StatelessWidget {
   final BuildServiceTier serviceTier;
   final Function(BuildServiceTier) onServiceTierChanged;
 
+  /// Mode ringkas (dipakai saat ditempel di atas navbar): daftar komponen disembunyikan.
+  final bool compact;
+
   const PriceSummaryCard({
     super.key,
     required this.selectedParts,
@@ -22,6 +25,7 @@ class PriceSummaryCard extends StatelessWidget {
     required this.grandTotal,
     required this.serviceTier,
     required this.onServiceTierChanged,
+    this.compact = false,
   });
 
   @override
@@ -30,12 +34,13 @@ class PriceSummaryCard extends StatelessWidget {
     final activeParts = selectedParts.values.where((part) => part != null).cast<PcPartModel>().toList();
 
     return GlassCard(
+      padding: EdgeInsets.all(compact ? 12 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Ringkasan Harga', style: AppTextStyles.titleMedium),
-          const SizedBox(height: 12),
-          if (activeParts.isNotEmpty) ...[
+          Text('Ringkasan Harga', style: compact ? AppTextStyles.titleSmall : AppTextStyles.titleMedium),
+          SizedBox(height: compact ? 8 : 12),
+          if (!compact && activeParts.isNotEmpty) ...[
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -68,11 +73,11 @@ class PriceSummaryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Subtotal Komponen', style: AppTextStyles.bodyMedium),
-              Text(formatRupiah(totalPartsPrice), style: AppTextStyles.titleSmall),
+              Text('Subtotal Komponen', style: compact ? AppTextStyles.bodySmall : AppTextStyles.bodyMedium),
+              Text(formatRupiah(totalPartsPrice), style: compact ? AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold) : AppTextStyles.titleSmall),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: compact ? 8 : 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -87,6 +92,8 @@ class PriceSummaryCard extends StatelessWidget {
                     onServiceTierChanged(newSelection.first);
                   },
                   style: SegmentedButton.styleFrom(
+                    visualDensity: compact ? VisualDensity.compact : null,
+                    textStyle: compact ? const TextStyle(fontSize: 12) : null,
                     backgroundColor: AppColors.surface,
                     selectedForegroundColor: AppColors.textPrimary,
                     selectedBackgroundColor: AppColors.primary,
@@ -94,17 +101,17 @@ class PriceSummaryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              Text(formatRupiah(buildFee), style: AppTextStyles.titleSmall),
+              Text(formatRupiah(buildFee), style: compact ? AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold) : AppTextStyles.titleSmall),
             ],
           ),
-          Divider(color: AppColors.cardBorder, height: 24),
+          Divider(color: AppColors.cardBorder, height: compact ? 16 : 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total Estimasi', style: AppTextStyles.titleMedium),
+              Text('Total Estimasi', style: compact ? AppTextStyles.titleSmall : AppTextStyles.titleMedium),
               Text(
                 formatRupiah(grandTotal),
-                style: AppTextStyles.heading3.copyWith(color: AppColors.accent),
+                style: (compact ? AppTextStyles.titleMedium : AppTextStyles.heading3).copyWith(color: AppColors.accent),
               ),
             ],
           ),

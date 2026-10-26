@@ -6,6 +6,7 @@ import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
+import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -28,7 +29,46 @@ class CartProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
 
   CartProvider() {
-    // Initial setup
+    // Saat flash sale berakhir, harga di keranjang ikut kembali normal.
+    ProductProvider.flashSaleExpired.addListener(refreshPrices);
+  }
+
+  @override
+  void dispose() {
+    ProductProvider.flashSaleExpired.removeListener(refreshPrices);
+    super.dispose();
+  }
+
+  /// Mengambil ulang harga setiap produk di keranjang dari database
+  /// (jumlah tetap). Produk rakitan PC (`build-...`) dilewati.
+  Future<void> refreshPrices() async {
+    if (_items.isEmpty) return;
+    try {
+      var changed = false;
+      final ids = _items
+          .map((i) => i.product.id)
+          .where((id) => !id.startsWith('build-'))
+          .toList();
+      for (final id in ids) {
+        final fresh = await _fetchProductAsync(id);
+        if (fresh == null) continue;
+        final index = _items.indexWhere((i) => i.product.id == id);
+        if (index < 0) continue;
+        final old = _items[index].product;
+        if (fresh.price != old.price ||
+            fresh.originalPrice != old.originalPrice ||
+            fresh.isOnSale != old.isOnSale) {
+          _items[index] = CartItemModel(
+            product: fresh,
+            quantity: _items[index].quantity,
+          );
+          changed = true;
+        }
+      }
+      if (changed) notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing cart prices: $e');
+    }
   }
 
   void setUserId(String? id) {
