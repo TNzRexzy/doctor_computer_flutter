@@ -6,7 +6,7 @@ import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/services/gemini_service.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 
-class AiBottleneckSheet extends StatelessWidget {
+class AiBottleneckSheet extends StatefulWidget {
   final PcPartModel? cpu;
   final PcPartModel? gpu;
   final PcPartModel? ram;
@@ -19,14 +19,46 @@ class AiBottleneckSheet extends StatelessWidget {
   });
 
   @override
+  State<AiBottleneckSheet> createState() => _AiBottleneckSheetState();
+}
+
+class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
+  Map<String, dynamic>? _result;
+  bool _loading = true;
+
+  PcPartModel? get cpu => widget.cpu;
+  PcPartModel? get gpu => widget.gpu;
+
+  @override
+  void initState() {
+    super.initState();
+    _analyze();
+  }
+
+  /// Sends the selected parts to Gemini as soon as the sheet is opened.
+  Future<void> _analyze() async {
+    final result = await GeminiService().calculateBottleneckAI(
+      cpu: widget.cpu,
+      gpu: widget.gpu,
+      ram: widget.ram,
+    );
+    if (!mounted) return;
+    setState(() {
+      _result = result;
+      _loading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final result = GeminiService().calculateBottleneck(cpu: cpu, gpu: gpu, ram: ram);
+    final result = _result ?? const <String, dynamic>{};
     final percentage = result['bottleneckPercentage'] as int? ?? 0;
     final status = result['status'] as String? ?? '';
     final advice = result['advice'] as String? ?? '';
     final color = result['color'] as Color? ?? Colors.green;
     final res = result['recommendedResolution'] as String? ?? '1080p';
     final fpsMap = result['gamingFps'] as Map<String, String>? ?? {};
+    final isLocal = result['source'] == 'local';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -120,31 +152,65 @@ class AiBottleneckSheet extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Score card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: color, width: 2),
+            if (_loading)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.4), width: 2),
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Gemini AI sedang menganalisis kombinasi CPU & GPU...',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: color, width: 2),
+                ),
+                child: Column(
+                  children: [
+                    Text('$percentage%', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: color)),
+                    Text(status, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+                    const SizedBox(height: 8),
+                    Text(
+                      advice,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                    ),
+                    if (isLocal) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Estimasi offline (Gemini AI tidak tersedia saat ini).',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  Text('$percentage%', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: color)),
-                  Text(status, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-                  const SizedBox(height: 8),
-                  Text(
-                    advice,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
-                  ),
-                ],
-              ),
-            ),
 
             const SizedBox(height: 20),
 
-            Text('Rekomendasi Resolusi: $res', style: AppTextStyles.titleSmall),
+            Text(_loading ? 'Rekomendasi Resolusi: ...' : 'Rekomendasi Resolusi: $res', style: AppTextStyles.titleSmall),
             const SizedBox(height: 12),
 
             // Game FPS Estimates
@@ -171,7 +237,14 @@ class AiBottleneckSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
               ),
-              child: fpsMap.isEmpty
+              child: _loading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                    )
+                  : fpsMap.isEmpty
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -248,7 +321,7 @@ class AiBottleneckSheet extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Push Notification trigger button if bottleneck high
-            if (percentage > 15)
+            if (!_loading && percentage > 15)
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,

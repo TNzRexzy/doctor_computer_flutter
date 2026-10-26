@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/pc_build_model.dart';
-import 'package:doctor_computer/data/mock/mock_pc_parts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/constants/app_constants.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
@@ -17,6 +16,7 @@ class PcBuilderProvider extends ChangeNotifier {
 
   List<PcPartModel> _allParts = [];
   bool _isLoading = false;
+  String? _errorMessage;
 
   double get totalPartsPrice {
     double total = 0;
@@ -74,15 +74,16 @@ class PcBuilderProvider extends ChangeNotifier {
     _loadParts();
   }
 
-  List<PcPartModel> get allParts => _allParts.isNotEmpty ? _allParts : mockPcParts;
+  /// Semua komponen PC yang berasal dari tabel `pc_parts` di database.
+  /// Tidak ada data mock / fallback: jika DB kosong atau gagal, list kosong.
+  List<PcPartModel> get allParts => List.unmodifiable(_allParts);
   bool get isLoading => _isLoading;
 
+  /// Pesan error jika pemuatan dari database gagal (null jika berhasil).
+  String? get errorMessage => _errorMessage;
+
   List<PcPartModel> getPartsForCategory(PcPartCategory category) {
-    final list = allParts.where((part) => part.category == category).toList();
-    if (list.isEmpty) {
-      return mockPcParts.where((part) => part.category == category).toList();
-    }
-    return list;
+    return _allParts.where((part) => part.category == category).toList();
   }
 
   Future<void> reloadParts() async {
@@ -91,6 +92,7 @@ class PcBuilderProvider extends ChangeNotifier {
 
   Future<void> _loadParts() async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
     try {
@@ -98,25 +100,16 @@ class PcBuilderProvider extends ChangeNotifier {
           .from('pc_parts')
           .select();
 
-      if (res.isNotEmpty) {
-        // Hanya komponen PC asli: baris dengan kategori di luar 8 slot
-        // (mis. Laptop 'cat-010', Peripherals 'cat-009') dilewati.
-        _allParts = res
-            .map((p) => _mapPart(p))
-            .whereType<PcPartModel>()
-            .toList();
-        // Also combine with mock parts to ensure all categories have choices
-        for (var mock in mockPcParts) {
-          if (!_allParts.any((p) => p.name == mock.name)) {
-            _allParts.add(mock);
-          }
-        }
-      } else {
-        _allParts = List.from(mockPcParts);
-      }
+      // Hanya komponen PC asli: baris dengan kategori di luar 8 slot
+      // (mis. Laptop 'cat-010', Peripherals 'cat-009') dilewati.
+      _allParts = res
+          .map((p) => _mapPart(p))
+          .whereType<PcPartModel>()
+          .toList();
     } catch (e) {
       debugPrint('Error loading pc parts from Supabase: $e');
-      _allParts = List.from(mockPcParts);
+      _allParts = [];
+      _errorMessage = 'Gagal memuat komponen dari database.';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -160,13 +153,19 @@ class PcBuilderProvider extends ChangeNotifier {
       tags = rawTags.map((e) => e.toString()).toList();
     }
 
-    String? imageUrl = p['image_url']?.toString();
-    if (imageUrl == null || imageUrl.isEmpty) {
-      final matched = AppImages.matchUploadedImage(p['name']?.toString() ?? '', p['brand']?.toString());
-      if (matched != null) {
-        imageUrl = AppImages.getBucketUrl(matched);
-      }
+    // Gambar hanya dari kolom image_url di database (path bucket atau URL penuh).
+    // Tidak ada tebak-tebakan gambar berdasarkan nama agar tidak salah gambar.
+    final rawImage = p['image_url'];
+    String? imageUrl;
+    if (rawImage is List && rawImage.isNotEmpty) {
+      imageUrl = rawImage.first?.toString();
+    } else if (rawImage is String) {
+      imageUrl = rawImage;
     }
+    imageUrl = imageUrl?.trim();
+    imageUrl = (imageUrl == null || imageUrl.isEmpty)
+        ? null
+        : AppImages.getBucketUrl(imageUrl);
 
     return PcPartModel(
       id: p['id']?.toString() ?? '',

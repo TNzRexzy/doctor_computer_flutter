@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.6-beta
+* **Release Version:** 1.1.7-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -124,6 +124,35 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-034 | Search bar on Home scrolled away with the page | Whole Home body was a single `SingleChildScrollView` | Resolved (`CustomScrollView` with a pinned `SliverPersistentHeader` for the search bar) |
 | BUG-035 | Price summary, AI Bottleneck banner and `Tambah ke Keranjang` button scrolled with the Rakit PC part list | All were placed inside / above the scrolling list | Resolved (AI Bottleneck banner, a compact price summary and the cart button are pinned at the bottom, directly above the navigation bar, in a smaller size) |
 | BUG-036 | After the Flash Sale timer ended, products stayed in Flash Sale at the flash price, could still be added to the cart, and the product page still said "PROMO FLASH SALE SEDANG BERLANGSUNG" | The flash price is stored in `products.price`/`is_on_sale`; nothing restored the normal price when `flash_sales.ends_at` passed, and checkout reads the price from `products` | Resolved (RPC `expire_flash_sales` restores the normal price and removes the product from Flash Sale; the app triggers it when the timer ends and checkout runs it before pricing; cart and product page refresh automatically) |
+| BUG-037 | AI Bottleneck Calculator gave non-real results; two different CPUs of the same tier produced identical numbers, and unknown components were always treated as tier 5 | `GeminiService.calculateBottleneck()` mapped CPU/GPU names to a 1–10 tier by keyword matching, used a fixed formula, and read FPS from a hard-coded table | Resolved (new `calculateBottleneckAI()` gets the percentage, bottleneck type, advice, recommended resolution and per-game FPS from Gemini; the old estimate is kept only as an offline fallback and is labelled as such) |
+| BUG-038 | Rakit PC component lists came from mock data and showed guessed images (e.g. `ASUS...` showed a laptop, `MSI...` showed a monitor) | `PcBuilderProvider` merged `pc_parts` with `mockPcParts` (and used mock data entirely when the table was empty or failed), and guessed images from the product name | Resolved (components come only from `pc_parts`; images come from the `image_url` column; no mock fallback, no name-based image guessing) |
+
+---
+
+## Version 1.1.7-beta Changelog
+
+1. **AI Bottleneck Calculator now uses Gemini (BUG-037):**
+   * The previous `calculateBottleneck()` was not a real calculation: CPU and GPU were assigned a tier from 1 to 10 by keyword matching on the product name (unknown names defaulted to tier 5), the percentage came from a fixed formula over the tier difference, and FPS came from a hard-coded table reduced by the bottleneck percentage.
+   * New `GeminiService.calculateBottleneckAI()` sends the name and specifications of the selected CPU, GPU and RAM to Gemini and asks for a JSON reply with the bottleneck percentage, bottleneck type (CPU, GPU or balanced), advice, recommended resolution and estimated FPS for the same 8 games as before.
+   * It uses the same `_generate()` pipeline as the chat and smart search features: the API key is read from `app_config.GEMINI_API_KEY` in Supabase and the Gemini model fallback chain applies. The `gemini-chat` Edge Function is not changed.
+   * The old `calculateBottleneck()` is kept as a fallback when Gemini fails (quota exhausted, no internet, missing key).
+   * The values are estimates based on the model's knowledge of benchmarks, not live benchmark results.
+2. **Bottleneck sheet loads real results (`ai_bottleneck_sheet.dart`):**
+   * The layout is unchanged (CPU vs GPU cards, score card, FPS list, notification button).
+   * The request is sent as soon as the sheet opens; the score card and FPS list show a loading spinner while waiting, then the Gemini result is shown in the same place.
+   * When the result comes from the old estimate, the score card shows `Estimasi offline (Gemini AI tidak tersedia saat ini)` so it is never mistaken for an AI result.
+3. **Rakit PC no longer uses mock data (BUG-038):**
+   * `PcBuilderProvider` no longer imports or falls back to `mockPcParts`; components are loaded only from the `pc_parts` table. Rows whose category is outside the 8 build slots are still skipped.
+   * If the query fails, the list is emptied and an `errorMessage` is exposed to the UI.
+   * Images are read from the `image_url` column; a bucket path or a full URL is converted to a loadable URL. The name-based image guessing was removed because it often returned wrong images. A part with an empty `image_url` shows only the placeholder icon.
+4. **Component images in Rakit PC:**
+   * `part_selection_screen.dart`: the 60×60 icon box is replaced by the component image from the database (`AppImageView`, with cache, shimmer and fallback icon). Added a loading state, the messages `Belum ada ... di database` and `Komponen tidak ditemukan`, and a `Coba lagi` button when loading fails.
+   * `part_slot_card.dart`: a selected slot now shows the component image instead of the check icon.
+5. **Versioning:** Bumped app version to `1.1.7-beta+17` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+No database migration and no new dependency are required for this version. `lib/data/mock/mock_pc_parts.dart` is no longer used by Rakit PC and can be deleted.
+
+**Data requirements:** `pc_parts.category` must be one of `cpu`, `gpu`, `motherboard`, `ram`, `storage`, `psu`, `cooler`, `pc_case` (or `cat-001` to `cat-008`); `pc_parts.image_url` should hold a file name in the `assets` bucket or a full URL; `compatibility_tags` must be filled for the compatibility checks. `app_config.GEMINI_API_KEY` must be set for the AI Bottleneck Calculator.
 
 ---
 

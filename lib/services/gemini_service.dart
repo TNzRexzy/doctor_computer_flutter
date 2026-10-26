@@ -511,6 +511,154 @@ class GeminiService {
     return null;
   }
 
+  static const String _bottleneckSystemInstruction =
+      'Anda adalah pakar hardware PC dan benchmark gaming. Tugas: menilai '
+      'bottleneck antara CPU dan GPU yang diberikan berdasarkan data benchmark '
+      'nyata yang Anda ketahui (performa single-core/multi-core CPU, kelas GPU, '
+      'hasil review game di 1080p). Aturan: (1) bottleneckPercentage adalah '
+      'persentase performa GPU atau CPU yang terbuang (0-60), berupa bilangan '
+      'bulat; (2) type hanya salah satu dari \"cpu_bottleneck\" (CPU terlalu '
+      'lemah), \"gpu_bottleneck\" (GPU terlalu lemah), atau \"balanced\"; '
+      '(3) gamingFps berisi estimasi FPS rata-rata (bilangan bulat) untuk '
+      'SETIAP nama game yang diminta, sudah memperhitungkan bottleneck pada '
+      'kombinasi tersebut; (4) recommendedResolution salah satu dari '
+      '\"1080p Esports\", \"1080p / 1440p Gaming\", \"1440p / 4K Gaming\"; '
+      '(5) advice adalah 1-2 kalimat Bahasa Indonesia yang menyebut nama CPU '
+      'dan GPU serta saran konkret. Jika ada komponen yang tidak dikenal, '
+      'berikan estimasi konservatif berdasarkan spesifikasinya. '
+      'Balas HANYA JSON valid dengan format: '
+      '{\"bottleneckPercentage\":0,\"type\":\"balanced\",'
+      '\"recommendedResolution\":\"...\",\"advice\":\"...\",'
+      '\"gamingFps\":{\"<nama game>\":0}}';
+
+  static const List<String> _bottleneckGames = [
+    'Cyberpunk 2077 (1080p Ultra)',
+    'Cyberpunk 2077 (1440p Ultra)',
+    'Red Dead Redemption 2 (1080p Ultra)',
+    'Valorant (1080p High)',
+    'GTA V (1080p Very High)',
+    'Black Myth Wukong (1080p High)',
+    'Forza Horizon 5 (1080p Ultra)',
+    'CS2 (1080p High)',
+  ];
+
+  String _partDescription(PcPartModel part) {
+    final specs = part.specs.entries.map((e) => '${e.key}: ${e.value}').join('; ');
+    return '${part.name} (merek ${part.brand}${specs.isEmpty ? '' : '; $specs'})';
+  }
+
+  /// AI Bottleneck Calculator powered by Gemini. Sends the selected CPU/GPU/RAM
+  /// and returns the same map shape as [calculateBottleneck]. When Gemini is
+  /// unavailable, the local estimate is returned with `source: 'local'`.
+  Future<Map<String, dynamic>> calculateBottleneckAI({
+    required PcPartModel? cpu,
+    required PcPartModel? gpu,
+    PcPartModel? ram,
+  }) async {
+    if (cpu == null || gpu == null) {
+      return calculateBottleneck(cpu: cpu, gpu: gpu, ram: ram);
+    }
+
+    try {
+      final prompt = StringBuffer()
+        ..writeln('CPU: ${_partDescription(cpu)}')
+        ..writeln('GPU: ${_partDescription(gpu)}');
+      if (ram != null) prompt.writeln('RAM: ${_partDescription(ram)}');
+      prompt
+        ..writeln()
+        ..writeln('Daftar game yang wajib ada di gamingFps (gunakan nama persis):')
+        ..writeln(jsonEncode(_bottleneckGames));
+
+      final text = await _generate(
+        systemInstruction: _bottleneckSystemInstruction,
+        contents: [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': prompt.toString()},
+            ],
+          },
+        ],
+        maxOutputTokens: 1500,
+        jsonOutput: true,
+      );
+
+      final parsed = text == null ? null : _parseBottleneck(text, cpu, gpu);
+      if (parsed != null) return parsed;
+    } catch (e) {
+      debugPrint('Gemini bottleneck failed; using local estimate: $e');
+    }
+
+    final local = calculateBottleneck(cpu: cpu, gpu: gpu, ram: ram);
+    local['source'] = 'local';
+    return local;
+  }
+
+  Map<String, dynamic>? _parseBottleneck(
+    String raw,
+    PcPartModel cpu,
+    PcPartModel gpu,
+  ) {
+    final data = _decodeJsonObject(raw);
+    if (data == null) return null;
+
+    final pctRaw = data['bottleneckPercentage'];
+    final pct = pctRaw is num
+        ? pctRaw.round()
+        : int.tryParse(pctRaw?.toString().replaceAll(RegExp(r'[^0-9]'), '') ?? '');
+    if (pct == null) return null;
+    final int percentage = pct.clamp(0, 60).toInt();
+
+    final fpsRaw = data['gamingFps'];
+    final fps = <String, String>{};
+    if (fpsRaw is Map) {
+      for (final game in _bottleneckGames) {
+        final value = fpsRaw[game];
+        final n = value is num
+            ? value.round()
+            : int.tryParse(value?.toString().replaceAll(RegExp(r'[^0-9]'), '') ?? '');
+        if (n != null) fps[game] = '$n FPS';
+      }
+    }
+    if (fps.isEmpty) return null;
+
+    var type = data['type']?.toString() ?? 'balanced';
+    if (type != 'cpu_bottleneck' && type != 'gpu_bottleneck') type = 'balanced';
+    if (percentage <= 10) type = 'balanced';
+
+    final String status;
+    final Color color;
+    switch (type) {
+      case 'cpu_bottleneck':
+        status = 'CPU Bottleneck ($percentage%)';
+        color = Colors.red;
+        break;
+      case 'gpu_bottleneck':
+        status = 'GPU Bottleneck ($percentage%)';
+        color = Colors.orange;
+        break;
+      default:
+        status = 'Optimal ($percentage% Bottleneck)';
+        color = Colors.green;
+    }
+
+    final advice = (data['advice']?.toString() ?? '').trim();
+    final resolution = (data['recommendedResolution']?.toString() ?? '').trim();
+
+    return {
+      'bottleneckPercentage': percentage,
+      'type': type,
+      'status': status,
+      'advice': advice.isNotEmpty
+          ? advice
+          : 'Analisis kombinasi ${cpu.name} dan ${gpu.name} selesai.',
+      'color': color,
+      'gamingFps': fps,
+      'recommendedResolution': resolution.isNotEmpty ? resolution : '1080p / 1440p Gaming',
+      'source': 'ai',
+    };
+  }
+
   /// AI Bottleneck Calculator
   Map<String, dynamic> calculateBottleneck({
     required PcPartModel? cpu,

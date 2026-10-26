@@ -3,6 +3,7 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 
 class PartSlotCard extends StatelessWidget {
@@ -32,14 +33,12 @@ class PartSlotCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Container(
+            AppImageView(
+              imageUrl: selectedPart!.imageUrl,
               width: 48,
               height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.check_circle_rounded, color: AppColors.success),
+              fit: BoxFit.contain,
+              borderRadius: BorderRadius.circular(8),
             ),
             const SizedBox(width: 12),
             Expanded(

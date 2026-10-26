@@ -5,6 +5,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/providers/pc_builder_provider.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 
 class PartSelectionScreen extends StatefulWidget {
@@ -84,6 +85,40 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                   
                   final selectedPart = provider.selectedParts[widget.category];
 
+                  if (provider.isLoading && parts.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (parts.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(widget.category.icon, size: 40, color: AppColors.textTertiary),
+                            const SizedBox(height: 12),
+                            Text(
+                              provider.errorMessage ??
+                                  (_searchQuery.isNotEmpty
+                                      ? 'Komponen tidak ditemukan'
+                                      : 'Belum ada ${widget.category.displayNameId} di database'),
+                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                              textAlign: TextAlign.center,
+                            ),
+                            if (provider.errorMessage != null) ...[
+                              const SizedBox(height: 12),
+                              TextButton.icon(
+                                onPressed: provider.reloadParts,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Coba lagi'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
                   return ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     itemCount: parts.length,
@@ -106,16 +141,12 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                               padding: const EdgeInsets.all(12.0),
                               child: Row(
                                 children: [
-                                  Container(
+                                  AppImageView(
+                                    imageUrl: part.imageUrl,
                                     width: 60,
                                     height: 60,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surface,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Icon(widget.category.icon, color: AppColors.primary),
-                                    ),
+                                    fit: BoxFit.contain,
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
