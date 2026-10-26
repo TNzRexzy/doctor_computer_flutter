@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.7-beta
+* **Release Version:** 1.1.8-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -128,6 +128,17 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-038 | Rakit PC component lists came from mock data and showed guessed images (e.g. `ASUS...` showed a laptop, `MSI...` showed a monitor) | `PcBuilderProvider` merged `pc_parts` with `mockPcParts` (and used mock data entirely when the table was empty or failed), and guessed images from the product name | Resolved (components come only from `pc_parts`; images come from the `image_url` column; no mock fallback, no name-based image guessing) |
 
 ---
+
+## Version 1.1.8-beta Changelog
+
+1. **Voucher untuk pembeli dan admin:**
+   * Pembeli dapat melihat voucher yang memenuhi syarat belanja, memilihnya langsung dari keranjang, dan melihat diskon serta total yang diperbarui sebelum checkout.
+   * Admin dapat membuat, mengedit, mengaktifkan, dan menonaktifkan voucher serta mengatur minimum belanja dan kuota pemakaian.
+   * Kode voucher dan kuota divalidasi kembali saat pesanan dibuat; pemakaian kuota dicatat secara atomik agar voucher yang habis tidak dapat digunakan.
+2. **Database:** Tambahkan migrasi `20261104_vouchers.sql` dan `20261105_available_vouchers.sql` untuk pengelolaan voucher, penukaran, serta daftar voucher yang memenuhi syarat.
+3. **Versioning:** Bumped app version to `1.1.8-beta+18` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+**Deployment:** Apply both new Supabase migrations before enabling voucher selection and redemption.
 
 ## Version 1.1.7-beta Changelog
 
