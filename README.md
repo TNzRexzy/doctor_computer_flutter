@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.4-beta
+* **Release Version:** 1.1.5-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -117,6 +117,25 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-027 | Gemini API key and Supabase project values were visible in source code, `.env` and `.env.example` | Key was a `defaultValue` in `EnvConfig`; `.env` was tracked by git | Resolved (Key moved to Supabase table `app_config`; `EnvConfig` has no hardcoded values; `.env` is git-ignored and `.env.example` holds placeholders only) |
 | BUG-028 | Adding a product failed with `23503` on `fk_products_subtype` | A database-side default/trigger set `products.subtype` to a code missing from `product_subtypes`; the app never sends the column | Resolved (`20261031_fix_product_subtype_fk.sql` normalizes `subtype`/`brand_code` before insert; no app code changed) |
 | BUG-029 | Product rating and review count were not real data; reviews were mixed with sample data and device-only cache | Fake fallbacks (`4.5` / `10`) in the product models, `ReviewProvider` merged `mockReviews` and SharedPreferences, and only a whole order (not each product) could be rated | Resolved (rating/count calculated by a database trigger from `reviews`; `ReviewProvider` reads Supabase only; per-item reviews with photo/video through `submit_product_review`) |
+| BUG-030 | Category icons were identical (CPU, GPU, RAM, etc. all showed the generic icon) | `_mapIcon` matched only the `categories.icon` column with loose substring checks, so unknown values fell back to the default icon | Resolved (icon resolved from category id/name/name_id/icon with whole-word matching and a distinct icon per hardware type) |
+| BUG-031 | A rounded box still appeared behind the bottom navigation bar | `BottomNavBar` drew a filled, bordered, shadowed container | Resolved (container is transparent; only icons and labels are shown) |
+| BUG-032 | Bottom navigation bar vanished after tapping `Lihat Semua` on Home (Kategori / Produk Terlaris) | The button pushed a new catalog route above `MainNavScreen` | Resolved (button switches to the Kategori tab of `MainNavScreen`, so the navigation bar stays visible) |
+
+---
+
+## Version 1.1.5-beta Changelog
+
+1. **Category icons (BUG-030):**
+   * Categories such as CPU, GPU, RAM, Motherboard, SSD/Storage, PSU, Case and Cooler all showed the same generic icon because `ProductProvider._mapIcon` only looked at the `categories.icon` column (often generic) with loose substring matching.
+   * The icon is now resolved from the category `id`, then `name`, `name_id` and finally the `icon` column, using whole-word matching (e.g. `ram` no longer matches `program`). Each hardware type gets its own Material icon (CPU chip, GPU, mainboard, RAM, SSD, storage, power supply, case, cooler, router, speaker, printer, webcam, etc.); unknown categories still fall back to the generic icon.
+2. **Transparent bottom navigation bar (BUG-031):**
+   * `BottomNavBar` no longer draws the rounded box (fill, border and shadow) behind the menu; only the icons and labels remain over the page content.
+3. **Navigation bar disappeared on `Lihat Semua` (BUG-032):**
+   * On Home, `Lihat Semua` next to **Kategori** and **Produk Terlaris** pushed a separate catalog page on top of `MainNavScreen`, which hid the bottom navigation bar.
+   * Both buttons now switch to the **Kategori** tab of `MainNavScreen` (same approach already used for the PC Builder card), clearing the previous filters so all products are listed with the default popularity sort. Tapping a single category still opens its own page with a back button.
+4. **Versioning:** Bumped app version to `1.1.5-beta+15` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+No database migration is required for this version.
 
 ---
 

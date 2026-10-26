@@ -22,6 +22,18 @@ import 'package:doctor_computer/screens/main_nav_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  /// "Lihat Semua": pindah ke tab Katalog di MainNavScreen (bukan membuka
+  /// halaman baru) supaya navbar tetap terlihat.
+  void _openCatalogTab(BuildContext context) {
+    final mainNavState = context.findAncestorStateOfType<MainNavScreenState>();
+    if (mainNavState != null) {
+      context.read<ProductProvider>().clearFilters();
+      mainNavState.switchToTab(1);
+    } else {
+      Navigator.pushNamed(context, AppRouter.catalog);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
@@ -174,7 +186,7 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     Text('Kategori', style: AppTextStyles.titleMedium),
                     TextButton(
-                      onPressed: () => Navigator.pushNamed(context, AppRouter.catalog),
+                      onPressed: () => _openCatalogTab(context),
                       child: Text('Lihat Semua', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
                     ),
                   ],
@@ -236,7 +248,7 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     Text('Produk Terlaris', style: AppTextStyles.titleMedium),
                     TextButton(
-                      onPressed: () => Navigator.pushNamed(context, AppRouter.catalog),
+                      onPressed: () => _openCatalogTab(context),
                       child: Text('Lihat Semua', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
                     ),
                   ],

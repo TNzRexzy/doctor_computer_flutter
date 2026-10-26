@@ -171,7 +171,10 @@ class ProductProvider extends ChangeNotifier {
             name: c['name']?.toString() ?? '',
             nameId: c['name_id']?.toString() ?? c['name']?.toString() ?? '',
             icon: _mapIcon(
-              c['icon']?.toString() ?? c['name']?.toString() ?? '',
+              c['icon']?.toString() ?? '',
+              id: c['id']?.toString() ?? '',
+              name: c['name']?.toString() ?? '',
+              nameId: c['name_id']?.toString() ?? '',
             ),
             productCount: (c['product_count'] as num? ?? 0).toInt(),
           );
@@ -649,26 +652,86 @@ class ProductProvider extends ChangeNotifier {
     return _persistFlashSaleConfig(endTime: _flashSaleEndTime, active: active);
   }
 
-  IconData _mapIcon(String iconName) {
-    final lower = iconName.toLowerCase();
-    if (lower.contains('laptop')) return Icons.laptop_mac;
-    if (lower.contains('desktop') || lower.contains('periph'))
-      return Icons.desktop_windows;
-    if (lower.contains('monitor')) return Icons.monitor;
-    if (lower.contains('keyboard')) return Icons.keyboard;
-    if (lower.contains('mouse')) return Icons.mouse;
-    if (lower.contains('headset') || lower.contains('audio'))
-      return Icons.headset;
-    if (lower.contains('storage') || lower.contains('ssd'))
-      return Icons.storage;
-    if (lower.contains('router') || lower.contains('network'))
-      return Icons.router;
-    if (lower.contains('cpu')) return Icons.memory;
-    if (lower.contains('gpu')) return Icons.videogame_asset;
-    if (lower.contains('motherboard')) return Icons.developer_board;
-    if (lower.contains('ram')) return Icons.sd_card;
-    if (lower.contains('case')) return Icons.inventory_2;
-    if (lower.contains('cooler')) return Icons.ac_unit;
+  /// Aturan ikon kategori. Dicek berurutan; aturan pertama yang cocok menang.
+  /// Kata dicocokkan per-token (mis. `ram` tidak cocok dengan `program`);
+  /// kata >= 6 huruf juga cocok sebagai bagian dari token (mis. `processors`).
+  static const List<MapEntry<List<String>, IconData>> _categoryIconRules = [
+    MapEntry(['laptop', 'notebook', 'macbook'], Icons.laptop_mac),
+    MapEntry(['desktop', 'aio'], Icons.desktop_windows),
+    MapEntry(['monitor', 'display', 'screen', 'layar'], Icons.monitor),
+    MapEntry(['keyboard', 'keyboards'], Icons.keyboard),
+    MapEntry(['mouse', 'mice'], Icons.mouse),
+    MapEntry(['speaker', 'speakers'], Icons.speaker),
+    MapEntry(['headset', 'headphone', 'earphone', 'audio'], Icons.headset),
+    MapEntry(['cpu', 'processor', 'prosesor'], Icons.memory),
+    MapEntry([
+      'gpu', 'vga', 'graphics', 'graphic', 'videocard', 'videogame',
+    ], Icons.videogame_asset),
+    MapEntry([
+      'motherboard', 'mainboard', 'mobo', 'board',
+    ], Icons.developer_board),
+    MapEntry(['ram', 'dimm', 'ddr4', 'ddr5', 'sd'], Icons.sd_card),
+    MapEntry(['ssd', 'nvme'], Icons.sd_storage),
+    MapEntry([
+      'storage', 'hdd', 'harddisk', 'hard', 'disk',
+    ], Icons.storage),
+    MapEntry(['psu', 'power', 'supply', 'powersupply'], Icons.power),
+    MapEntry(['case', 'casing', 'chassis', 'inventory'], Icons.inventory_2),
+    MapEntry([
+      'cooler', 'cooling', 'fan', 'heatsink', 'radiator', 'ac',
+    ], Icons.ac_unit),
+    MapEntry([
+      'router', 'network', 'networking', 'jaringan', 'wifi',
+    ], Icons.router),
+    MapEntry(['printer', 'print'], Icons.print),
+    MapEntry(['webcam', 'camera', 'kamera'], Icons.videocam),
+    MapEntry(['tablet'], Icons.tablet_mac),
+    MapEntry(['smartphone', 'phone', 'handphone'], Icons.smartphone),
+    MapEntry(['gaming', 'game', 'games'], Icons.sports_esports),
+    MapEntry(['ups', 'battery'], Icons.battery_charging_full),
+    MapEntry([
+      'accessory', 'accessories', 'aksesoris', 'cable', 'kabel',
+    ], Icons.extension),
+    MapEntry([
+      'peripheral', 'peripherals', 'periph',
+    ], Icons.devices_other),
+    // Terakhir: nama ikon Material "memory" (chip) pada kolom icon.
+    MapEntry(['memory', 'chip'], Icons.memory),
+  ];
+
+  static IconData? _iconForText(String text) {
+    final tokens = text
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return null;
+    for (final rule in _categoryIconRules) {
+      for (final keyword in rule.key) {
+        for (final token in tokens) {
+          if (token == keyword ||
+              (keyword.length >= 6 && token.contains(keyword))) {
+            return rule.value;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Memilih ikon kategori. Urutan prioritas: id, nama, nama Indonesia, lalu
+  /// kolom `icon`, sehingga CPU, GPU, RAM, dst. mendapat ikon masing-masing
+  /// walau kolom `icon` di database sama atau generik.
+  IconData _mapIcon(
+    String iconName, {
+    String id = '',
+    String name = '',
+    String nameId = '',
+  }) {
+    for (final text in [id, name, nameId, iconName]) {
+      final icon = _iconForText(text);
+      if (icon != null) return icon;
+    }
     return Icons.category;
   }
 
