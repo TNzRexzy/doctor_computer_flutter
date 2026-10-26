@@ -11,6 +11,7 @@ import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/admin/product_editor_dialog.dart';
+import 'package:doctor_computer/widgets/review/review_management_tab.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
 
@@ -46,7 +47,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _loadCashierData();
   }
 
@@ -1190,6 +1191,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
             const Tab(icon: Icon(Icons.local_shipping), text: 'Pesanan'),
             const Tab(icon: Icon(Icons.inventory_2), text: 'Cek Stok'),
             const Tab(icon: Icon(Icons.edit_note), text: 'Kelola Produk'),
+            const Tab(icon: Icon(Icons.star_rate), text: 'Ulasan'),
           ],
         ),
       ),
@@ -1204,6 +1206,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 _buildOrderManagementTab(),
                 _buildStockTab(),
                 _buildProductManagementTab(),
+                const ReviewManagementTab(),
               ],
             ),
     );

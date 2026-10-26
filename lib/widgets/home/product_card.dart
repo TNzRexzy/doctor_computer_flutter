@@ -188,7 +188,9 @@ class ProductCard extends StatelessWidget {
                         const Icon(Icons.star, color: Colors.amber, size: 12),
                         const SizedBox(width: 2),
                         Text(
-                          product.rating.toString(),
+                          product.reviewCount > 0
+                              ? product.rating.toStringAsFixed(1)
+                              : 'Baru',
                           style: AppTextStyles.caption,
                         ),
                       ],

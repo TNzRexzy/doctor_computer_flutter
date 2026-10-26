@@ -6,7 +6,7 @@ import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/providers/wishlist_provider.dart';
 import 'package:doctor_computer/providers/cart_provider.dart';
-import 'package:doctor_computer/providers/review_provider.dart';
+import 'package:doctor_computer/widgets/review/product_reviews_section.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
@@ -20,7 +20,6 @@ class ProductDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
-    final reviews = context.watch<ReviewProvider>().getReviewsForProduct(product.id);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -77,7 +76,9 @@ class ProductDetailScreen extends StatelessWidget {
                                   Icon(Icons.star, color: Colors.amber, size: 16),
                                   SizedBox(width: 4),
                                   Text(
-                                    '${product.rating} (${product.reviewCount} ulasan)',
+                                    product.reviewCount > 0
+                                        ? '${product.rating.toStringAsFixed(1)} (${product.reviewCount} ulasan)'
+                                        : 'Belum ada ulasan',
                                     style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                                   ),
                                 ],
@@ -179,137 +180,7 @@ class ProductDetailScreen extends StatelessWidget {
                         SizedBox(height: 8),
                         Text(product.descriptionId, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
                         SizedBox(height: 16),
-                        Text('Ulasan (${reviews.length})', style: AppTextStyles.titleMedium),
-                        SizedBox(height: 8),
-                        if (reviews.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Text(
-                              'Belum ada ulasan untuk produk ini',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textTertiary),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ...reviews.take(5).map((r) => Padding(
-                          padding: EdgeInsets.only(bottom: 8.0),
-                          child: GlassCard(
-                            padding: EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(r.userName, style: AppTextStyles.titleSmall),
-                                    Spacer(),
-                                    Row(
-                                      children: List.generate(
-                                        5,
-                                        (index) => Icon(
-                                          index < r.rating ? Icons.star : Icons.star_border,
-                                          color: Colors.amber,
-                                          size: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  r.date.toString().substring(0, 10),
-                                  style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
-                                ),
-                                SizedBox(height: 8),
-                                Text(r.comment, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
-                                if (r.mediaUrls.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: r.mediaUrls.map((media) {
-                                      final isVideo = media.contains('.mp4') ||
-                                          media.contains('.mov') ||
-                                          media.contains('.webm') ||
-                                          media.contains('video') ||
-                                          media.contains('youtu');
-                                      return Container(
-                                        width: 70,
-                                        height: 70,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.surface,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: AppColors.border),
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: Stack(
-                                            alignment: Alignment.center,
-                                            children: [
-                                              AppImageView(
-                                                imageUrl: media,
-                                                fit: BoxFit.cover,
-                                                width: 70,
-                                                height: 70,
-                                              ),
-                                              if (isVideo)
-                                                Container(
-                                                  padding: const EdgeInsets.all(4),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black.withValues(alpha: 0.6),
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ],
-                                // Seller reply
-                                if (r.reply != null && r.reply!.isNotEmpty) ...[
-                                  SizedBox(height: 10),
-                                  Container(
-                                    padding: EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withValues(alpha: 0.07),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(Icons.store, size: 14, color: AppColors.primary),
-                                            SizedBox(width: 6),
-                                            Text(
-                                              'Respon Penjual${r.replyRole != null ? ' - ${r.replyRole == 'admin' ? 'Admin' : 'Kasir'}' : ''}',
-                                              style: AppTextStyles.caption.copyWith(
-                                                color: AppColors.primary,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(height: 4),
-                                        Text(r.reply!, style: AppTextStyles.bodySmall),
-                                        if (r.replyDate != null)
-                                          Text(
-                                            r.replyDate!.toString().substring(0, 10),
-                                            style: AppTextStyles.caption.copyWith(
-                                              color: AppColors.textTertiary,
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        )),
+                        ProductReviewsSection(productId: product.id),
                         SizedBox(height: 100),
                       ],
                     ),

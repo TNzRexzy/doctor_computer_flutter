@@ -235,8 +235,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 Row(
                   children: [
                     Icon(Icons.star, size: 14, color: AppColors.warning),
-                    Text(' ${product.rating}', style: AppTextStyles.caption),
-                    Text(' (${product.reviewCount})', style: AppTextStyles.caption),
+                    Text(
+                      product.reviewCount > 0
+                          ? ' ${product.rating.toStringAsFixed(1)}'
+                          : ' Belum ada ulasan',
+                      style: AppTextStyles.caption,
+                    ),
+                    if (product.reviewCount > 0)
+                      Text(' (${product.reviewCount})', style: AppTextStyles.caption),
                   ],
                 ),
                 const SizedBox(height: 4),

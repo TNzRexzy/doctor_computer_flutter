@@ -37,7 +37,7 @@ class CartItemModel {
         brand: map['brand']?.toString() ?? '',
         images: imageStr.isNotEmpty ? [imageStr] : [],
         specs: {},
-        rating: 5.0,
+        rating: 0.0,
         reviewCount: 0,
         stock: 10,
         isNew: false,

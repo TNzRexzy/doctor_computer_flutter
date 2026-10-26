@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.3-beta
+* **Release Version:** 1.1.4-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -116,6 +116,42 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-026 | Irrelevant sample notifications appeared on every login | `NotificationProvider` was seeded with four hard-coded demo notifications (fake order, voucher, reminders) | Resolved (List starts empty; notifications are created only by real events and stored per user) |
 | BUG-027 | Gemini API key and Supabase project values were visible in source code, `.env` and `.env.example` | Key was a `defaultValue` in `EnvConfig`; `.env` was tracked by git | Resolved (Key moved to Supabase table `app_config`; `EnvConfig` has no hardcoded values; `.env` is git-ignored and `.env.example` holds placeholders only) |
 | BUG-028 | Adding a product failed with `23503` on `fk_products_subtype` | A database-side default/trigger set `products.subtype` to a code missing from `product_subtypes`; the app never sends the column | Resolved (`20261031_fix_product_subtype_fk.sql` normalizes `subtype`/`brand_code` before insert; no app code changed) |
+| BUG-029 | Product rating and review count were not real data; reviews were mixed with sample data and device-only cache | Fake fallbacks (`4.5` / `10`) in the product models, `ReviewProvider` merged `mockReviews` and SharedPreferences, and only a whole order (not each product) could be rated | Resolved (rating/count calculated by a database trigger from `reviews`; `ReviewProvider` reads Supabase only; per-item reviews with photo/video through `submit_product_review`) |
+
+---
+
+## Version 1.1.4-beta Changelog
+
+1. **Per-item product reviews with photo and video:**
+   * After an order reaches **Selesai**, `Pesanan Saya` lists every product of the order with its own **Beri Ulasan** button (similar to Shopee). The old order-level rating dialog was removed.
+   * New `lib/screens/profile/product_review_screen.dart`: star rating, text, up to 5 photos and 1 video (max. 60 seconds) picked from the gallery and uploaded to Supabase Storage (no more typing media URLs). A review can be edited for 7 days after it was first sent, then it is locked.
+   * New `lib/services/review_media_service.dart`: picks media, validates type/size (photo 10 MB, video 50 MB, JPG/PNG/WEBP magic-byte check, MP4/MOV/WEBM) and uploads to the `review-media` bucket under the user's own folder.
+   * Writes go through the RPC `submit_product_review`: only the owner of an order with status `delivered` that contains the product can review it, media URLs must live in the caller's own storage folder, and the 7-day edit window is enforced on the server.
+2. **Reviews shown on the product page:**
+   * New `lib/widgets/review/product_reviews_section.dart` under the product description: average rating, 1-5 star distribution, filter **Dengan Foto & Video**, paging (`Lihat ulasan lainnya`), review photos/videos and the seller (admin/cashier) reply.
+   * New `lib/widgets/review/review_media_viewer.dart` (`video_player`): full-screen photo viewer with zoom and video playback.
+3. **Seller review management (admin and cashier):**
+   * New shared `lib/widgets/review/review_management_tab.dart` used by both dashboards: list of buyer reviews with product name, stars, text, **buyer photos/videos** (tap for full screen), seller reply, and a **Belum dibalas** filter.
+   * Cashier dashboard now has an **Ulasan** tab (previously only the admin dashboard could see and reply to reviews). Replies are stored in the database and shown on the product page as `Respon Penjual - Admin/Kasir`.
+   * Reply templates (tap a chip to fill the reply, then edit): thank you, thank you for photo/video, apology, warranty claim, shipping feedback, general feedback. Positive templates are listed first for 4-5 star reviews and apology templates first for 1-3 stars; `{nama}` is replaced with the buyer's first name.
+   * `AdminDashboardScreen`: the old inline review list and reply dialog were replaced by the shared tab.
+4. **Ratings now come from real database data (BUG-029):**
+   * `products.rating` and `products.review_count` are recalculated by a database trigger from the `reviews` table (average with one decimal).
+   * Removed the fake fallback values (rating `4.5` / `10` reviews) from `ProductModel`, `ProductProvider`, `CartProvider` and `WishlistProvider`; they now default to `0`.
+   * Products without reviews show **Belum ada ulasan** / **Baru** instead of a fake rating (product card, catalog, product detail).
+   * `ProductProvider` no longer lets the locally cached custom products overwrite the rating and review count loaded from the database.
+   * `ReviewProvider` was rewritten to read only from Supabase: mock reviews and the SharedPreferences review cache are no longer used, and admin/cashier replies are saved to the database (and report failure instead of silently succeeding).
+5. **Database Migration:**
+   * Added `supabase/migrations/20261101_product_reviews.sql`: `reviews.order_id`, `media_urls`, `updated_at`; unique review per (order, product, user); public read policy with writes restricted to the RPC (`INSERT`/`DELETE` revoked for clients, staff reply policy kept); rating trigger; `review-media` bucket and storage policies; backfill that recalculates the rating and review count of every product from real reviews.
+6. **Dependencies:** added `video_player`.
+7. **Versioning:** Bumped app version to `1.1.4-beta+14` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+**Notes:**
+* The backfill resets old placeholder ratings: products without reviews become `0` rating / `0` reviews.
+* Orders rated with the old order-level rating are not converted; buyers review each product again. The old `orders.rating` columns are kept but no longer used.
+* Video items show a play icon tile instead of a generated thumbnail.
+
+**Action required after updating:** run `20261101_product_reviews.sql`, run `flutter pub get`, and rebuild the app.
 
 ---
 
@@ -242,6 +278,7 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 11. `supabase/migrations/20261030_app_config.sql` (`app_config` table with RLS; store the Gemini API key here instead of in the app).
 12. `supabase/migrations/20261031_fix_product_subtype_fk.sql` (normalizes `subtype`/`brand_code` so adding a product no longer violates `fk_products_subtype`).
 13. `supabase/migrations/20261031_biometric_login.sql` (`user_biometrics` / `user_security_settings` with own-row RLS for fingerprint login).
+14. `supabase/migrations/20261101_product_reviews.sql` (per-item reviews with photo/video, rating trigger, `submit_product_review` RPC, `review-media` bucket).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 

@@ -221,8 +221,8 @@ class ProductProvider extends ChangeNotifier {
             brand: p['brand']?.toString() ?? 'Generic',
             images: images,
             specs: specsMap,
-            rating: (p['rating'] as num?)?.toDouble() ?? 4.5,
-            reviewCount: (p['review_count'] as num?)?.toInt() ?? 10,
+            rating: (p['rating'] as num?)?.toDouble() ?? 0.0,
+            reviewCount: (p['review_count'] as num?)?.toInt() ?? 0,
             stock: (p['stock'] as num?)?.toInt() ?? 10,
             isNew: p['is_new'] as bool? ?? false,
             isOnSale:
@@ -244,7 +244,14 @@ class ProductProvider extends ChangeNotifier {
           final List list = jsonDecode(customJson);
           for (final item in list) {
             final prod = ProductModel.fromMap(item as Map<String, dynamic>);
-            productMap[prod.id] = prod;
+            // Rating & jumlah ulasan selalu dari database (dihitung dari reviews).
+            final fromDb = productMap[prod.id];
+            productMap[prod.id] = fromDb == null
+                ? prod
+                : prod.copyWith(
+                    rating: fromDb.rating,
+                    reviewCount: fromDb.reviewCount,
+                  );
           }
         }
 

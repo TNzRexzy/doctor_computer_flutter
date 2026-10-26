@@ -4,6 +4,7 @@ class ReviewModel {
   final String userId;
   final String userName;
   final String productId;
+  final String? orderId;
   final double rating;
   final String comment;
   final DateTime date;
@@ -17,6 +18,7 @@ class ReviewModel {
     required this.userId,
     required this.userName,
     required this.productId,
+    this.orderId,
     required this.rating,
     required this.comment,
     required this.date,
@@ -31,6 +33,7 @@ class ReviewModel {
     String? userId,
     String? userName,
     String? productId,
+    String? orderId,
     double? rating,
     String? comment,
     DateTime? date,
@@ -44,6 +47,7 @@ class ReviewModel {
       userId: userId ?? this.userId,
       userName: userName ?? this.userName,
       productId: productId ?? this.productId,
+      orderId: orderId ?? this.orderId,
       rating: rating ?? this.rating,
       comment: comment ?? this.comment,
       date: date ?? this.date,
@@ -54,12 +58,19 @@ class ReviewModel {
     );
   }
 
+  /// Ulasan boleh diubah maksimal 7 hari sejak pertama kali dikirim
+  /// (sama dengan aturan di RPC `submit_product_review`).
+  bool get canEdit => DateTime.now().difference(date).inDays < 7;
+
+  int get remainingEditDays => 7 - DateTime.now().difference(date).inDays;
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'user_id': userId,
       'user_name': userName,
       'product_id': productId,
+      'order_id': orderId,
       'rating': rating,
       'comment': comment,
       'date': date.toIso8601String(),
@@ -80,6 +91,7 @@ class ReviewModel {
       userId: map['user_id']?.toString() ?? '',
       userName: map['user_name']?.toString() ?? 'Pengguna',
       productId: map['product_id']?.toString() ?? '',
+      orderId: map['order_id']?.toString(),
       rating: (map['rating'] as num?)?.toDouble() ?? 5.0,
       comment: map['comment']?.toString() ?? '',
       date: map['date'] != null
