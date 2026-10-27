@@ -1,10 +1,11 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
-import 'package:doctor_computer/providers/notification_provider.dart';
-import 'package:doctor_computer/providers/blockchain_provider.dart';
-import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/screens/member/minigames/sensor_game_support.dart';
 
 class PcQuizGame extends StatefulWidget {
   const PcQuizGame({super.key});
@@ -14,291 +15,399 @@ class PcQuizGame extends StatefulWidget {
 }
 
 class _PcQuizGameState extends State<PcQuizGame> {
-  int _currentIndex = 0;
-  int _score = 0;
-  int? _selectedOption;
-  bool _answered = false;
+  static const double _targetRotation = math.pi * 2;
+  static const int _roundSeconds = 12;
 
-  final List<Map<String, dynamic>> _questions = [
-    {
-      'question': 'Soket motherboard apa yang digunakan oleh prosesor Intel Core Generasi 12, 13, dan 14?',
-      'options': ['AM4', 'LGA 1700', 'AM5', 'LGA 1200'],
-      'correct': 1,
-      'explanation': 'Intel Core Gen 12 (Alder Lake), Gen 13 (Raptor Lake), dan Gen 14 menggunakan soket LGA 1700.',
-    },
-    {
-      'question': 'Tipe memori RAM manakah yang memiliki transfer rate tertinggi dan efisiensi daya terbaik saat ini?',
-      'options': ['DDR3', 'DDR4', 'DDR5', 'SDR'],
-      'correct': 2,
-      'explanation': 'DDR5 adalah standar terbaru dengan frekuensi mulai dari 4800MHz ke atas.',
-    },
-    {
-      'question': 'Jika kartu grafis (GPU) membutuhkan daya 300W dan CPU 125W, berapa watt PSU minimal yang disarankan untuk keamanan?',
-      'options': ['450W', '500W', '750W - 850W', '1200W'],
-      'correct': 2,
-      'explanation': 'Dengan total beban komponen ~450W + headroom transient spikes, PSU 750W-850W adalah pilihan ideal.',
-    },
-    {
-      'question': 'Komponen pendingin manakah yang menggunakan pompa sirkulasi cairan untuk meredam panas prosesor?',
-      'options': [
-        'Air Cooler',
-        'AIO Liquid Cooler',
-        'Heatsink Pasif',
-        'Thermal Pad',
-      ],
-      'correct': 1,
-      'explanation': 'AIO (All-in-One) Liquid Cooler menggunakan radiator, pipa, cairan coolant, dan pompa air.',
-    },
-  ];
+  StreamSubscription<GyroscopeEvent>? _sensorSubscription;
+  Timer? _timer;
+  DateTime? _lastGyroSampleAt;
+  double _rotationRadians = 0;
+  int _secondsLeft = _roundSeconds;
+  bool _isPlaying = false;
+  bool _isFinished = false;
+  bool _isCleared = false;
+  bool _isSaving = false;
+  bool _sensorAvailable = true;
+  bool _isCooldownLoading = true;
+  DateTime? _cooldownUntil;
+  String? _cooldownError;
+  String? _resultMessage;
 
-  void _chooseOption(int index) {
-    if (_answered) return;
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCooldown());
+  }
+
+  Future<void> _loadCooldown() async {
     setState(() {
-      _selectedOption = index;
-      _answered = true;
-      if (index == _questions[_currentIndex]['correct']) {
-        _score++;
+      _isCooldownLoading = true;
+      _cooldownError = null;
+    });
+    try {
+      final cooldownUntil = await loadMinigameCooldown(context, 'pc_quiz');
+      if (!mounted) return;
+      setState(() {
+        _cooldownUntil = cooldownUntil;
+        _isCooldownLoading = false;
+      });
+    } catch (error) {
+      debugPrint('[PcQuizGame] Could not verify game cooldown: $error');
+      if (!mounted) return;
+      setState(() {
+        _cooldownError =
+            'Pastikan koneksi internet tersedia agar jadwal cooldown dapat diverifikasi.';
+        _isCooldownLoading = false;
+      });
+    }
+  }
+
+  Future<void> _startGame() async {
+    if (_isCooldownLoading ||
+        _cooldownError != null ||
+        (_cooldownUntil?.isAfter(DateTime.now()) ?? false)) {
+      return;
+    }
+    await _sensorSubscription?.cancel();
+    _timer?.cancel();
+    setState(() {
+      _rotationRadians = 0;
+      _secondsLeft = _roundSeconds;
+      _lastGyroSampleAt = null;
+      _isPlaying = true;
+      _isFinished = false;
+      _isCleared = false;
+      _isSaving = false;
+      _sensorAvailable = true;
+      _resultMessage = null;
+    });
+
+    _sensorSubscription = gyroscopeEventStream(
+      samplingPeriod: SensorInterval.gameInterval,
+    ).listen(
+      _onGyroscope,
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() => _sensorAvailable = false);
+        unawaited(_finish(cleared: false));
+      },
+    );
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_secondsLeft <= 1) {
+        timer.cancel();
+        setState(() => _secondsLeft = 0);
+        unawaited(_finish(cleared: _rotationRadians.abs() >= _targetRotation));
+      } else {
+        setState(() => _secondsLeft--);
       }
     });
   }
 
-  void _nextQuestion() {
-    if (_currentIndex < _questions.length - 1) {
-      setState(() {
-        _currentIndex++;
-        _selectedOption = null;
-        _answered = false;
-      });
-    } else {
-      _finishQuiz();
+  void _onGyroscope(GyroscopeEvent event) {
+    if (!_isPlaying) return;
+    final now = DateTime.now();
+    final previousSample = _lastGyroSampleAt;
+    _lastGyroSampleAt = now;
+    if (previousSample == null) return;
+
+    final elapsed = now.difference(previousSample).inMicroseconds / 1000000;
+    if (elapsed <= 0 || elapsed > 0.25) return;
+    setState(() {
+      _rotationRadians += event.z * elapsed;
+    });
+    if (_rotationRadians.abs() >= _targetRotation) {
+      unawaited(_finish(cleared: true));
     }
   }
 
-  Future<void> _finishQuiz() async {
-    final passed = _score >= 2;
-    if (passed) {
-      // EXP is awarded and saved by the server (award_minigame_exp RPC)
-      final award = await context.read<BlockchainProvider>().awardMinigameExp(
-        game: 'pc_quiz',
-        result: {'score': _score},
-      );
-      if (!mounted) return;
-      context.read<AuthProvider>().restoreSession();
-      final awardText = BlockchainProvider.describeAward(award);
+  Future<void> _finish({required bool cleared}) async {
+    if (!_isPlaying) return;
+    _timer?.cancel();
+    final subscription = _sensorSubscription;
+    _sensorSubscription = null;
+    unawaited(subscription?.cancel());
+    setState(() {
+      _isPlaying = false;
+      _isFinished = true;
+      _isCleared = cleared;
+      _isSaving = cleared;
+    });
 
-      context.read<NotificationProvider>().addNotification(
-        title: 'Kuis PC selesai',
-        message: 'Skor Anda $_score/${_questions.length}. $awardText',
-        type: 'minigame',
-      );
+    if (!cleared) return;
+    final message = await awardSensorGame(
+      context: context,
+      game: 'pc_quiz',
+      notificationTitle: 'Kipas pendingin berhasil dikalibrasi',
+      result: {'score': 2, 'rotation_radians': _rotationRadians},
+    );
+    if (!mounted) return;
+    setState(() {
+      _isSaving = false;
+      _resultMessage = message;
+    });
+    await _loadCooldown();
+  }
 
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('Selamat! Kuis Lulus!'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Skor Anda: $_score dari ${_questions.length} soal benar!',
-                style: AppTextStyles.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                awardText,
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              },
-              child: const Text('Tutup'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Coba Lagi!'),
-          content: Text('Skor Anda $_score/${_questions.length}.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                setState(() {
-                  _currentIndex = 0;
-                  _score = 0;
-                  _selectedOption = null;
-                  _answered = false;
-                });
-              },
-              child: const Text('Ulangi Kuis'),
-            ),
-          ],
-        ),
-      );
-    }
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _sensorSubscription?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final q = _questions[_currentIndex];
+    final progress = (_rotationRadians.abs() / _targetRotation).clamp(
+      0.0,
+      1.0,
+    );
+    final canPlay =
+        _sensorAvailable &&
+        !_isPlaying &&
+        !_isSaving &&
+        !_isCooldownLoading &&
+        _cooldownError == null &&
+        !(_cooldownUntil?.isAfter(DateTime.now()) ?? false);
+    final cooldownNotice = minigameCooldownNotice(
+      isLoading: _isCooldownLoading,
+      availableAt: _cooldownUntil,
+      error: _cooldownError,
+      onRetry: _loadCooldown,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Kuis Perakitan PC'),
+        title: const Text('Gyro Spin: Kalibrasi Kipas'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Soal ${_currentIndex + 1} dari ${_questions.length}',
-                    style: AppTextStyles.titleSmall,
-                  ),
-                  Text(
-                    'Skor: $_score',
-                    style: AppTextStyles.titleSmall.copyWith(
-                      color: AppColors.primary,
-                    ),
+                  Text('MISI 02', style: AppTextStyles.caption),
+                  sensorStatusBadge(
+                    available: _sensorAvailable,
+                    active: _isPlaying,
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: (_currentIndex + 1) / _questions.length,
-                backgroundColor: AppColors.surface,
-                color: AppColors.primary,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                q['question'] as String,
-                style: AppTextStyles.heading3.copyWith(fontSize: 18),
-              ),
-              const SizedBox(height: 24),
-              ...List.generate((q['options'] as List).length, (idx) {
-                final optionText = q['options'][idx] as String;
-                final isSelected = _selectedOption == idx;
-                final isCorrect = idx == q['correct'];
-
-                Color borderColor = AppColors.border;
-                Color bgColor = AppColors.surface;
-
-                if (_answered) {
-                  if (isCorrect) {
-                    borderColor = AppColors.success;
-                    bgColor = AppColors.success.withValues(alpha: 0.15);
-                  } else if (isSelected) {
-                    borderColor = AppColors.error;
-                    bgColor = AppColors.error.withValues(alpha: 0.15);
-                  }
-                }
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: InkWell(
-                    onTap: () => _chooseOption(idx),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: bgColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: borderColor, width: 2),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.accent.withValues(alpha: 0.16),
+                        AppColors.primary.withValues(alpha: 0.14),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.24),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _isCleared ? 'KIPAS SIAP!' : 'Nyalakan pendingin',
+                        style: AppTextStyles.heading3,
+                        textAlign: TextAlign.center,
                       ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundColor: borderColor.withValues(alpha: 0.2),
-                            child: Text(
-                              String.fromCharCode(65 + idx),
-                              style: TextStyle(
-                                color: borderColor,
-                                fontWeight: FontWeight.bold,
+                      const SizedBox(height: 8),
+                      Text(
+                        _sensorAvailable
+                            ? 'Putar HP satu lingkaran penuh seperti memutar rotor kipas.'
+                            : 'Gyroscope tidak tersedia. Game ini membutuhkan sensor rotasi pada HP.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 26),
+                      SizedBox(
+                        width: 210,
+                        height: 210,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox.expand(
+                              child: CircularProgressIndicator(
+                                value: progress,
+                                strokeWidth: 10,
+                                strokeCap: StrokeCap.round,
+                                backgroundColor: AppColors.surface,
+                                color: AppColors.accent,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              optionText,
-                              style: AppTextStyles.bodyMedium,
+                            Transform.rotate(
+                              angle: _rotationRadians,
+                              child: Container(
+                                width: 144,
+                                height: 144,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.surface.withValues(
+                                    alpha: 0.78,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.accent.withValues(
+                                        alpha: 0.25,
+                                      ),
+                                      blurRadius: 24,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.toys_rounded,
+                                  size: 82,
+                                  color: AppColors.primary,
+                                ),
+                              ),
                             ),
+                            Positioned(
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Text(
+                                  '${(progress * 100).round()}%',
+                                  style: AppTextStyles.caption.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _Metric(
+                            label: 'ROTASI',
+                            value:
+                                '${(_rotationRadians.abs() * 180 / math.pi).round()}°',
                           ),
-                          if (_answered && isCorrect)
-                            Icon(Icons.check_circle, color: AppColors.success)
-                          else if (_answered && isSelected && !isCorrect)
-                            Icon(Icons.cancel, color: AppColors.error),
+                          _Metric(label: 'WAKTU', value: '$_secondsLeft dtk'),
                         ],
                       ),
-                    ),
-                  ),
-                );
-              }),
-              if (_answered) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  child: Text(
-                    'Info: ${q['explanation']}',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _nextQuestion,
-                    child: Text(
-                      _currentIndex < _questions.length - 1
-                          ? 'Soal Berikutnya'
-                          : 'Selesai & Klaim EXP',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              ),
+              const SizedBox(height: 16),
+              if (!_isPlaying)
+                FilledButton.icon(
+                  onPressed: canPlay ? _startGame : null,
+                  icon: Icon(
+                    _isFinished ? Icons.replay_rounded : Icons.play_arrow,
                   ),
+                  label: Text(_isFinished ? 'Coba Lagi' : 'Mulai Kalibrasi'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                )
+              else
+                Text(
+                  'Putar HP perlahan dan satu arah',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              if (cooldownNotice != null) ...[
+                const SizedBox(height: 12),
+                cooldownNotice,
+              ],
+              if (_isCleared && _isSaving) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ] else if (_isCleared && _resultMessage != null) ...[
+                const SizedBox(height: 12),
+                sensorResultCard(
+                  title: 'Kalibrasi berhasil',
+                  message: _resultMessage!,
+                  color: AppColors.success,
+                ),
+              ] else if (_isFinished && !_isCleared) ...[
+                const SizedBox(height: 12),
+                sensorResultCard(
+                  title: 'Belum satu putaran penuh',
+                  message: 'Coba putar HP satu lingkaran penuh sebelum waktu habis.',
+                  color: AppColors.warning,
+                ),
+              ] else if (!_sensorAvailable) ...[
+                const SizedBox(height: 12),
+                sensorResultCard(
+                  title: 'Gyroscope tidak tersedia',
+                  message:
+                      'Sensor gyroscope tidak dapat dibaca pada perangkat ini.',
+                  color: AppColors.error,
                 ),
               ],
+              const SizedBox(height: 10),
+              Text(
+                'EXP diproses oleh server membership dan mengikuti batas harian.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _Metric({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: AppTextStyles.titleLarge.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 }

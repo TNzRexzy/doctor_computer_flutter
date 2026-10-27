@@ -139,6 +139,30 @@ class BlockchainProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns the server-side availability timestamp for one membership game.
+  Future<DateTime?> getMinigameCooldown(String game) async {
+    if (_wallet.userId == 'guest') return null;
+
+    try {
+      final response = await _supabase.rpc(
+        'get_minigame_cooldown',
+        params: {'p_game': game},
+      );
+      if (response is! Map) {
+        throw const FormatException('Invalid minigame cooldown response');
+      }
+      final nextAvailableAt = response['next_available_at'];
+      if (nextAvailableAt == null) return null;
+      if (nextAvailableAt is! String) {
+        throw const FormatException('Invalid cooldown timestamp');
+      }
+      return DateTime.parse(nextAvailableAt).toLocal();
+    } catch (e) {
+      debugPrint('[BlockchainProvider] Could not load minigame cooldown: $e');
+      rethrow;
+    }
+  }
+
   /// Human readable text for the result of [awardMinigameExp].
   static String describeAward(Map<String, dynamic> award) {
     final exp = (award['awarded_exp'] as num?)?.toInt() ?? 0;
@@ -150,7 +174,7 @@ class BlockchainProvider extends ChangeNotifier {
     }
     switch (award['reason']) {
       case 'cooldown':
-        return 'EXP belum bertambah: tunggu sebentar sebelum memainkan game ini lagi.';
+        return 'Game ini sedang dalam cooldown 3 hari. Coba lagi setelah waktu cooldown berakhir.';
       case 'daily_cap':
         return 'Batas EXP minigame hari ini sudah tercapai. Coba lagi besok.';
       case 'not_passed':

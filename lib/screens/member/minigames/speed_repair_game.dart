@@ -1,12 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
-import 'package:doctor_computer/providers/notification_provider.dart';
-import 'package:doctor_computer/providers/blockchain_provider.dart';
-import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/screens/member/minigames/sensor_game_support.dart';
 
 class SpeedRepairGame extends StatefulWidget {
   const SpeedRepairGame({super.key});
@@ -16,261 +15,363 @@ class SpeedRepairGame extends StatefulWidget {
 }
 
 class _SpeedRepairGameState extends State<SpeedRepairGame> {
-  int _clicks = 0;
-  final int _targetClicks = 25;
-  int _timeLeft = 10;
+  static const int _targetShakes = 12;
+  static const int _roundSeconds = 15;
+
+  StreamSubscription<UserAccelerometerEvent>? _sensorSubscription;
   Timer? _timer;
+  DateTime? _lastShakeAt;
+  int _shakes = 0;
+  int _secondsLeft = _roundSeconds;
   bool _isPlaying = false;
-  bool _isGameOver = false;
+  bool _isFinished = false;
+  bool _isCleared = false;
+  bool _isSaving = false;
+  bool _sensorAvailable = true;
+  bool _isCooldownLoading = true;
+  DateTime? _cooldownUntil;
+  String? _cooldownError;
+  String? _resultMessage;
 
-  void _startGame() {
-    setState(() {
-      _clicks = 0;
-      _timeLeft = 10;
-      _isPlaying = true;
-      _isGameOver = false;
-    });
-
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      setState(() {
-        if (_timeLeft > 0) {
-          _timeLeft--;
-        } else {
-          _timer?.cancel();
-          _isPlaying = false;
-          _isGameOver = true;
-          _checkResult();
-        }
-      });
-    });
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCooldown());
   }
 
-  void _onTapRepair() {
-    if (!_isPlaying) return;
+  Future<void> _loadCooldown() async {
     setState(() {
-      _clicks++;
-      if (_clicks >= _targetClicks) {
-        _timer?.cancel();
-        _isPlaying = false;
-        _isGameOver = true;
-        _checkResult();
+      _isCooldownLoading = true;
+      _cooldownError = null;
+    });
+    try {
+      final cooldownUntil = await loadMinigameCooldown(context, 'speed_repair');
+      if (!mounted) return;
+      setState(() {
+        _cooldownUntil = cooldownUntil;
+        _isCooldownLoading = false;
+      });
+    } catch (error) {
+      debugPrint('[SpeedRepairGame] Could not verify game cooldown: $error');
+      if (!mounted) return;
+      setState(() {
+        _cooldownError = 'Pastikan koneksi internet tersedia agar jadwal cooldown dapat diverifikasi.';
+        _isCooldownLoading = false;
+      });
+    }
+  }
+
+  Future<void> _startGame() async {
+    if (_isCooldownLoading ||
+        _cooldownError != null ||
+        (_cooldownUntil?.isAfter(DateTime.now()) ?? false)) {
+      return;
+    }
+    await _sensorSubscription?.cancel();
+    _timer?.cancel();
+    setState(() {
+      _shakes = 0;
+      _secondsLeft = _roundSeconds;
+      _lastShakeAt = null;
+      _isPlaying = true;
+      _isFinished = false;
+      _isCleared = false;
+      _isSaving = false;
+      _resultMessage = null;
+      _sensorAvailable = true;
+    });
+
+    _sensorSubscription =
+        userAccelerometerEventStream(
+          samplingPeriod: SensorInterval.gameInterval,
+        ).listen(
+          _onMotion,
+          onError: (Object error) {
+            if (!mounted) return;
+            setState(() => _sensorAvailable = false);
+            unawaited(_finish(cleared: false));
+          },
+        );
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_secondsLeft <= 1) {
+        timer.cancel();
+        setState(() => _secondsLeft = 0);
+        unawaited(_finish(cleared: _shakes >= _targetShakes));
+      } else {
+        setState(() => _secondsLeft--);
       }
     });
   }
 
-  Future<void> _checkResult() async {
-    if (_clicks >= _targetClicks) {
-      // EXP is awarded and saved by the server (award_minigame_exp RPC)
-      final award = await context.read<BlockchainProvider>().awardMinigameExp(
-        game: 'speed_repair',
-        result: {'clicks': _clicks},
-      );
-      if (!mounted) return;
-      context.read<AuthProvider>().restoreSession();
-      final awardText = BlockchainProvider.describeAward(award);
-
-      context.read<NotificationProvider>().addNotification(
-        title: 'PC berhasil di-service',
-        message: awardText,
-        type: 'minigame',
-      );
-
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('PC Berhasil Di-Service!'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Suhu CPU turun drastis ke 35°C!',
-                style: AppTextStyles.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                awardText,
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              },
-              child: const Text('Kembali ke Member'),
-            ),
-          ],
-        ),
-      );
+  void _onMotion(UserAccelerometerEvent event) {
+    if (!_isPlaying) return;
+    final magnitude = math.sqrt(
+      event.x * event.x + event.y * event.y + event.z * event.z,
+    );
+    final now = DateTime.now();
+    if (magnitude < 6.5 ||
+        (_lastShakeAt != null &&
+            now.difference(_lastShakeAt!) <
+                const Duration(milliseconds: 320))) {
+      return;
     }
+
+    _lastShakeAt = now;
+    setState(() => _shakes++);
+    if (_shakes >= _targetShakes) {
+      unawaited(_finish(cleared: true));
+    }
+  }
+
+  Future<void> _finish({required bool cleared}) async {
+    if (!_isPlaying) return;
+    _timer?.cancel();
+    final subscription = _sensorSubscription;
+    _sensorSubscription = null;
+    unawaited(subscription?.cancel());
+    setState(() {
+      _isPlaying = false;
+      _isFinished = true;
+      _isCleared = cleared;
+      _isSaving = cleared;
+    });
+
+    if (!cleared) return;
+    final message = await awardSensorGame(
+      context: context,
+      game: 'speed_repair',
+      notificationTitle: 'Debu PC berhasil dibersihkan',
+      result: {'shakes': _shakes, 'duration_seconds': _roundSeconds},
+    );
+    if (!mounted) return;
+    setState(() {
+      _isSaving = false;
+      _resultMessage = message;
+    });
+    await _loadCooldown();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _sensorSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final progress = (_clicks / _targetClicks).clamp(0.0, 1.0);
+    final progress = (_shakes / _targetShakes).clamp(0.0, 1.0);
+    final canPlay =
+        _sensorAvailable &&
+        !_isPlaying &&
+        !_isSaving &&
+        !_isCooldownLoading &&
+        _cooldownError == null &&
+        !(_cooldownUntil?.isAfter(DateTime.now()) ?? false);
+    final cooldownNotice = minigameCooldownNotice(
+      isLoading: _isCooldownLoading,
+      availableAt: _cooldownUntil,
+      error: _cooldownError,
+      onRetry: _loadCooldown,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Speed PC Repair'),
+        title: const Text('Shake It: Bersihkan Debu'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'Bersihkan Debu & Ganti Thermal Paste!',
-                style: AppTextStyles.heading3,
-                textAlign: TextAlign.center,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('MISI 03', style: AppTextStyles.caption),
+                  sensorStatusBadge(
+                    available: _sensorAvailable,
+                    active: _isPlaying,
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.20),
+                      AppColors.accent.withValues(alpha: 0.12),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      _isCleared
+                          ? Icons.auto_awesome
+                          : Icons.cleaning_services_rounded,
+                      size: 54,
+                      color: _isCleared ? AppColors.success : AppColors.primary,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _isCleared ? 'PC Kembali Bersih!' : 'Bersihkan PC',
+                      style: AppTextStyles.heading3,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _sensorAvailable
+                          ? 'Goyangkan HP dengan aman untuk mengangkat debu dari kipas dan heatsink.'
+                          : 'Sensor gerak tidak tersedia. Coba jalankan game ini di HP yang mendukung accelerometer.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _StatValue(
+                          label: 'GOYANGAN',
+                          value: '$_shakes/$_targetShakes',
+                          color: AppColors.primary,
+                        ),
+                        Container(
+                          width: 1,
+                          height: 42,
+                          color: AppColors.cardBorder,
+                        ),
+                        _StatValue(
+                          label: 'WAKTU',
+                          value: '$_secondsLeft dtk',
+                          color: _secondsLeft <= 4
+                              ? AppColors.error
+                              : AppColors.accent,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 10,
+                        backgroundColor: AppColors.surface,
+                        color: AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (!_isPlaying)
+                      FilledButton.icon(
+                        onPressed: canPlay ? _startGame : null,
+                        icon: Icon(
+                          _isFinished ? Icons.replay_rounded : Icons.play_arrow,
+                        ),
+                        label: Text(
+                          _isFinished ? 'Coba Lagi' : 'Mulai Bersihkan',
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                      )
+                    else
+                      Text(
+                        'Goyangkan maju-mundur dengan mantap',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (cooldownNotice != null) ...[
+                cooldownNotice,
+                const SizedBox(height: 14),
+              ],
+              if (_isCleared && _isSaving)
+                const LinearProgressIndicator()
+              else if (_isCleared && _resultMessage != null)
+                sensorResultCard(
+                  title: 'Hasil tersimpan',
+                  message: _resultMessage!,
+                  color: AppColors.success,
+                )
+              else if (_isFinished && !_isCleared)
+                sensorResultCard(
+                  title: 'Debu masih menempel',
+                  message:
+                      'Tercapai $_shakes dari $_targetShakes goyangan. Coba lagi!',
+                  color: AppColors.warning,
+                )
+              else if (!_sensorAvailable)
+                sensorResultCard(
+                  title: 'Sensor tidak ditemukan',
+                  message: 'Game ini membutuhkan accelerometer dan hanya bisa dimainkan di perangkat yang mendukung.',
+                  color: AppColors.error,
+                ),
+              const Spacer(),
               Text(
-                'Tekan tombol secepat mungkin sebelum waktu habis untuk mendinginkan CPU!',
-                style: AppTextStyles.bodySmall.copyWith(
+                'EXP diproses oleh server membership dan mengikuti batas harian.',
+                style: AppTextStyles.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      Text('Waktu', style: AppTextStyles.caption),
-                      Text(
-                        '$_timeLeft dtk',
-                        style: AppTextStyles.heading2.copyWith(
-                          color: _timeLeft <= 3
-                              ? AppColors.error
-                              : AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      Text('Progress Tap', style: AppTextStyles.caption),
-                      Text(
-                        '$_clicks / $_targetClicks',
-                        style: AppTextStyles.heading2.copyWith(
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              LinearProgressIndicator(
-                value: progress,
-                minHeight: 14,
-                backgroundColor: AppColors.surface,
-                color: AppColors.success,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              const SizedBox(height: 36),
-              if (!_isPlaying && !_isGameOver) ...[
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                  ),
-                  icon: const Icon(Icons.play_arrow, color: Colors.white),
-                  label: const Text(
-                    'Mulai Permainan',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onPressed: _startGame,
-                ),
-              ] else if (_isPlaying) ...[
-                GestureDetector(
-                  onTap: _onTapRepair,
-                  child: Container(
-                    width: 180,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [AppColors.accent, AppColors.primary],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.4),
-                          spreadRadius: 8,
-                          blurRadius: 16,
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.touch_app, size: 50, color: Colors.white),
-                          SizedBox(height: 8),
-                          Text(
-                            'TAP CEPAT!',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ] else if (_isGameOver && _clicks < _targetClicks) ...[
-                Text(
-                  'Waktu Habis! Anda baru mencapai $_clicks tap.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.error,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                  ),
-                  onPressed: _startGame,
-                  child: const Text(
-                    'Coba Lagi',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StatValue extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatValue({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: AppTextStyles.titleLarge.copyWith(
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 }

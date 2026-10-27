@@ -17,7 +17,7 @@ Doctor Computer utilizes a decoupled, reactive architecture adhering to clean Fl
 * **State Management:** Scoped `ChangeNotifier` providers (`AuthProvider`, `CartProvider`, `ProductProvider`, `PcBuilderProvider`, `OrderProvider`, `BlockchainProvider`, `WishlistProvider`, `NotificationProvider`, `ThemeProvider`, `ReviewProvider`).
 * **Data Layer & Remote Persistence:** Supabase PostgreSQL with PostgREST API client, database triggers, Row-Level Security (RLS) enforcement, and local caching for non-authoritative display data.
 * **Omnichannel POS & Shift Engine:** Authenticated PostgreSQL RPCs calculate prices, lock/decrement inventory, persist order items, and reconcile cashier shifts atomically.
-* **Loyalty Points:** Customer points and tiers are database-owned; 500 points are awarded once when an online order is marked delivered. Client-generated hash-chain/minigame data is not authoritative, and minigame EXP is disabled until server-side score verification is implemented.
+* **Loyalty Points:** Customer points, tiers, and minigame EXP are database-owned. The server awards purchase points once when an online order is marked delivered and handles minigame rewards, per-game cooldowns, and daily caps through authenticated Supabase RPCs.
 * **Geospatial & Mapping Engine:** OpenStreetMap tile integration via `flutter_map` with real-time reverse geocoding through Nominatim HTTP endpoints.
 * **Artificial Intelligence Engine:** Doctor AI (floating round chat) and AI Smart Search call the Gemini API with automatic fallback between Flash models when a quota limit is hit; the Gemini API key is stored in the Supabase table `app_config` (`key = 'GEMINI_API_KEY'`, see `supabase/migrations/20261030_app_config.sql`) and is not hardcoded in the app (the `gemini-chat` Edge Function remains available as server-side alternative).
 
@@ -57,8 +57,9 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 
 ### 2. Loyalty Points & Client-Side Hash-Chain Display
 * Customer points and membership tiers are read from the protected `users` profile. Only the server can award purchase points, once an online order is marked delivered.
-* Writes to `blockchain_blocks` are revoked for client roles. Existing/local chain entries may be displayed for demonstration and audit context only; they do not award points or authorize discounts.
-* Minigame EXP is intentionally disabled until game results can be verified by a trusted server endpoint.
+* The `blockchain_blocks` ledger is written by server-side functions; clients cannot directly award points or authorize discounts.
+* Membership includes three sensor-driven mini-games: tilt the phone to collect PC parts, rotate it using the gyroscope to calibrate a fan, and shake it to clean dust.
+* Successful game rewards are recorded in `blockchain_blocks` by the authenticated `award_minigame_exp` RPC. Each game has an independent three-day cooldown per user; the app reads availability from `get_minigame_cooldown`, while the server enforces the cooldown and existing daily EXP cap.
 
 ### 3. Omnichannel Admin Dashboard & Staff Provisioning
 * **Omnichannel Order Filtering:** Added channel filters (`Semua`, `Online`, `POS Kasir`) with visual indicators on orders.
@@ -413,6 +414,8 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 12. `supabase/migrations/20261031_fix_product_subtype_fk.sql` (normalizes `subtype`/`brand_code` so adding a product no longer violates `fk_products_subtype`).
 13. `supabase/migrations/20261031_biometric_login.sql` (`user_biometrics` / `user_security_settings` with own-row RLS for fingerprint login).
 14. `supabase/migrations/20261101_product_reviews.sql` (per-item reviews with photo/video, rating trigger, `submit_product_review` RPC, `review-media` bucket).
+15. `supabase/migrations/20261104_sensor_member_minigame_titles.sql` (updates membership game names recorded in the EXP ledger).
+16. `supabase/migrations/20261105_member_minigame_three_day_cooldown.sql` (enforces a per-user, per-game three-day cooldown and adds the `get_minigame_cooldown` RPC).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 

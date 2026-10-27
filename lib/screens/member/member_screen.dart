@@ -194,11 +194,11 @@ class MemberScreen extends StatelessWidget {
 
               _buildGameCard(
                 context: context,
-                title: 'Memory Match Komponen PC',
+                title: 'Tilt Control: Ambil Komponen',
                 description:
-                    'Cocokkan kartu CPU, GPU, RAM, SSD untuk melatih ingatan.',
-                difficulty: 'Mudah',
-                icon: Icons.memory,
+                    'Miringkan HP untuk mengarahkan teknisi dan mengumpulkan komponen.',
+                difficulty: 'Sensor accelerometer',
+                icon: Icons.screen_rotation_alt,
                 color: Colors.teal,
                 onTap: () {
                   Navigator.push(
@@ -210,10 +210,10 @@ class MemberScreen extends StatelessWidget {
 
               _buildGameCard(
                 context: context,
-                title: 'Kuis Perakitan PC & Hardware',
-                description: 'Uji pengetahuan seputar soket, RAM DDR5, dan spek komputer.',
-                difficulty: 'Sedang',
-                icon: Icons.quiz,
+                title: 'Gyro Spin: Kalibrasi Kipas',
+                description: 'Putar HP satu lingkaran untuk menyalakan kipas pendingin.',
+                difficulty: 'Sensor gyroscope',
+                icon: Icons.toys,
                 color: Colors.orange,
                 onTap: () {
                   Navigator.push(
@@ -225,11 +225,11 @@ class MemberScreen extends StatelessWidget {
 
               _buildGameCard(
                 context: context,
-                title: 'Speed Thermal Paste & Repair',
+                title: 'Shake It: Bersihkan Debu',
                 description:
-                    'Tap cepat untuk membersihkan debu dan mendinginkan CPU.',
-                difficulty: 'Cepat (10s)',
-                icon: Icons.speed,
+                    'Goyangkan HP untuk membersihkan debu dari PC sebelum waktunya habis.',
+                difficulty: 'Sensor gerak • 15 detik',
+                icon: Icons.cleaning_services,
                 color: Colors.blue,
                 onTap: () {
                   Navigator.push(
