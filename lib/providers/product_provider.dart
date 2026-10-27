@@ -9,6 +9,7 @@ import 'package:doctor_computer/data/mock/mock_categories.dart';
 import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
+import 'package:doctor_computer/services/pc_part_sync_service.dart';
 
 class ProductProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
@@ -336,11 +337,33 @@ class ProductProvider extends ChangeNotifier {
 
   /// Adds a catalog product in Supabase before updating the local display cache.
   Future<bool> addProduct(ProductModel product) async {
-    final savedProduct = await supabase
-        .from('products')
-        .insert(product.toMap())
-        .select('id, image_url')
-        .single();
+    // Komponen PC (CPU, GPU, SSD/NVMe, cooler, case, dll) otomatis dibuatkan
+    // baris di `pc_parts` dengan ID sesuai jenisnya (cpu-001, gpu-001, ...).
+    String? categoryName;
+    for (final category in _categories) {
+      if (category.id == product.categoryId) {
+        categoryName = category.name;
+        break;
+      }
+    }
+    final pcPartId = await PcPartSyncService.insertForProduct(
+      supabase,
+      product,
+      categoryName: categoryName,
+    );
+
+    final Map<String, dynamic> savedProduct;
+    try {
+      savedProduct = await supabase
+          .from('products')
+          .insert(product.toMap())
+          .select('id, image_url')
+          .single();
+    } catch (_) {
+      // Produk gagal tersimpan -> batalkan baris pc_parts yang baru dibuat.
+      await PcPartSyncService.rollback(supabase, pcPartId);
+      rethrow;
+    }
     _verifySavedImages(savedProduct, product);
 
     _allProducts.removeWhere((existing) => existing.id == product.id);

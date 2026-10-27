@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.8-beta
+* **Release Version:** 1.1.9-beta
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -126,8 +126,34 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-036 | After the Flash Sale timer ended, products stayed in Flash Sale at the flash price, could still be added to the cart, and the product page still said "PROMO FLASH SALE SEDANG BERLANGSUNG" | The flash price is stored in `products.price`/`is_on_sale`; nothing restored the normal price when `flash_sales.ends_at` passed, and checkout reads the price from `products` | Resolved (RPC `expire_flash_sales` restores the normal price and removes the product from Flash Sale; the app triggers it when the timer ends and checkout runs it before pricing; cart and product page refresh automatically) |
 | BUG-037 | AI Bottleneck Calculator gave non-real results; two different CPUs of the same tier produced identical numbers, and unknown components were always treated as tier 5 | `GeminiService.calculateBottleneck()` mapped CPU/GPU names to a 1–10 tier by keyword matching, used a fixed formula, and read FPS from a hard-coded table | Resolved (new `calculateBottleneckAI()` gets the percentage, bottleneck type, advice, recommended resolution and per-game FPS from Gemini; the old estimate is kept only as an offline fallback and is labelled as such) |
 | BUG-038 | Rakit PC component lists came from mock data and showed guessed images (e.g. `ASUS...` showed a laptop, `MSI...` showed a monitor) | `PcBuilderProvider` merged `pc_parts` with `mockPcParts` (and used mock data entirely when the table was empty or failed), and guessed images from the product name | Resolved (components come only from `pc_parts`; images come from the `image_url` column; no mock fallback, no name-based image guessing) |
+| BUG-039 | Products added by admin / cashier as PC components (CPU, GPU, SSD/NVMe, cooler, case, ...) never appeared in Rakit PC | `ProductProvider.addProduct` wrote only to `products`; Rakit PC reads `pc_parts`, and nothing created the matching row or an ID | Resolved (new `PcPartSyncService` inserts a `pc_parts` row with an automatic ID per type: `cpu-001`, `gpu-001`, `mobo-001`, `ram-001`, `storage-001`, `psu-001`, `cooler-001`, `case-001`; the row is rolled back if the product insert fails) |
+| BUG-040 | Rakit PC parts had no product photo although the photo exists in the database | Photos are uploaded at product input and stored in `products.image_url`; `pc_parts.image_url` was empty for those parts | Resolved (new parts copy the first product photo; parts with an empty `image_url` borrow the photo of the product with the same name; optional backfill migration) |
+| BUG-041 | The Flash Sale section on Home stayed as an empty block when no flash sale was running | Heading, timer and list were always rendered, even with no active sale or no flash products | Resolved (the whole section, including its spacing, is hidden unless a flash sale is active, not expired and has at least one product) |
+| BUG-042 | Selected theme (dark/light) was lost after closing the app and always returned to light mode | `ThemeProvider` always started as light and did not save the choice | Resolved (choice stored in `SharedPreferences` and restored in `main()` before `runApp`) |
 
 ---
+
+## Version 1.1.9-beta Changelog
+
+1. **Auto-register PC components in Rakit PC (BUG-039):**
+   * When admin or cashier adds a product whose category is a PC component (CPU, GPU, motherboard, RAM, storage / SSD / NVMe / HDD, PSU, cooler, case), a row is also created in `pc_parts`. Other categories (laptop, monitor, keyboard, mouse, ...) are not touched.
+   * IDs are generated per type from the highest existing number plus one: `cpu-001`, `gpu-001`, `mobo-001`, `ram-001`, `storage-001`, `psu-001`, `cooler-001`, `case-001`. Existing IDs such as `part-001` are unchanged. A clash between two staff members adding at the same time is retried with a new number.
+   * Saving order is `pc_parts` first, then `products`; if the product insert fails, the new `pc_parts` row is removed again.
+   * New file `lib/services/pc_part_sync_service.dart`; only `ProductProvider.addProduct` was changed. Editing or deleting a product does not update `pc_parts`.
+   * New parts have empty `compatibility_tags`, so the CPU / motherboard / RAM compatibility check does not apply to them until tags are filled in the database.
+2. **Photos in Rakit PC (BUG-040):**
+   * New parts store the first product photo in `pc_parts.image_url`.
+   * `PcBuilderProvider` fills an empty `pc_parts.image_url` with the photo of the product with the same name in `products` (case and extra spaces ignored). A photo already stored in `pc_parts` is never overwritten, and a failure to read `products` does not stop the parts from loading.
+3. **Flash Sale on Home (BUG-041):** the Flash Sale heading, timer and product list are shown only while a flash sale is running; otherwise the section and its spacing disappear and `Produk Terlaris` moves up. The section disappears again automatically when the timer ends and prices return to normal.
+4. **Theme is remembered (BUG-042):** the dark / light choice is saved on the device and restored before the first screen, so the app opens with the last selected theme. The setting is per device, not per account.
+5. **New Edit Profile design (`edit_profile_screen.dart`):**
+   * Gradient header with a large avatar (photo or initials) and the back button.
+   * Redesigned photo dialog: rounded dialog with an icon title, gradient avatar ring, full-width `Pilih Foto dari Perangkat` button and a highlighted error message.
+   * Saving is handled by a dedicated `_saveProfile()` with a saving state on the button; profile data fields and the location picker work as before.
+6. **Database:** added migrations `20261106_pc_parts_staff_insert.sql` (read for everyone, write for admin and cashier on `pc_parts`) and `20261107_pc_parts_backfill_images.sql` (optional, fills empty `pc_parts.image_url` from products with the same name).
+7. **Versioning:** Bumped app version to `1.1.9-beta+19` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+**Deployment:** Run `20261106_pc_parts_staff_insert.sql` before adding PC component products, otherwise the `pc_parts` insert can be rejected by row level security. `20261107_pc_parts_backfill_images.sql` is optional and safe to run more than once. No new dependency is required. Rakit PC loads parts once when the app opens, so reopen the app to see newly added parts.
 
 ## Version 1.1.8-beta Changelog
 

@@ -32,6 +32,10 @@ Future<void> main() async {
   final authProvider = AuthProvider();
   await authProvider.restoreSession();
 
+  // Restore the last selected theme (light/dark) before UI build
+  final themeProvider = ThemeProvider();
+  await themeProvider.restore();
+
   runApp(
     MultiProvider(
       providers: [
@@ -56,7 +60,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => PcBuilderProvider()),
         ChangeNotifierProvider(create: (_) => WishlistProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProxyProvider<AuthProvider, BlockchainProvider>(
           create: (_) {
             final bp = BlockchainProvider();

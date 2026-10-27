@@ -102,8 +102,11 @@ class PcBuilderProvider extends ChangeNotifier {
 
       // Hanya komponen PC asli: baris dengan kategori di luar 8 slot
       // (mis. Laptop 'cat-010', Peripherals 'cat-009') dilewati.
+      // Gambar part yang kosong di pc_parts dilengkapi dari tabel products
+      // (produk dengan nama yang sama), karena foto diunggah saat input produk.
+      final productImages = await _loadProductImagesByName();
       _allParts = res
-          .map((p) => _mapPart(p))
+          .map((p) => _mapPart(p, productImages))
           .whereType<PcPartModel>()
           .toList();
     } catch (e) {
@@ -116,7 +119,42 @@ class PcBuilderProvider extends ChangeNotifier {
     }
   }
 
-  PcPartModel? _mapPart(dynamic p) {
+  static String _normalizeName(String? name) =>
+      (name ?? '').toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  /// Peta nama produk (ternormalisasi) -> gambar pertama di tabel `products`.
+  /// Gagal memuat tidak menghentikan pemuatan part (hasilnya kosong).
+  Future<Map<String, String>> _loadProductImagesByName() async {
+    final Map<String, String> result = {};
+    try {
+      final List rows = await Supabase.instance.client
+          .from('products')
+          .select('name, image_url');
+      for (final row in rows) {
+        final key = _normalizeName(row['name']?.toString());
+        if (key.isEmpty || result.containsKey(key)) continue;
+        final raw = row['image_url'];
+        String? image;
+        if (raw is List) {
+          for (final item in raw) {
+            final value = item?.toString().trim() ?? '';
+            if (value.isNotEmpty) {
+              image = value;
+              break;
+            }
+          }
+        } else if (raw is String) {
+          image = raw.trim();
+        }
+        if (image != null && image.isNotEmpty) result[key] = image;
+      }
+    } catch (e) {
+      debugPrint('Error loading product images for pc parts: $e');
+    }
+    return result;
+  }
+
+  PcPartModel? _mapPart(dynamic p, [Map<String, String> productImages = const {}]) {
     final categoryStr = (p['category']?.toString() ?? '').toLowerCase();
     PcPartCategory? category;
 
@@ -163,6 +201,9 @@ class PcBuilderProvider extends ChangeNotifier {
       imageUrl = rawImage;
     }
     imageUrl = imageUrl?.trim();
+    if (imageUrl == null || imageUrl.isEmpty) {
+      imageUrl = productImages[_normalizeName(p['name']?.toString())];
+    }
     imageUrl = (imageUrl == null || imageUrl.isEmpty)
         ? null
         : AppImages.getBucketUrl(imageUrl);
