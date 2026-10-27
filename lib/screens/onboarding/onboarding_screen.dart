@@ -89,6 +89,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         TextButton(
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(88, 56),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                          ),
                           onPressed: _completeOnboarding,
                           child: Text(
                             'Lewati',
@@ -97,6 +101,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                         GradientButton(
                           label: 'Lanjut',
+                          width: 180,
+                          height: 56,
                           onPressed: () {
                             _pageController.nextPage(
                               duration: const Duration(milliseconds: 300),

@@ -130,6 +130,7 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-040 | Rakit PC parts had no product photo although the photo exists in the database | Photos are uploaded at product input and stored in `products.image_url`; `pc_parts.image_url` was empty for those parts | Resolved (new parts copy the first product photo; parts with an empty `image_url` borrow the photo of the product with the same name; optional backfill migration) |
 | BUG-041 | The Flash Sale section on Home stayed as an empty block when no flash sale was running | Heading, timer and list were always rendered, even with no active sale or no flash products | Resolved (the whole section, including its spacing, is hidden unless a flash sale is active, not expired and has at least one product) |
 | BUG-042 | Selected theme (dark/light) was lost after closing the app and always returned to light mode | `ThemeProvider` always started as light and did not save the choice | Resolved (choice stored in `SharedPreferences` and restored in `main()` before `runApp`) |
+| BUG-043 | The `Lanjut` button on the onboarding screen (after the splash screen) was too small | `GradientButton` was placed in a `Row` without a width, so it shrank to the size of its label | Resolved (`Lanjut` is now 180×56 and `Lewati` has a larger touch area; the shared `GradientButton` is unchanged) |
 
 ---
 
@@ -150,8 +151,15 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
    * Gradient header with a large avatar (photo or initials) and the back button.
    * Redesigned photo dialog: rounded dialog with an icon title, gradient avatar ring, full-width `Pilih Foto dari Perangkat` button and a highlighted error message.
    * Saving is handled by a dedicated `_saveProfile()` with a saving state on the button; profile data fields and the location picker work as before.
-6. **Database:** added migrations `20261106_pc_parts_staff_insert.sql` (read for everyone, write for admin and cashier on `pc_parts`) and `20261107_pc_parts_backfill_images.sql` (optional, fills empty `pc_parts.image_url` from products with the same name).
-7. **Versioning:** Bumped app version to `1.1.9-beta+19` (`pubspec.yaml`, `AppConstants.appVersion`).
+6. **Pull to refresh on every page:**
+   * Pulling down from the top of any page reloads products and flash sale, Rakit PC parts, orders, reviews, cart prices and the member wallet. Each task runs independently, so one failure does not stop the others, and the whole refresh times out after 20 seconds.
+   * The indicator is added once in `MaterialApp.builder` (`GlobalPullToRefresh`, new file `lib/widgets/common/global_pull_to_refresh.dart`). Only vertical gestures count, and pages that already have their own `RefreshIndicator` (member ledger, security, some admin tabs, review management) keep using it, so there is no double refresh.
+   * `AppScrollBehavior` lets short pages be pulled too and enables mouse / trackpad dragging on Web and Windows.
+   * Admin and cashier dashboards keep their data locally, so they register their loaders in `PageRefreshRegistry` (`initState` / `dispose`) and reload on pull as well.
+   * The logged-in profile (name, tier) is intentionally not reloaded by pull to refresh, because a failed session restore on a bad connection could sign the user out; member points are refreshed through the wallet.
+7. **Onboarding button (BUG-043):** `Lanjut` is enlarged to 180×56 and `Lewati` has a minimum touch area of 88×56 (`onboarding_screen.dart`).
+8. **Database:** added migrations `20261106_pc_parts_staff_insert.sql` (read for everyone, write for admin and cashier on `pc_parts`) and `20261107_pc_parts_backfill_images.sql` (optional, fills empty `pc_parts.image_url` from products with the same name).
+9. **Versioning:** Bumped app version to `1.1.9-beta+19` (`pubspec.yaml`, `AppConstants.appVersion`).
 
 **Deployment:** Run `20261106_pc_parts_staff_insert.sql` before adding PC component products, otherwise the `pc_parts` insert can be rejected by row level security. `20261107_pc_parts_backfill_images.sql` is optional and safe to run more than once. No new dependency is required. Rakit PC loads parts once when the app opens, so reopen the app to see newly added parts.
 

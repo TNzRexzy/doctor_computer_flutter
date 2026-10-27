@@ -15,6 +15,7 @@ import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/common/product_image_picker.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -49,6 +50,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final isAdmin = user?.role == UserRole.admin;
     _tabController = TabController(length: isAdmin ? 7 : 4, vsync: this);
     _loadData();
+    PageRefreshRegistry.register(_loadData);
 
     _flashSaleTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
@@ -57,6 +59,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   @override
   void dispose() {
+    PageRefreshRegistry.unregister(_loadData);
     _flashSaleTicker?.cancel();
     _tabController.dispose();
     super.dispose();

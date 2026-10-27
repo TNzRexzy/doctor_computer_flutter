@@ -14,6 +14,7 @@ import 'package:doctor_computer/widgets/admin/product_editor_dialog.dart';
 import 'package:doctor_computer/widgets/review/review_management_tab.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
+import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
 
 class CashierDashboardScreen extends StatefulWidget {
   const CashierDashboardScreen({super.key});
@@ -49,10 +50,12 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     super.initState();
     _tabController = TabController(length: 7, vsync: this);
     _loadCashierData();
+    PageRefreshRegistry.register(_loadCashierData);
   }
 
   @override
   void dispose() {
+    PageRefreshRegistry.unregister(_loadCashierData);
     _tabController.dispose();
     super.dispose();
   }
