@@ -131,11 +131,11 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 
 ## Version 1.1.8-beta Changelog
 
-1. **Voucher untuk pembeli dan admin:**
-   * Pembeli dapat melihat voucher yang memenuhi syarat belanja, memilihnya langsung dari keranjang, dan melihat diskon serta total yang diperbarui sebelum checkout.
-   * Admin dapat membuat, mengedit, mengaktifkan, dan menonaktifkan voucher serta mengatur minimum belanja dan kuota pemakaian.
-   * Kode voucher dan kuota divalidasi kembali saat pesanan dibuat; pemakaian kuota dicatat secara atomik agar voucher yang habis tidak dapat digunakan.
-2. **Database:** Tambahkan migrasi `20261104_vouchers.sql` dan `20261105_available_vouchers.sql` untuk pengelolaan voucher, penukaran, serta daftar voucher yang memenuhi syarat.
+1. **Vouchers for buyers and admins:**
+   * Buyers can view eligible vouchers, select them directly from the cart, and see the discount and updated total before checkout.
+   * Admins can create, edit, activate, and deactivate vouchers, as well as set minimum purchase requirements and usage quotas.
+   * Voucher codes and quotas are re-validated when an order is created; quota usage is recorded atomically to prevent the use of depleted vouchers.
+2. **Database:** Added migrations `20261104_vouchers.sql` and `20261105_available_vouchers.sql` for voucher management, redemptions, and eligible voucher lists.
 3. **Versioning:** Bumped app version to `1.1.8-beta+18` (`pubspec.yaml`, `AppConstants.appVersion`).
 
 **Deployment:** Apply both new Supabase migrations before enabling voucher selection and redemption.
