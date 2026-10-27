@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +15,8 @@ import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/admin/product_editor_dialog.dart';
 import 'package:doctor_computer/widgets/review/review_management_tab.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
+import 'package:doctor_computer/services/pos_local_database_helper.dart';
+import 'package:doctor_computer/services/pos_sync_service.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
 import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
 
@@ -84,7 +88,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   }
 
   String _getCashierId() {
-    return supabase.auth.currentUser?.id ?? '';
+    return context.read<AuthProvider>().currentUser?.id ?? '';
   }
 
   String _getCashierName() {
@@ -95,117 +99,103 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   Future<void> _loadCashierData() async {
     setState(() => _isLoading = true);
     final cashierId = _getCashierId();
+    final auth = context.read<AuthProvider>();
+    final database = PosLocalDatabaseHelper.instance;
+    final syncFuture = auth.canWriteRemoteData
+        ? context.read<PosSyncService>().syncNow()
+        : null;
 
     try {
-      try {
-        final shiftRes = await supabase
-            .from('cashier_shifts')
-            .select()
-            .eq('cashier_id', cashierId)
-            .eq('status', 'open')
-            .maybeSingle();
-        _currentShift = shiftRes != null
-            ? Map<String, dynamic>.from(shiftRes)
-            : null;
-      } catch (e) {
-        debugPrint('Notice loading active shift from Supabase: $e');
-        _currentShift = null;
-      }
-
-      try {
-        final historyRes = await supabase
-            .from('cashier_shifts')
-            .select()
-            .eq('cashier_id', cashierId)
-            .order('opened_at', ascending: false)
-            .limit(20);
-        _shiftHistory = List<Map<String, dynamic>>.from(historyRes);
-      } catch (e) {
-        debugPrint('Notice loading shift history: $e');
-      }
-
-      // 3. Fetch products (merge Supabase + ProductProvider)
-      try {
-        final productsRes = await supabase
-            .from('products')
-            .select()
-            .order('created_at', ascending: false);
-        final Map<String, Map<String, dynamic>> pMap = {};
-        for (final p in productsRes) {
-          final id = p['id']?.toString() ?? '';
-          if (id.isNotEmpty) pMap[id] = Map<String, dynamic>.from(p);
-        }
-        _managedProducts = pMap.values.toList();
-        if (mounted) {
-          final providerProducts = context.read<ProductProvider>().allProducts;
-          for (final p in providerProducts) {
-            if (!pMap.containsKey(p.id)) {
-              pMap[p.id] = p.toMap();
-            }
-          }
-        }
-        _products = pMap.values.toList();
-      } catch (e) {
-        debugPrint('Notice loading products: $e');
-      }
-
-      // 4. Fetch POS orders from Supabase
-      try {
-        List<dynamic> ordersRes;
+      await _loadLocalCashierData(database, cashierId);
+      if (auth.canWriteRemoteData) {
         try {
-          ordersRes = await supabase
-              .from('orders')
-              .select()
-              .eq('channel', 'pos')
-              .order('order_date', ascending: false)
-              .limit(50);
-        } catch (_) {
+          List<dynamic> ordersRes;
           try {
             ordersRes = await supabase
                 .from('orders')
                 .select()
-                .order('created_at', ascending: false)
-                .limit(50);
+                .order('order_date', ascending: false)
+                .limit(200);
           } catch (_) {
-            ordersRes = await supabase.from('orders').select().limit(50);
+            try {
+              ordersRes = await supabase
+                  .from('orders')
+                  .select()
+                  .order('created_at', ascending: false)
+                  .limit(200);
+            } catch (_) {
+              ordersRes = await supabase.from('orders').select().limit(200);
+            }
           }
+          _allOrders = List<Map<String, dynamic>>.from(ordersRes);
+          final remotePosOrders = _allOrders.where((order) {
+            final channel = order['channel']?.toString().toLowerCase();
+            return channel == null || channel == 'pos' || channel.isEmpty;
+          });
+          final orderMap = <String, Map<String, dynamic>>{
+            for (final order in _posOrders)
+              (order['remote_id'] ?? order['id']).toString(): order,
+          };
+          for (final order in remotePosOrders) {
+            orderMap[order['id'].toString()] = order;
+          }
+          _posOrders = orderMap.values.toList();
+        } catch (e) {
+          debugPrint('Notice loading all orders: $e');
+          _allOrders = List<Map<String, dynamic>>.from(_posOrders);
         }
-        final filtered = ordersRes.where((o) {
-          final ch = o['channel']?.toString().toLowerCase();
-          return ch == null || ch == 'pos' || ch.isEmpty;
-        }).toList();
-        _posOrders = List<Map<String, dynamic>>.from(filtered);
-      } catch (e) {
-        debugPrint('Notice loading POS orders: $e');
-      }
-
-      // 5. Fetch all orders (online + POS) for the Pesanan management tab
-      try {
-        List<dynamic> allRes;
-        try {
-          allRes = await supabase
-              .from('orders')
-              .select()
-              .order('order_date', ascending: false)
-              .limit(200);
-        } catch (_) {
-          allRes = await supabase
-              .from('orders')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(200);
-        }
-        _allOrders = allRes
-            .map((o) => Map<String, dynamic>.from(o as Map))
-            .toList();
-      } catch (e) {
-        debugPrint('Notice loading all orders: $e');
       }
     } catch (e) {
       debugPrint('Error loading cashier data: $e');
     }
 
     if (mounted) setState(() => _isLoading = false);
+    if (syncFuture != null) {
+      unawaited(
+        syncFuture
+            .then((_) async {
+              if (!mounted) return;
+              await _loadLocalCashierData(
+                database,
+                cashierId,
+                preserveRemoteOrders: true,
+              );
+              if (mounted) setState(() {});
+            })
+            .catchError((Object error) {
+              debugPrint('[CashierDashboard] POS sync failed: $error');
+            }),
+      );
+    }
+  }
+
+  Future<void> _loadLocalCashierData(
+    PosLocalDatabaseHelper database,
+    String cashierId, {
+    bool preserveRemoteOrders = false,
+  }) async {
+    _currentShift = await database.readOpenShift(cashierId);
+    _shiftHistory = await database.readShiftHistory(cashierId);
+    _products = await database.readCatalogProducts();
+    _managedProducts = List<Map<String, dynamic>>.from(_products);
+    final localOrders = await database.readLocalOrders(
+      channel: 'pos',
+      limit: 50,
+    );
+    if (!preserveRemoteOrders) {
+      _posOrders = localOrders;
+      return;
+    }
+
+    final ordersByRemoteId = <String, Map<String, dynamic>>{
+      for (final order in _posOrders)
+        (order['remote_id'] ?? order['id']).toString(): order,
+    };
+    for (final order in localOrders) {
+      final remoteId = order['remote_id']?.toString();
+      ordersByRemoteId[remoteId ?? order['id'].toString()] = order;
+    }
+    _posOrders = ordersByRemoteId.values.toList();
   }
 
   // ============================================================
@@ -274,42 +264,42 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   ? null
                   : () async {
                       final messenger = ScaffoldMessenger.of(context);
+                      final auth = context.read<AuthProvider>();
+                      final syncService = context.read<PosSyncService>();
+                      final cashierId = _getCashierId();
                       final cash =
                           double.tryParse(cashCtrl.text.replaceAll('.', '')) ??
                           0;
                       setDialogState(() => isSubmitting = true);
 
                       try {
-                        final response = await supabase.rpc(
-                          'open_cashier_shift',
-                          params: {
-                            'p_opening_cash': cash,
-                            'p_notes': notesCtrl.text.trim(),
-                          },
-                        );
-                        if (response is! Map) {
-                          throw const FormatException(
-                            'Respons open_cashier_shift tidak valid.',
-                          );
+                        final newShiftData = await PosLocalDatabaseHelper
+                            .instance
+                            .createLocalShift(
+                              cashierId: cashierId,
+                              openingCash: cash,
+                              notes: notesCtrl.text.trim(),
+                            );
+                        if (auth.canWriteRemoteData) {
+                          syncService.scheduleSync();
                         }
-                        final newShiftData = Map<String, dynamic>.from(
-                          response,
-                        );
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           messenger.showSnackBar(
                             SnackBar(
-                              content: const Text(
-                                'Shift kasir berhasil dibuka di server.',
+                              content: Text(
+                                auth.canWriteRemoteData
+                                    ? 'Shift tersimpan dan sedang disinkronkan.'
+                                    : 'Shift tersimpan di perangkat dan menunggu sinkronisasi.',
                               ),
                               backgroundColor: AppColors.success,
                             ),
                           );
                           setState(() => _currentShift = newShiftData);
-                          _loadCashierData();
+                          await _loadCashierData();
                         }
                       } catch (e) {
-                        debugPrint('open_cashier_shift failed: $e');
+                        debugPrint('Local shift open failed: $e');
                         if (ctx.mounted) {
                           setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
@@ -461,20 +451,19 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                     ? null
                     : () async {
                         final messenger = ScaffoldMessenger.of(context);
+                        final auth = context.read<AuthProvider>();
+                        final syncService = context.read<PosSyncService>();
                         final shiftId = _currentShift!['id']?.toString() ?? '';
                         setDialogState(() => isSubmitting = true);
 
                         try {
-                          await supabase.rpc(
-                            'close_cashier_shift',
-                            params: {
-                              'p_shift_id': shiftId,
-                              'p_closing_cash': counted,
-                              'p_notes': notesCtrl.text.trim(),
-                            },
+                          await PosLocalDatabaseHelper.instance.closeLocalShift(
+                            shiftId: shiftId,
+                            closingCash: counted,
+                            notes: notesCtrl.text.trim(),
                           );
                         } catch (e) {
-                          debugPrint('close_cashier_shift failed: $e');
+                          debugPrint('Local shift close failed: $e');
                           if (ctx.mounted) {
                             setDialogState(() => isSubmitting = false);
                             messenger.showSnackBar(
@@ -487,12 +476,17 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                           return;
                         }
 
+                        if (auth.canWriteRemoteData) {
+                          syncService.scheduleSync();
+                        }
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
                           messenger.showSnackBar(
                             SnackBar(
-                              content: const Text(
-                                'Shift kasir berhasil ditutup.',
+                              content: Text(
+                                auth.canWriteRemoteData
+                                    ? 'Shift ditutup dan sedang disinkronkan.'
+                                    : 'Shift ditutup di perangkat dan menunggu sinkronisasi.',
                               ),
                               backgroundColor: AppColors.success,
                             ),
@@ -880,6 +874,8 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   }) async {
     final cashierId = _getCashierId();
     final cashierName = _getCashierName();
+    final auth = context.read<AuthProvider>();
+    final syncService = context.read<PosSyncService>();
     final productProvider = context.read<ProductProvider>();
     final orderProvider = context.read<OrderProvider>();
 
@@ -889,19 +885,12 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     }
 
     try {
-      final rpcRes = await supabase.rpc(
-        'create_pos_order',
-        params: {
-          'p_cashier_id': cashierId,
-          'p_total_price': subtotal,
-          'p_payment_method': paymentMethod,
-          'p_items': itemsPayload,
-        },
+      final order = await PosLocalDatabaseHelper.instance.createLocalPosOrder(
+        cashierId: cashierId,
+        shiftId: _currentShift!['id'].toString(),
+        paymentMethod: paymentMethod,
+        items: itemsPayload,
       );
-      if (rpcRes is! Map) {
-        throw const FormatException('Respons create_pos_order tidak valid.');
-      }
-      final order = Map<String, dynamic>.from(rpcRes);
       final orderId = order['id']?.toString();
       final totalPrice = (order['total_price'] as num?)?.toDouble();
       final rawItems = order['items'];
@@ -909,7 +898,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
           orderId.isEmpty ||
           totalPrice == null ||
           rawItems is! List) {
-        throw const FormatException('Respons create_pos_order tidak lengkap.');
+        throw const FormatException('Data transaksi lokal tidak lengkap.');
       }
       final receiptItems = rawItems.map((rawItem) {
         final item = Map<String, dynamic>.from(rawItem as Map);
@@ -923,12 +912,17 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         };
       }).toList();
 
+      if (auth.canWriteRemoteData) {
+        syncService.scheduleSync();
+      }
       if (dialogCtx.mounted) Navigator.pop(dialogCtx);
       if (mounted) {
         setState(() => _cart.clear());
         await _loadCashierData();
-        productProvider.reloadData();
-        orderProvider.reloadOrders();
+        if (auth.canWriteRemoteData) {
+          productProvider.reloadData();
+          orderProvider.reloadOrders();
+        }
         _showReceiptDialog(
           orderId: orderId,
           cashierName: cashierName,
@@ -941,7 +935,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
       }
       return true;
     } catch (e) {
-      debugPrint('create_pos_order failed: $e');
+      debugPrint('Local POS transaction failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1209,10 +1203,22 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 _buildOrderManagementTab(),
                 _buildStockTab(),
                 _buildProductManagementTab(),
-                const ReviewManagementTab(),
+                _buildReviewsTab(),
               ],
             ),
     );
+  }
+
+  Widget _buildReviewsTab() {
+    if (context.read<AuthProvider>().isOfflineSession) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Manajemen ulasan memerlukan koneksi internet.'),
+        ),
+      );
+    }
+    return const ReviewManagementTab();
   }
 
   // ============================================================
@@ -1237,6 +1243,16 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
     return Column(
       children: [
+        if (context.read<AuthProvider>().isOfflineSession)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: AppColors.warning.withValues(alpha: 0.15),
+            child: const Text(
+              'Mode offline: transaksi disimpan di perangkat dan menunggu sinkronisasi.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
         // Shift alert if closed
         if (!isOpen)
           Container(
@@ -1631,7 +1647,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     for (final id in used) {
       result.add(MapEntry(id, labels[id] ?? id));
     }
-    result.sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+    result.sort(
+      (a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()),
+    );
     return result;
   }
 
@@ -1923,6 +1941,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                         : '-';
                     final total = _parseDouble(order['total_price']);
                     final method = order['payment_method'] ?? 'Cash';
+                    final syncStatus = order['sync_status']?.toString();
+                    final syncError = order['last_sync_error']?.toString();
+                    final isSynced =
+                        syncStatus == null || syncStatus == 'synced';
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
@@ -1946,11 +1968,22 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                             fontSize: 13,
                           ),
                         ),
-                        subtitle: Text(
-                          'Waktu: $date\nMetode: $method',
-                          style: AppTextStyles.caption,
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Waktu: $date\nMetode: $method'),
+                            if (syncError != null && syncError.isNotEmpty)
+                              Text(
+                                'Sinkronisasi tertunda: $syncError',
+                                style: TextStyle(
+                                  color: AppColors.error,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
                         ),
-                        isThreeLine: true,
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -1970,17 +2003,19 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(
-                                  alpha: 0.15,
-                                ),
+                                color: isSynced
+                                    ? AppColors.success.withValues(alpha: 0.15)
+                                    : AppColors.warning.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'SELESAI',
+                                isSynced ? 'TERSINKRON' : 'MENUNGGU SYNC',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.success,
+                                  color: isSynced
+                                      ? AppColors.success
+                                      : AppColors.warning,
                                 ),
                               ),
                             ),
@@ -1999,6 +2034,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   // TAB: PESANAN (update status + input resi)
   // ============================================================
   Future<void> _showEditOrderDialog(Map<String, dynamic> order) async {
+    if (!context.read<AuthProvider>().canWriteRemoteData) return;
     final result = await showOrderUpdateDialog(context, order);
     if (!mounted || result == null || result.isEmpty) return;
 
@@ -2218,7 +2254,10 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                           trailing: IconButton(
                             icon: const Icon(Icons.edit),
                             tooltip: 'Update pesanan',
-                            onPressed: () => _showEditOrderDialog(order),
+                            onPressed:
+                                context.read<AuthProvider>().isOfflineSession
+                                ? null
+                                : () => _showEditOrderDialog(order),
                           ),
                         ),
                       );
@@ -2325,6 +2364,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   }
 
   Future<void> _editProduct({ProductModel? product}) async {
+    if (!context.read<AuthProvider>().canWriteRemoteData) return;
     final editedProduct = await showDialog<ProductModel>(
       context: context,
       builder: (_) => ProductEditorDialog(product: product),
@@ -2375,6 +2415,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   }
 
   Future<void> _deleteProduct(ProductModel product) async {
+    if (!context.read<AuthProvider>().canWriteRemoteData) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2429,7 +2470,9 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => _editProduct(),
+              onPressed: context.read<AuthProvider>().isOfflineSession
+                  ? null
+                  : () => _editProduct(),
               icon: const Icon(Icons.add),
               label: const Text('Tambah Produk + Foto'),
             ),
@@ -2468,12 +2511,18 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                           children: [
                             IconButton(
                               tooltip: 'Edit produk/foto',
-                              onPressed: () => _editProduct(product: product),
+                              onPressed:
+                                  context.read<AuthProvider>().isOfflineSession
+                                  ? null
+                                  : () => _editProduct(product: product),
                               icon: const Icon(Icons.edit_outlined),
                             ),
                             IconButton(
                               tooltip: 'Hapus produk',
-                              onPressed: () => _deleteProduct(product),
+                              onPressed:
+                                  context.read<AuthProvider>().isOfflineSession
+                                  ? null
+                                  : () => _deleteProduct(product),
                               icon: Icon(
                                 Icons.delete_outline,
                                 color: AppColors.error,

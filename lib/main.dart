@@ -11,6 +11,7 @@ import 'package:doctor_computer/providers/blockchain_provider.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
+import 'package:doctor_computer/services/pos_sync_service.dart';
 import 'package:doctor_computer/core/config/env_config.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/app.dart';
@@ -31,6 +32,8 @@ Future<void> main() async {
   // Restore authenticated user session before UI build
   final authProvider = AuthProvider();
   await authProvider.restoreSession();
+  final posSyncService = PosSyncService();
+  await posSyncService.start(authProvider);
 
   // Restore the last selected theme (light/dark) before UI build
   final themeProvider = ThemeProvider();
@@ -40,6 +43,7 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
+        Provider<PosSyncService>.value(value: posSyncService),
         ChangeNotifierProxyProvider<AuthProvider, CartProvider>(
           create: (_) {
             final cp = CartProvider();
@@ -57,7 +61,9 @@ Future<void> main() async {
             return cp;
           },
         ),
-        ChangeNotifierProvider(create: (_) => ProductProvider()),
+        ChangeNotifierProvider(
+          create: (_) => ProductProvider(syncService: posSyncService),
+        ),
         ChangeNotifierProvider(create: (_) => PcBuilderProvider()),
         ChangeNotifierProvider(create: (_) => WishlistProvider()),
         ChangeNotifierProvider.value(value: themeProvider),

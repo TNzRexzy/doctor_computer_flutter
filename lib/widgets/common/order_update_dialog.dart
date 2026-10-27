@@ -4,6 +4,9 @@ import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
+import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/services/pos_local_database_helper.dart';
+import 'package:doctor_computer/services/pos_sync_service.dart';
 
 /// Quick-fill suggestions for the courier field.
 const List<String> _kCourierSuggestions = [
@@ -81,14 +84,16 @@ class _OrderUpdateDialogState extends State<_OrderUpdateDialog> {
 
   Future<void> _submit() async {
     final provider = context.read<OrderProvider>();
+    final syncService = context.read<PosSyncService>();
+    final isOfflineSession = context.read<AuthProvider>().isOfflineSession;
     final nav = Navigator.of(context);
+    final hasNetwork = await syncService.hasNetworkConnection();
+    final queueOffline = isOfflineSession || !hasNetwork;
     final resi = _resiCtrl.text.trim();
     final courier = _courierCtrl.text.trim();
 
     if (!_isPos && _selectedStatus == 'shipped' && resi.isEmpty) {
-      setState(
-        () => _resiError = 'Nomor resi wajib diisi saat status SHIPPED',
-      );
+      setState(() => _resiError = 'Nomor resi wajib diisi saat status SHIPPED');
       return;
     }
 
@@ -102,17 +107,25 @@ class _OrderUpdateDialogState extends State<_OrderUpdateDialog> {
     if (!_isPos &&
         resi.isNotEmpty &&
         (resi != _savedResi || courier != _savedCourier)) {
-      final ok = await provider.updateOrderTracking(
-        _orderId,
-        courier: courier,
-        trackingNumber: resi,
-      );
+      final ok = queueOffline
+          ? await _queueOrderChange(
+              operation: 'order_tracking',
+              payload: {
+                ...widget.order,
+                'courier': courier,
+                'tracking_number': resi,
+              },
+            )
+          : await provider.updateOrderTracking(
+              _orderId,
+              courier: courier,
+              trackingNumber: resi,
+            );
       if (!mounted) return;
       if (!ok) {
         setState(() {
           _isSubmitting = false;
-          _submitError =
-              provider.errorMessage ?? 'Nomor resi gagal disimpan.';
+          _submitError = provider.errorMessage ?? 'Nomor resi gagal disimpan.';
         });
         return;
       }
@@ -133,7 +146,12 @@ class _OrderUpdateDialogState extends State<_OrderUpdateDialog> {
           break;
         }
       }
-      final ok = await provider.updateOrderStatus(_orderId, newStatus);
+      final ok = queueOffline
+          ? await _queueOrderChange(
+              operation: 'order_status',
+              payload: {...widget.order, ..._result, 'status': _selectedStatus},
+            )
+          : await provider.updateOrderStatus(_orderId, newStatus);
       if (!mounted) return;
       if (!ok) {
         setState(() {
@@ -148,6 +166,29 @@ class _OrderUpdateDialogState extends State<_OrderUpdateDialog> {
     }
 
     nav.pop(_result);
+  }
+
+  Future<bool> _queueOrderChange({
+    required String operation,
+    required Map<String, dynamic> payload,
+  }) async {
+    final syncService = context.read<PosSyncService>();
+    try {
+      await PosLocalDatabaseHelper.instance.queueAdminChange(
+        entity: 'orders',
+        operation: operation,
+        recordId: _orderId,
+        payload: payload,
+      );
+      syncService.scheduleSync();
+      return true;
+    } catch (error) {
+      setState(() {
+        _isSubmitting = false;
+        _submitError = 'Perubahan pesanan gagal disimpan lokal: $error';
+      });
+      return false;
+    }
   }
 
   @override

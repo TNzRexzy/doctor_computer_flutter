@@ -18,6 +18,7 @@ Doctor Computer utilizes a decoupled, reactive architecture adhering to clean Fl
 * **Data Layer & Remote Persistence:** Supabase PostgreSQL with PostgREST API client, database triggers, Row-Level Security (RLS) enforcement, and local caching for non-authoritative display data.
 * **Omnichannel POS & Shift Engine:** Authenticated PostgreSQL RPCs calculate prices, lock/decrement inventory, persist order items, and reconcile cashier shifts atomically.
 * **Loyalty Points:** Customer points, tiers, and minigame EXP are database-owned. The server awards purchase points once when an online order is marked delivered and handles minigame rewards, per-game cooldowns, and daily caps through authenticated Supabase RPCs.
+* **Offline-First Admin/Cashier POS:** Admin/cashier offline login uses a salted PBKDF2 verifier in secure storage with a 14-day validity window. Catalog and admin dashboard snapshots are cached in SQLite; POS shifts/orders and supported admin edits are stored locally until connectivity and an authenticated staff session are available. Customer shopping and checkout remain online-only.
 * **Geospatial & Mapping Engine:** OpenStreetMap tile integration via `flutter_map` with real-time reverse geocoding through Nominatim HTTP endpoints.
 * **Artificial Intelligence Engine:** Doctor AI (floating round chat) and AI Smart Search call the Gemini API with automatic fallback between Flash models when a quota limit is hit; the Gemini API key is stored in the Supabase table `app_config` (`key = 'GEMINI_API_KEY'`, see `supabase/migrations/20261030_app_config.sql`) and is not hardcoded in the app (the `gemini-chat` Edge Function remains available as server-side alternative).
 
@@ -42,13 +43,13 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
   * Interactive POS cart drawer with quantity increments and inventory ceiling validation.
   * Payment modal supporting **Cash (Tunai)**, **QRIS**, and **Debit BCA**.
   * Quick-cash tender shortcuts (`Uang Pas`, `50rb`, `100rb`, `200rb`, `500rb`) with real-time change calculation.
-  * Integration with PostgreSQL RPC `create_pos_order` to atomically create POS orders and decrement authoritative stock; failures do not produce receipts.
+  * SQLite-first checkout: receipts are issued immediately after the local order and items commit atomically; online synchronization later validates current server prices and stock and decrements authoritative inventory.
   * Digital thermal receipt modal with transaction metadata, cashier ID, itemized totals, and simulated POS printer dispatch.
 * **Cashier Shift Management & Reconciliation:**
   * Open shift workflow with drawer starting cash (`opening_cash`) and operational notes.
   * Active shift status indicator (OPEN / CLOSED pill) in the dashboard header.
   * Close shift modal with expected drawer cash computation (`opening_cash + total_sales`), actual cash input, and automatic variance calculation (Pas, Lebih, Kurang).
-  * Shift operations persist only on the server; offline actions fail explicitly rather than creating a local-only shift.
+  * Shift operations persist locally first and synchronize when authenticated connectivity returns; closed shifts are not closed remotely until their pending orders have synchronized.
 * **Order Management Tab (`Pesanan`):** Cashiers can search all orders (order ID, status, or tracking number), filter by channel, and update the order status (`processing`, `shipped`, `delivered`, `cancelled`) with the same dialog used by admins, including courier and tracking number (resi) input.
 * **Store POS Order Log & Stock Checker:**
   * Filterable log of offline store transactions with search by transaction number.
@@ -60,6 +61,16 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 * The `blockchain_blocks` ledger is written by server-side functions; clients cannot directly award points or authorize discounts.
 * Membership includes three sensor-driven mini-games: tilt the phone to collect PC parts, rotate it using the gyroscope to calibrate a fan, and shake it to clean dust.
 * Successful game rewards are recorded in `blockchain_blocks` by the authenticated `award_minigame_exp` RPC. Each game has an independent three-day cooldown per user; the app reads availability from `get_minigame_cooldown`, while the server enforces the cooldown and existing daily EXP cap.
+
+### 2.1 Offline-First Admin/Cashier POS
+* Offline password login is restricted to Admin and Cashier accounts that have previously authenticated online on the same device. The device stores a salted PBKDF2-HMAC-SHA256 verifier (600,000 iterations) and minimal profile data in `flutter_secure_storage`; it never stores the password as part of this offline credential.
+* Offline credentials expire 14 days after the last successful online login. Offline sessions are explicitly marked with `AuthProvider.isOfflineSession`, clear any persisted Supabase session, and do not send writes to Supabase directly. Supported admin changes are queued in SQLite and synchronized only after an authenticated online staff session is restored. Web builds do not enable offline credential authentication.
+* `PosLocalDatabaseHelper` manages the versioned SQLite database `doctor_computer_pos.db` on Android/iOS/macOS and Windows/Linux. Web is not supported by this SQLite implementation.
+* The catalog cache is stored in `local_categories` and `local_products`; the Admin snapshot is stored in `local_admin_records` for users, vouchers, orders, flash sales, and shifts. Admin edits are persisted in `local_admin_outbox` and remain pending with their last sync error until the server confirms the authorized operation.
+* POS orders, order items, and cashier shifts are persisted locally and transactionally in `local_orders`, `local_order_items`, and `local_cashier_shifts`; status values are `pending_insert`, `pending_update`, or `synced`. Money values use integer minor units scaled by 100.
+* The cashier screen reads the cached catalog, shift, and local POS history. Checkout and shift open/close are committed to SQLite first, so local receipts do not wait for a server response. Stock reservations are maintained against pending orders during catalog refreshes.
+* `PosSyncService` listens for connectivity changes and requires an online authenticated staff session before syncing. It pulls catalog and Admin snapshots, pushes queued Admin changes through the existing RLS-protected tables/RPCs, then pushes shifts before POS orders and closes shifts only after their pending orders have synchronized. Migration `20261106_offline_pos_sync.sql` adds idempotent POS synchronization RPCs and local-to-remote ID mappings so retries do not duplicate sales. Failed writes remain pending with a recorded sync error.
+* Product, flash-sale, voucher, user-profile, and order-status/tracking changes can be queued offline and applied after reconnection. Product photos continue to use Supabase Storage, and staff accounts continue to use the trusted `provision-staff` Edge Function; these operations require an online connection. Passwords and image binaries are never stored in SQLite or the local queue. Customer shopping and checkout remain online-only.
 
 ### 3. Omnichannel Admin Dashboard & Staff Provisioning
 * **Omnichannel Order Filtering:** Added channel filters (`Semua`, `Online`, `POS Kasir`) with visual indicators on orders.
@@ -106,7 +117,7 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-015 | Cross-user account editing rejected by RLS | Restrictive RLS policies and trigger column guards | Resolved (Idempotent RLS policies and `guard_privileged_user_columns` relaxed for points/tier) |
 | BUG-016 | PostgREST single-object coercion failure during login sync | Single-object query mode on duplicate records | Resolved (Migrated to `.limit(1)` queries across all session loaders) |
 | BUG-017 | Client-controlled blockchain EXP | Client blocks were accepted as the source of member points | Resolved for database balances (client writes revoked; points awarded by delivered-order RPC; minigame rewards disabled pending server verification) |
-| BUG-018 | Cashier shift open error 42501 (RLS violation) | `cashier_shifts` table only defined SELECT policy, lacking INSERT/UPDATE | Resolved (Authenticated shift RPCs; local-only shift fallback removed) |
+| BUG-018 | Cashier shift open error 42501 (RLS violation) | `cashier_shifts` table only defined SELECT policy, lacking INSERT/UPDATE | Resolved (Authenticated shift RPCs behind local-first, idempotent POS synchronization) |
 | BUG-019 | Cashier could not update order status or enter a tracking number | Cashier dashboard had no order management tab; no RPC to save the resi | Resolved (New `Pesanan` tab, shared update dialog, and `update_order_tracking` RPC) |
 | BUG-020 | Order tracking showed an auto-generated resi that could be copied | `OrderModel` defaulted `trackingNumber` to a hard-coded demo value | Resolved (Default removed; shows "Belum tersedia" with copy disabled until staff enter a resi) |
 | BUG-021 | POS checkout failed with PGRST203 (`Could not choose the best candidate function`) | Two overloads of `create_pos_order` existed (`varchar` and `text` parameters) | Resolved (Old overload dropped by `20261028_drop_old_create_pos_order.sql`) |
@@ -416,6 +427,7 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 14. `supabase/migrations/20261101_product_reviews.sql` (per-item reviews with photo/video, rating trigger, `submit_product_review` RPC, `review-media` bucket).
 15. `supabase/migrations/20261104_sensor_member_minigame_titles.sql` (updates membership game names recorded in the EXP ledger).
 16. `supabase/migrations/20261105_member_minigame_three_day_cooldown.sql` (enforces a per-user, per-game three-day cooldown and adds the `get_minigame_cooldown` RPC).
+17. `supabase/migrations/20261106_offline_pos_sync.sql` (adds idempotent shift/order sync RPCs and local-to-remote transaction mappings).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 

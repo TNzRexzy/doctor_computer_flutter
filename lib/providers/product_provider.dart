@@ -10,9 +10,17 @@ import 'package:doctor_computer/data/mock/mock_products.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
 import 'package:doctor_computer/services/pc_part_sync_service.dart';
+import 'package:doctor_computer/services/pos_local_database_helper.dart';
+import 'package:doctor_computer/services/pos_sync_service.dart';
 
 class ProductProvider extends ChangeNotifier {
+  ProductProvider({this.syncService}) {
+    _loadData();
+    _subscribeFlashSaleRealtime();
+  }
+
   final supabase = Supabase.instance.client;
+  final PosSyncService? syncService;
   static const String _prefCustomProductsKey = 'admin_custom_products';
   static const String _prefProductOverridesKey = 'admin_product_overrides';
   static const String _prefDeletedProductsKey = 'admin_deleted_products';
@@ -44,11 +52,6 @@ class ProductProvider extends ChangeNotifier {
   bool _isExpiringFlashSale = false;
 
   bool _isLoading = false;
-
-  ProductProvider() {
-    _loadData();
-    _subscribeFlashSaleRealtime();
-  }
 
   @override
   void dispose() {
@@ -337,6 +340,16 @@ class ProductProvider extends ChangeNotifier {
 
   /// Adds a catalog product in Supabase before updating the local display cache.
   Future<bool> addProduct(ProductModel product) async {
+    if (await _shouldSaveProductLocally()) {
+      await PosLocalDatabaseHelper.instance.saveLocalProduct(product.toMap());
+      _updateLocalProduct(product);
+      if (product.isOnSale) {
+        await _syncFlashSaleRow(product, true);
+      }
+      syncService?.scheduleSync();
+      return true;
+    }
+
     // Komponen PC (CPU, GPU, SSD/NVMe, cooler, case, dll) otomatis dibuatkan
     // baris di `pc_parts` dengan ID sesuai jenisnya (cpu-001, gpu-001, ...).
     String? categoryName;
@@ -365,6 +378,9 @@ class ProductProvider extends ChangeNotifier {
       rethrow;
     }
     _verifySavedImages(savedProduct, product);
+    if (product.isOnSale) {
+      await _syncFlashSaleRow(product, true);
+    }
 
     _allProducts.removeWhere((existing) => existing.id == product.id);
     _allProducts.insert(0, product);
@@ -389,6 +405,13 @@ class ProductProvider extends ChangeNotifier {
 
   /// Updates an existing product details, price, stock, or flash sale status.
   Future<bool> updateProduct(ProductModel product) async {
+    if (await _shouldSaveProductLocally()) {
+      await PosLocalDatabaseHelper.instance.saveLocalProduct(product.toMap());
+      _updateLocalProduct(product);
+      syncService?.scheduleSync();
+      return true;
+    }
+
     final updatedRows = await supabase
         .from('products')
         .update(product.toMap())
@@ -453,7 +476,19 @@ class ProductProvider extends ChangeNotifier {
     double? salePrice,
     double? originalPrice,
   }) async {
-    final prod = getProductById(productId);
+    final saveLocally = await _shouldSaveProductLocally();
+    ProductModel? prod;
+    if (saveLocally) {
+      final cachedProducts = await PosLocalDatabaseHelper.instance
+          .readCatalogProducts();
+      for (final product in cachedProducts) {
+        if (product['id']?.toString() == productId) {
+          prod = ProductModel.fromMap(product);
+          break;
+        }
+      }
+    }
+    prod ??= getProductById(productId);
     if (prod == null) return false;
 
     double newPrice = prod.price;
@@ -491,6 +526,13 @@ class ProductProvider extends ChangeNotifier {
 
   /// Deletes a product from Supabase before removing it from local caches.
   Future<bool> deleteProduct(String productId) async {
+    if (await _shouldSaveProductLocally()) {
+      await PosLocalDatabaseHelper.instance.deleteLocalProduct(productId);
+      _allProducts.removeWhere((product) => product.id == productId);
+      notifyListeners();
+      syncService?.scheduleSync();
+      return true;
+    }
     await supabase.from('products').delete().eq('id', productId);
     _allProducts.removeWhere((p) => p.id == productId);
     notifyListeners();
@@ -519,6 +561,18 @@ class ProductProvider extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  void _updateLocalProduct(ProductModel product) {
+    _allProducts.removeWhere((existing) => existing.id == product.id);
+    _allProducts.insert(0, product);
+    notifyListeners();
+  }
+
+  Future<bool> _shouldSaveProductLocally() async {
+    final service = syncService;
+    return supabase.auth.currentUser == null ||
+        (service != null && !await service.hasNetworkConnection());
   }
 
   // ============================================================
@@ -553,6 +607,25 @@ class ProductProvider extends ChangeNotifier {
       _scheduleFlashSaleExpiry();
     } catch (e) {
       debugPrint('Error loading flash sale config from Supabase: $e');
+      try {
+        final cachedRows = await PosLocalDatabaseHelper.instance
+            .readAdminRecords('flash_sales');
+        DateTime? latestEnd;
+        var anyActive = false;
+        for (final row in cachedRows) {
+          final end = DateTime.tryParse(row['ends_at']?.toString() ?? '');
+          if (end != null && (latestEnd == null || end.isAfter(latestEnd))) {
+            latestEnd = end;
+          }
+          anyActive = anyActive || row['is_active'] == true;
+        }
+        _flashSaleEndTime = latestEnd?.toLocal() ?? DateTime.now();
+        _isFlashSaleActive = latestEnd != null && anyActive;
+        notifyListeners();
+        _scheduleFlashSaleExpiry();
+      } catch (cacheError) {
+        debugPrint('Error loading cached flash sale config: $cacheError');
+      }
     }
   }
 
@@ -675,7 +748,10 @@ class ProductProvider extends ChangeNotifier {
           }
         }
         if (changed) {
-          await prefs.setString(_prefProductOverridesKey, jsonEncode(overrides));
+          await prefs.setString(
+            _prefProductOverridesKey,
+            jsonEncode(overrides),
+          );
         }
       }
 
@@ -722,6 +798,42 @@ class ProductProvider extends ChangeNotifier {
 
   /// Creates / removes the flash_sales row of one product.
   Future<void> _syncFlashSaleRow(ProductModel product, bool isOnSale) async {
+    final service = syncService;
+    if (supabase.auth.currentUser == null ||
+        (service != null && !await service.hasNetworkConnection())) {
+      if (isOnSale) {
+        final now = DateTime.now();
+        final timerRunning = _flashSaleEndTime.isAfter(now);
+        await PosLocalDatabaseHelper.instance.queueAdminChange(
+          entity: 'flash_sales',
+          operation: 'upsert',
+          recordId: product.id,
+          payload: {
+            'product_id': product.id,
+            'original_price': product.originalPrice ?? product.price,
+            'flash_price': product.price,
+            'flash_stock': product.stock,
+            'ends_at':
+                (timerRunning
+                        ? _flashSaleEndTime
+                        : now.add(_defaultNewFlashSaleDuration))
+                    .toUtc()
+                    .toIso8601String(),
+            'is_active': timerRunning ? _isFlashSaleActive : true,
+          },
+        );
+      } else {
+        await PosLocalDatabaseHelper.instance.queueAdminChange(
+          entity: 'flash_sales',
+          operation: 'delete',
+          recordId: product.id,
+          payload: {'product_id': product.id},
+        );
+      }
+      service?.scheduleSync();
+      return;
+    }
+
     try {
       if (isOnSale) {
         final now = DateTime.now();
@@ -761,6 +873,58 @@ class ProductProvider extends ChangeNotifier {
   }) async {
     final previousEnd = _flashSaleEndTime;
     final previousActive = _isFlashSaleActive;
+    final service = syncService;
+
+    if (supabase.auth.currentUser == null ||
+        (service != null && !await service.hasNetworkConnection())) {
+      final cachedRows = await PosLocalDatabaseHelper.instance.readAdminRecords(
+        'flash_sales',
+      );
+      final saleProducts = _allProducts.where((product) => product.isOnSale);
+      if (cachedRows.isEmpty && saleProducts.isEmpty) return false;
+      _flashSaleEndTime = endTime;
+      _isFlashSaleActive = active;
+      notifyListeners();
+      if (cachedRows.isNotEmpty) {
+        for (final row in cachedRows) {
+          final productId = row['product_id']?.toString();
+          if (productId == null || productId.isEmpty) continue;
+          final payload = Map<String, dynamic>.from(row)
+            ..remove('sync_status')
+            ..remove('last_sync_error')
+            ..addAll({
+              'ends_at': endTime.toUtc().toIso8601String(),
+              'is_active': active,
+            });
+          await PosLocalDatabaseHelper.instance.queueAdminChange(
+            entity: 'flash_sales',
+            operation: 'upsert',
+            recordId: productId,
+            payload: payload,
+          );
+        }
+      } else {
+        for (final product in saleProducts) {
+          await PosLocalDatabaseHelper.instance.queueAdminChange(
+            entity: 'flash_sales',
+            operation: 'upsert',
+            recordId: product.id,
+            payload: {
+              'product_id': product.id,
+              'original_price': product.originalPrice ?? product.price,
+              'flash_price': product.price,
+              'flash_stock': product.stock,
+              'ends_at': endTime.toUtc().toIso8601String(),
+              'is_active': active,
+            },
+          );
+        }
+      }
+      service?.scheduleSync();
+      _scheduleFlashSaleExpiry();
+      return true;
+    }
+
     _flashSaleEndTime = endTime;
     _isFlashSaleActive = active;
     notifyListeners();
@@ -772,23 +936,25 @@ class ProductProvider extends ChangeNotifier {
 
       // Make sure every product on sale has a row (covers legacy data).
       if (saleProducts.isNotEmpty) {
-        await supabase.from('flash_sales').upsert(
-          saleProducts
-              .map(
-                (p) => {
-                  'product_id': p.id,
-                  'original_price': p.originalPrice ?? p.price,
-                  'flash_price': p.price,
-                  'flash_stock': p.stock,
-                  'ends_at': endIso,
-                  'is_active': active,
-                  'created_by': supabase.auth.currentUser?.id,
-                },
-              )
-              .toList(),
-          onConflict: 'product_id',
-          ignoreDuplicates: true,
-        );
+        await supabase
+            .from('flash_sales')
+            .upsert(
+              saleProducts
+                  .map(
+                    (p) => {
+                      'product_id': p.id,
+                      'original_price': p.originalPrice ?? p.price,
+                      'flash_price': p.price,
+                      'flash_stock': p.stock,
+                      'ends_at': endIso,
+                      'is_active': active,
+                      'created_by': supabase.auth.currentUser?.id,
+                    },
+                  )
+                  .toList(),
+              onConflict: 'product_id',
+              ignoreDuplicates: true,
+            );
       }
 
       final values = {
@@ -848,23 +1014,38 @@ class ProductProvider extends ChangeNotifier {
     MapEntry(['headset', 'headphone', 'earphone', 'audio'], Icons.headset),
     MapEntry(['cpu', 'processor', 'prosesor'], Icons.memory),
     MapEntry([
-      'gpu', 'vga', 'graphics', 'graphic', 'videocard', 'videogame',
+      'gpu',
+      'vga',
+      'graphics',
+      'graphic',
+      'videocard',
+      'videogame',
     ], Icons.videogame_asset),
     MapEntry([
-      'motherboard', 'mainboard', 'mobo', 'board',
+      'motherboard',
+      'mainboard',
+      'mobo',
+      'board',
     ], Icons.developer_board),
     MapEntry(['ram', 'dimm', 'ddr4', 'ddr5', 'sd'], Icons.sd_card),
     MapEntry(['ssd', 'nvme'], Icons.sd_storage),
-    MapEntry([
-      'storage', 'hdd', 'harddisk', 'hard', 'disk',
-    ], Icons.storage),
+    MapEntry(['storage', 'hdd', 'harddisk', 'hard', 'disk'], Icons.storage),
     MapEntry(['psu', 'power', 'supply', 'powersupply'], Icons.power),
     MapEntry(['case', 'casing', 'chassis', 'inventory'], Icons.inventory_2),
     MapEntry([
-      'cooler', 'cooling', 'fan', 'heatsink', 'radiator', 'ac',
+      'cooler',
+      'cooling',
+      'fan',
+      'heatsink',
+      'radiator',
+      'ac',
     ], Icons.ac_unit),
     MapEntry([
-      'router', 'network', 'networking', 'jaringan', 'wifi',
+      'router',
+      'network',
+      'networking',
+      'jaringan',
+      'wifi',
     ], Icons.router),
     MapEntry(['printer', 'print'], Icons.print),
     MapEntry(['webcam', 'camera', 'kamera'], Icons.videocam),
@@ -873,11 +1054,13 @@ class ProductProvider extends ChangeNotifier {
     MapEntry(['gaming', 'game', 'games'], Icons.sports_esports),
     MapEntry(['ups', 'battery'], Icons.battery_charging_full),
     MapEntry([
-      'accessory', 'accessories', 'aksesoris', 'cable', 'kabel',
+      'accessory',
+      'accessories',
+      'aksesoris',
+      'cable',
+      'kabel',
     ], Icons.extension),
-    MapEntry([
-      'peripheral', 'peripherals', 'periph',
-    ], Icons.devices_other),
+    MapEntry(['peripheral', 'peripherals', 'periph'], Icons.devices_other),
     // Terakhir: nama ikon Material "memory" (chip) pada kolom icon.
     MapEntry(['memory', 'chip'], Icons.memory),
   ];

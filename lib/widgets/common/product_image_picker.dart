@@ -7,6 +7,7 @@ class ProductImagePicker extends StatefulWidget {
   final String? initialImageUrl;
   final ValueChanged<String?> onChanged;
   final ValueChanged<bool>? onUploadingChanged;
+  final bool enabled;
 
   const ProductImagePicker({
     super.key,
@@ -14,6 +15,7 @@ class ProductImagePicker extends StatefulWidget {
     required this.onChanged,
     this.initialImageUrl,
     this.onUploadingChanged,
+    this.enabled = true,
   });
 
   @override
@@ -63,12 +65,15 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Align(
+        Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Foto Produk (JPG, JPEG, PNG, WEBP; maks. 10 MB). '
-            'Pilih file untuk mengunggah ke Storage, lalu tekan Simpan '
-            'agar URL foto terhubung ke produk.',
+            widget.enabled
+                ? 'Foto Produk (JPG, JPEG, PNG, WEBP; maks. 10 MB). '
+                      'Pilih file untuk mengunggah ke Storage, lalu tekan Simpan '
+                      'agar URL foto terhubung ke produk.'
+                : 'Unggah foto memerlukan koneksi. Data produk tanpa perubahan '
+                      'gambar tetap dapat disimpan offline.',
           ),
         ),
         const SizedBox(height: 8),
@@ -98,7 +103,9 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
                 runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _isUploading ? null : _pickImage,
+                    onPressed: _isUploading || !widget.enabled
+                        ? null
+                        : _pickImage,
                     icon: _isUploading
                         ? const SizedBox(
                             width: 16,
@@ -110,7 +117,7 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
                   ),
                   if (_imageUrl != null)
                     TextButton.icon(
-                      onPressed: _isUploading
+                      onPressed: _isUploading || !widget.enabled
                           ? null
                           : () {
                               setState(() => _imageUrl = null);

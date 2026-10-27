@@ -16,6 +16,8 @@ import 'package:doctor_computer/widgets/common/product_image_picker.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
+import 'package:doctor_computer/services/pos_local_database_helper.dart';
+import 'package:doctor_computer/services/pos_sync_service.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -102,16 +104,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final user = context.read<AuthProvider>().currentUser;
+      final auth = context.read<AuthProvider>();
+      final user = auth.currentUser;
       final isAdmin = user?.role == UserRole.admin;
+      final database = PosLocalDatabaseHelper.instance;
+
+      if (auth.isOfflineSession) {
+        _products = await database.readCatalogProducts();
+        final offlineOrders = await database.readAdminRecords('orders');
+        for (final local in await database.readLocalOrders()) {
+          offlineOrders.add({
+            ...local,
+            'id': local['remote_id']?.toString() ?? local['id'],
+          });
+        }
+        _orders = {
+          for (final order in offlineOrders)
+            if (order['id'] != null) order['id'].toString(): order,
+        }.values.toList();
+        _shifts = isAdmin
+            ? await database.readAdminRecords('cashier_shifts')
+            : await database.readShiftHistory(user?.id ?? '');
+        _users = isAdmin
+            ? await database.readAdminRecords('users')
+            : <Map<String, dynamic>>[];
+        _vouchers = isAdmin
+            ? await database.readAdminRecords('vouchers')
+            : <Map<String, dynamic>>[];
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      try {
+        await context.read<PosSyncService>().syncNow();
+      } catch (error) {
+        debugPrint('Admin background sync notice: $error');
+      }
 
       // Products - merge Supabase + ProductProvider (isolated so one failure doesn't abort others)
       try {
         final productsRes = await supabase.from('products').select();
+        final categoriesRes = await supabase.from('categories').select();
+        final remoteProducts = productsRes
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+        await database.upsertCatalog(
+          categories: categoriesRes
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(),
+          products: remoteProducts,
+        );
         final Map<String, Map<String, dynamic>> productMap = {};
-        for (final p in productsRes) {
+        for (final p in remoteProducts) {
           final id = p['id']?.toString() ?? '';
           if (id.isNotEmpty) productMap[id] = Map<String, dynamic>.from(p);
+        }
+        for (final local in await database.readCatalogProducts()) {
+          if (local['sync_status'] != 'synced') {
+            productMap[local['id'].toString()] = local;
+          }
         }
         if (mounted) {
           final providerProducts = context.read<ProductProvider>().allProducts;
@@ -124,10 +175,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         _products = productMap.values.toList();
       } catch (e) {
         debugPrint('Notice loading products: $e');
-        if (mounted) {
-          final providerProducts = context.read<ProductProvider>().allProducts;
-          _products = providerProducts.map((p) => p.toMap()).toList();
-        }
+        _products = await database.readCatalogProducts();
       }
 
       // Orders - merge Supabase + OrderProvider (try order_date, fallback created_at)
@@ -136,12 +184,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         try {
           ordersRes = await supabase
               .from('orders')
-              .select()
+              .select(
+                'id, user_id, channel, status, total_price, order_date, '
+                'created_at, payment_method, cashier_id, tracking_number, courier',
+              )
               .order('order_date', ascending: false);
         } catch (_) {
           ordersRes = await supabase
               .from('orders')
-              .select()
+              .select(
+                'id, user_id, channel, status, total_price, created_at, '
+                'payment_method, cashier_id, tracking_number, courier',
+              )
               .order('created_at', ascending: false);
         }
         final Map<String, Map<String, dynamic>> orderMap = {};
@@ -149,16 +203,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           final id = o['id']?.toString() ?? '';
           if (id.isNotEmpty) orderMap[id] = Map<String, dynamic>.from(o);
         }
+        await database.upsertAdminRecords(
+          entity: 'orders',
+          records: orderMap.values.toList(),
+        );
+        for (final local in await database.readAdminRecords('orders')) {
+          if (local['sync_status'] != 'synced') {
+            orderMap[local['id'].toString()] = local;
+          }
+        }
+        for (final local in await database.readLocalOrders()) {
+          final id = local['remote_id']?.toString() ?? local['id']?.toString();
+          if (id != null && id.isNotEmpty) {
+            orderMap[id] = {...local, 'id': id};
+          }
+        }
         _orders = orderMap.values.toList();
       } catch (e) {
         debugPrint('Notice loading orders: $e');
-        _orders = [];
+        final cachedOrders = await database.readAdminRecords('orders');
+        for (final local in await database.readLocalOrders()) {
+          cachedOrders.add({
+            ...local,
+            'id': local['remote_id']?.toString() ?? local['id'],
+          });
+        }
+        _orders = {
+          for (final order in cachedOrders)
+            if (order['id'] != null) order['id'].toString(): order,
+        }.values.toList();
       }
 
       // Users - admin only
       if (isAdmin) {
-        final usersRes = await supabase.from('users').select();
-        _users = List<Map<String, dynamic>>.from(usersRes);
+        try {
+          final usersRes = await supabase
+              .from('users')
+              .select('id, email, full_name, points, role, membership_tier');
+          _users = List<Map<String, dynamic>>.from(usersRes);
+          await database.upsertAdminRecords(entity: 'users', records: _users);
+          _users = _mergePendingRecords(
+            _users,
+            await database.readAdminRecords('users'),
+          );
+        } catch (error) {
+          debugPrint('Notice loading users: $error');
+          _users = await database.readAdminRecords('users');
+        }
 
         try {
           final voucherRes = await supabase
@@ -166,9 +257,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               .select()
               .order('created_at', ascending: false);
           _vouchers = List<Map<String, dynamic>>.from(voucherRes);
+          await database.upsertAdminRecords(
+            entity: 'vouchers',
+            records: _vouchers,
+          );
+          _vouchers = _mergePendingRecords(
+            _vouchers,
+            await database.readAdminRecords('vouchers'),
+          );
         } catch (e) {
           debugPrint('Notice loading vouchers: $e');
-          _vouchers = [];
+          _vouchers = await database.readAdminRecords('vouchers');
         }
 
         // Cashier shifts - admin monitoring
@@ -179,8 +278,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               .order('opened_at', ascending: false)
               .limit(20);
           _shifts = List<Map<String, dynamic>>.from(shiftsRes);
+          await database.upsertAdminRecords(
+            entity: 'cashier_shifts',
+            records: _shifts,
+          );
         } catch (e) {
           debugPrint('Notice loading cashier shifts: $e');
+          _shifts = await database.readAdminRecords('cashier_shifts');
         }
       }
     } catch (e) {
@@ -189,15 +293,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (mounted) setState(() => _isLoading = false);
   }
 
+  List<Map<String, dynamic>> _mergePendingRecords(
+    List<Map<String, dynamic>> remote,
+    List<Map<String, dynamic>> cached,
+  ) {
+    final merged = {
+      for (final row in remote)
+        if (row['id'] != null) row['id'].toString(): row,
+    };
+    for (final row in cached) {
+      if (row['id'] != null && row['sync_status'] != 'synced') {
+        merged[row['id'].toString()] = row;
+      }
+    }
+    return merged.values.toList();
+  }
+
+  bool _denyOfflineWrite() {
+    if (!context.read<AuthProvider>().isOfflineSession) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Perubahan admin memerlukan koneksi dan sesi online.'),
+      ),
+    );
+    return true;
+  }
+
+  Future<bool> _shouldQueueOfflineChange() async {
+    final isOfflineSession = context.read<AuthProvider>().isOfflineSession;
+    final syncService = context.read<PosSyncService>();
+    return isOfflineSession || !await syncService.hasNetworkConnection();
+  }
+
+  bool get _isOfflineSession => context.read<AuthProvider>().isOfflineSession;
+
   @override
   Widget build(BuildContext context) {
     Theme.of(context);
-    final user = context.read<AuthProvider>().currentUser;
+    final auth = context.watch<AuthProvider>();
+    final isOfflineSession = auth.isOfflineSession;
+    final user = auth.currentUser;
     final isAdmin = user?.role == UserRole.admin;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isAdmin ? 'Dashboard Admin' : 'Dashboard Kasir'),
+        title: Text(
+          isOfflineSession
+              ? 'Dashboard Admin (Offline)'
+              : isAdmin
+              ? 'Dashboard Admin'
+              : 'Dashboard Kasir',
+        ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -515,9 +661,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final flashSaleEndTime = productProvider.flashSaleEndTime;
     final isFlashSaleActive = productProvider.isFlashSaleActive;
     final remaining = productProvider.flashSaleRemainingTime;
-    final flashProducts = productProvider.allProducts
-        .where((p) => p.isOnSale)
-        .toList();
+    final catalogProducts = _products.map(ProductModel.fromMap).toList();
+    final flashProducts = catalogProducts.where((p) => p.isOnSale).toList();
 
     return Scaffold(
       body: RefreshIndicator(
@@ -1022,19 +1167,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     await productProvider.toggleFlashSale(product.id, false);
 
-    try {
-      await supabase
-          .from('products')
-          .update({
-            'is_on_sale': false,
-            'price': product.originalPrice ?? product.price,
-            'original_price': null,
-          })
-          .eq('id', product.id);
-    } catch (e) {
-      debugPrint('Supabase revert flash sale notice: $e');
-    }
-
     messenger.showSnackBar(
       const SnackBar(content: Text('Produk dikeluarkan dari Flash Sale')),
     );
@@ -1051,6 +1183,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => _FlashSaleSheetWidget(
         initialProduct: initialProduct,
+        availableProducts: _products.map(ProductModel.fromMap).toList(),
         onSaved: () {
           if (mounted) _loadData();
         },
@@ -1287,7 +1420,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ============================================================
   // TAB 4: REVIEWS TAB
   // ============================================================
-  Widget _buildReviewsTab() => const ReviewManagementTab();
+  Widget _buildReviewsTab() {
+    if (context.read<AuthProvider>().isOfflineSession) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Manajemen ulasan memerlukan koneksi internet.'),
+        ),
+      );
+    }
+    return const ReviewManagementTab();
+  }
 
   Widget _buildVouchersTab() {
     return RefreshIndicator(
@@ -1438,11 +1581,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     Map<String, dynamic> voucher,
     bool active,
   ) async {
+    final syncService = context.read<PosSyncService>();
     try {
-      await supabase
-          .from('vouchers')
-          .update({'is_active': active})
-          .eq('id', voucher['id'].toString());
+      final updated = Map<String, dynamic>.from(voucher)
+        ..remove('sync_status')
+        ..remove('last_sync_error')
+        ..['is_active'] = active;
+      if (await _shouldQueueOfflineChange()) {
+        await PosLocalDatabaseHelper.instance.queueAdminChange(
+          entity: 'vouchers',
+          operation: 'upsert',
+          recordId: voucher['id'].toString(),
+          payload: updated,
+        );
+        syncService.scheduleSync();
+      } else {
+        await supabase
+            .from('vouchers')
+            .update({'is_active': active})
+            .eq('id', voucher['id'].toString());
+      }
       await _loadData();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1464,6 +1622,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _showVoucherDialog([Map<String, dynamic>? existing]) async {
+    final syncService = context.read<PosSyncService>();
     final formKey = GlobalKey<FormState>();
     final codeController = TextEditingController(
       text: existing?['code']?.toString() ?? '',
@@ -1728,8 +1887,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       .toIso8601String(),
                 };
                 try {
-                  final id = existing?['id']?.toString();
-                  if (id == null) {
+                  final id =
+                      existing?['id']?.toString() ??
+                      PosLocalDatabaseHelper.instance.generateLocalId();
+                  final queuedData =
+                      Map<String, dynamic>.from(
+                        existing ?? const <String, dynamic>{},
+                      )..removeWhere(
+                        (key, _) =>
+                            key == 'sync_status' || key == 'last_sync_error',
+                      );
+                  queuedData.addAll({
+                    ...data,
+                    'id': id,
+                    'is_active': existing?['is_active'] ?? true,
+                    'used_count': existing?['used_count'] ?? 0,
+                    'created_at':
+                        existing?['created_at'] ??
+                        DateTime.now().toUtc().toIso8601String(),
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  });
+                  if (await _shouldQueueOfflineChange()) {
+                    await PosLocalDatabaseHelper.instance.queueAdminChange(
+                      entity: 'vouchers',
+                      operation: 'upsert',
+                      recordId: id,
+                      payload: queuedData,
+                    );
+                    syncService.scheduleSync();
+                  } else if (existing == null) {
                     await supabase.from('vouchers').insert(data);
                   } else {
                     await supabase.from('vouchers').update(data).eq('id', id);
@@ -1825,7 +2011,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   foregroundColor: Colors.white,
                   visualDensity: VisualDensity.compact,
                 ),
-                onPressed: _showProvisionStaffDialog,
+                onPressed: _isOfflineSession ? null : _showProvisionStaffDialog,
               ),
             ],
           ),
@@ -1943,6 +2129,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   void _showProvisionStaffDialog() {
+    if (_denyOfflineWrite()) return;
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final passwordCtrl = TextEditingController();
@@ -2098,6 +2285,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   void _showEditUserDialog(Map<String, dynamic> userData) {
+    final syncService = context.read<PosSyncService>();
     final nameController = TextEditingController(
       text: userData['full_name']?.toString() ?? '',
     );
@@ -2214,25 +2402,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   return;
                 }
                 try {
-                  final result = await supabase.rpc(
-                    'admin_update_user',
-                    params: {
-                      'p_user_id': userId,
-                      'p_full_name': fullName,
-                      'p_points': points,
-                      'p_role': selectedRole,
-                      'p_membership_tier': selectedTier,
-                    },
-                  );
-                  if (result is! Map) {
-                    throw const FormatException(
-                      'Respons admin_update_user tidak valid.',
+                  final Map<String, dynamic> result;
+                  if (await _shouldQueueOfflineChange()) {
+                    result = {
+                      ...userData,
+                      'id': userId,
+                      'full_name': fullName,
+                      'points': points,
+                      'role': selectedRole,
+                      'membership_tier': selectedTier,
+                    };
+                    await PosLocalDatabaseHelper.instance.queueAdminChange(
+                      entity: 'users',
+                      operation: 'upsert',
+                      recordId: userId,
+                      payload: result,
                     );
+                    syncService.scheduleSync();
+                  } else {
+                    final response = await supabase.rpc(
+                      'admin_update_user',
+                      params: {
+                        'p_user_id': userId,
+                        'p_full_name': fullName,
+                        'p_points': points,
+                        'p_role': selectedRole,
+                        'p_membership_tier': selectedTier,
+                      },
+                    );
+                    if (response is! Map) {
+                      throw const FormatException(
+                        'Respons admin_update_user tidak valid.',
+                      );
+                    }
+                    result = Map<String, dynamic>.from(response);
                   }
                   if (!ctx.mounted) return;
                   final idx = _users.indexWhere((u) => u['id'] == userId);
                   if (idx != -1) {
-                    _users[idx] = Map<String, dynamic>.from(result);
+                    _users[idx] = result;
                   }
                   nav.pop();
                   messenger.showSnackBar(
@@ -2781,18 +2989,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // PRODUCT ADD DIALOG
   // ============================================================
   Future<void> _showAddProductDialog() async {
-    final List<dynamic> categoryRows;
+    final queueOffline = await _shouldQueueOfflineChange();
+    List<dynamic> categoryRows;
     try {
-      categoryRows = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name');
+      categoryRows = queueOffline
+          ? await PosLocalDatabaseHelper.instance.readCatalogCategories()
+          : await supabase.from('categories').select('id, name').order('name');
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kategori gagal dimuat dari database: $error')),
-      );
-      return;
+      debugPrint('Category source unavailable; using local snapshot: $error');
+      categoryRows = await PosLocalDatabaseHelper.instance
+          .readCatalogCategories();
+      if (categoryRows.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Kategori tidak tersedia online maupun lokal: $error',
+            ),
+          ),
+        );
+        return;
+      }
     }
     if (!mounted) return;
 
@@ -2872,8 +3089,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         )
                         .toList(),
                     onChanged: (val) {
-                      if (val != null)
+                      if (val != null) {
                         setDialogState(() => selectedCategory = val);
+                      }
                     },
                   ),
                   const SizedBox(height: 12),
@@ -2907,6 +3125,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   const SizedBox(height: 12),
                   ProductImagePicker(
                     productId: productId,
+                    enabled: !queueOffline,
                     onChanged: (url) => setDialogState(() => imageUrl = url),
                     onUploadingChanged: (uploading) =>
                         setDialogState(() => isImageUploading = uploading),
@@ -3020,7 +3239,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  void _showEditProductDialog(Map<String, dynamic> product) {
+  Future<void> _showEditProductDialog(Map<String, dynamic> product) async {
+    final queueOffline = await _shouldQueueOfflineChange();
+    if (!mounted) return;
     final existingProduct = ProductModel.fromMap(product);
     String? imageUrl = existingProduct.images.isNotEmpty
         ? existingProduct.images.first
@@ -3100,6 +3321,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ProductImagePicker(
                     productId: existingProduct.id,
                     initialImageUrl: imageUrl,
+                    enabled: !queueOffline,
                     onChanged: (url) {
                       imageUrl = url;
                       imageWasChanged = true;
@@ -3143,7 +3365,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               : existingProduct.images,
                         );
                         await productProvider.updateProduct(editedProduct);
-                        if (imageWasChanged && oldImageUrl != imageUrl) {
+                        if (!queueOffline &&
+                            imageWasChanged &&
+                            oldImageUrl != imageUrl) {
                           try {
                             await ProductImageStorageService.deleteProductImage(
                               oldImageUrl,
@@ -3199,7 +3423,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 await productProvider.deleteProduct(
                   product['id']?.toString() ?? '',
                 );
-                if (deletedProduct.images.isNotEmpty) {
+                if (!await _shouldQueueOfflineChange() &&
+                    deletedProduct.images.isNotEmpty) {
                   try {
                     await ProductImageStorageService.deleteProductImage(
                       deletedProduct.images.first,
@@ -3236,10 +3461,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 // ============================================================
 class _FlashSaleSheetWidget extends StatefulWidget {
   final Map<String, dynamic>? initialProduct;
+  final List<ProductModel> availableProducts;
   final VoidCallback onSaved;
 
   const _FlashSaleSheetWidget({
     required this.initialProduct,
+    required this.availableProducts,
     required this.onSaved,
   });
 
@@ -3270,7 +3497,13 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
 
       if (widget.initialProduct != null) {
         final id = widget.initialProduct!['id']?.toString() ?? '';
-        _selectedProduct = provider.getProductById(id);
+        for (final product in widget.availableProducts) {
+          if (product.id == id) {
+            _selectedProduct = product;
+            break;
+          }
+        }
+        _selectedProduct ??= provider.getProductById(id);
       }
 
       _recalculatePrices();
@@ -3300,7 +3533,7 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ProductProvider>();
-    final nonFlashProducts = provider.allProducts.where((p) {
+    final nonFlashProducts = widget.availableProducts.where((p) {
       final matchesSearch =
           _searchC.text.isEmpty ||
           p.name.toLowerCase().contains(_searchC.text.toLowerCase()) ||
@@ -3577,19 +3810,6 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                               salePrice: salePrice,
                               originalPrice: originalPrice,
                             );
-
-                            try {
-                              await Supabase.instance.client
-                                  .from('products')
-                                  .update({
-                                    'is_on_sale': true,
-                                    'price': salePrice,
-                                    'original_price': originalPrice,
-                                  })
-                                  .eq('id', _selectedProduct!.id);
-                            } catch (e) {
-                              debugPrint('Supabase flash sale sync notice: $e');
-                            }
 
                             nav.pop();
                             messenger.showSnackBar(

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/core/utils/validators.dart';
+import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/services/biometric_service.dart';
@@ -111,6 +112,26 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (success) {
+        if (auth.isOfflineSession) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Mode offline aktif. Perubahan data dinonaktifkan.',
+              ),
+            ),
+          );
+        } else if ((auth.currentUser?.role == UserRole.admin ||
+                auth.currentUser?.role == UserRole.cashier) &&
+            !auth.offlineCredentialSaved) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Login online berhasil, tetapi kredensial offline tidak '
+                'dapat disimpan di perangkat ini.',
+              ),
+            ),
+          );
+        }
         Navigator.pushReplacementNamed(context, AppRouter.mainNav);
       } else {
         final errorMsg = auth.errorMessage ?? 'Login gagal. Silakan periksa kredensial Anda.';

@@ -1,24 +1,32 @@
 import 'dart:convert';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/models/blockchain/blockchain.dart';
 import 'package:doctor_computer/services/biometric_service.dart';
+import 'package:doctor_computer/services/offline_auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserModel? _currentUser;
   bool _isLoggedIn = false;
+  bool _isOfflineSession = false;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _offlineCredentialSaved = false;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoggedIn => _isLoggedIn;
+  bool get isOfflineSession => _isOfflineSession;
+  bool get canWriteRemoteData => _isLoggedIn && !_isOfflineSession;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get offlineCredentialSaved => _offlineCredentialSaved;
 
   final supabase = Supabase.instance.client;
+  final OfflineAuthService _offlineAuth = OfflineAuthService();
 
   AuthProvider();
 
@@ -69,6 +77,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> restoreSession() async {
+    if (_isOfflineSession) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       final supaUser = supabase.auth.currentUser;
@@ -88,6 +97,7 @@ class AuthProvider extends ChangeNotifier {
 
       _currentUser = _mapToUserModel(data);
       _isLoggedIn = true;
+      _isOfflineSession = false;
       await _saveSessionToPrefs(_currentUser!);
       await BiometricService.instance.rememberLastUser(_currentUser!.id);
       notifyListeners();
@@ -113,6 +123,10 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
+      if (await _isNetworkUnavailable()) {
+        return await _loginOffline(email, password);
+      }
+
       final authRes = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -140,8 +154,10 @@ class AuthProvider extends ChangeNotifier {
 
       _currentUser = _mapToUserModel(data);
       _isLoggedIn = true;
+      _isOfflineSession = false;
       await _saveSessionToPrefs(_currentUser!);
       await BiometricService.instance.rememberLastUser(userId);
+      await _cacheOfflineCredential(_currentUser!, password);
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -158,6 +174,11 @@ class AuthProvider extends ChangeNotifier {
       }
 
       return true;
+    } on AuthRetryableFetchException catch (e) {
+      debugPrint(
+        '[AuthProvider] Network unavailable during login: ${e.message}',
+      );
+      return await _loginOffline(email, password);
     } on AuthException catch (e) {
       _errorMessage = e.message;
       debugPrint('Login AuthException: ${e.message}');
@@ -174,6 +195,82 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> _loginOffline(String email, String password) async {
+    try {
+      if (!_offlineAuth.isSupported) {
+        _errorMessage = 'Login offline tidak tersedia pada platform ini.';
+        return false;
+      }
+
+      final user = await _offlineAuth.authenticateOffline(
+        email: email,
+        password: password,
+      );
+      if (user == null) {
+        _errorMessage =
+            'Login offline gagal. Kredensial admin/kasir tidak tersimpan, '
+            'password salah, atau akses offline sudah kedaluwarsa.';
+        return false;
+      }
+
+      if (supabase.auth.currentUser != null) {
+        try {
+          await supabase.auth.signOut(scope: SignOutScope.local);
+        } catch (e) {
+          debugPrint(
+            '[AuthProvider] Could not clear previous local session: $e',
+          );
+          _errorMessage =
+              'Sesi sebelumnya tidak dapat diamankan untuk login offline. '
+              'Coba lagi saat perangkat terhubung ke internet.';
+          return false;
+        }
+      }
+
+      _currentUser = user;
+      _isLoggedIn = true;
+      _isOfflineSession = true;
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Kredensial offline tidak dapat diverifikasi.';
+      debugPrint('[AuthProvider] Offline login failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _isNetworkUnavailable() async {
+    try {
+      final results = await Connectivity().checkConnectivity();
+      return results.isEmpty || results.contains(ConnectivityResult.none);
+    } catch (e) {
+      debugPrint('[AuthProvider] Connectivity check failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> _cacheOfflineCredential(UserModel user, String password) async {
+    try {
+      await _offlineAuth.cachePasswordCredential(
+        user: user,
+        password: password,
+      );
+      _offlineCredentialSaved =
+          _offlineAuth.isSupported &&
+          (user.role == UserRole.admin || user.role == UserRole.cashier);
+    } catch (e) {
+      _offlineCredentialSaved = false;
+      debugPrint('[AuthProvider] Could not cache offline credentials: $e');
+    }
+  }
+
+  bool _denyOfflineWrite(String operation) {
+    if (!_isOfflineSession) return false;
+    _errorMessage = '$operation tidak tersedia saat login offline.';
+    return true;
   }
 
   // ============================================
@@ -217,7 +314,8 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      final stillActive = _currentUser?.id == credential.userId &&
+      final stillActive =
+          _currentUser?.id == credential.userId &&
           await bio.verifyRegistration(credential.userId, credential.token);
       if (!stillActive) {
         await bio.deleteCredential(credential.userId);
@@ -320,6 +418,10 @@ class AuthProvider extends ChangeNotifier {
     double? longitude,
     String? profileImageUrl,
   }) async {
+    if (_denyOfflineWrite('Perubahan profil')) {
+      notifyListeners();
+      return false;
+    }
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -381,6 +483,10 @@ class AuthProvider extends ChangeNotifier {
   // UPDATE PROFILE IMAGE
   // ============================================
   Future<bool> updateProfileImage(String imageUrl) async {
+    if (_denyOfflineWrite('Perubahan foto profil')) {
+      notifyListeners();
+      return false;
+    }
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -421,6 +527,10 @@ class AuthProvider extends ChangeNotifier {
   // UPDATE LOCATION
   // ============================================
   Future<bool> updateLocation(double lat, double lng) async {
+    if (_denyOfflineWrite('Perubahan lokasi')) {
+      notifyListeners();
+      return false;
+    }
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -475,6 +585,10 @@ class AuthProvider extends ChangeNotifier {
     String userId,
     Map<String, dynamic> updates,
   ) async {
+    if (_denyOfflineWrite('Perubahan data pengguna')) {
+      notifyListeners();
+      return false;
+    }
     try {
       final result = await supabase.rpc(
         'admin_update_user',
@@ -516,6 +630,8 @@ class AuthProvider extends ChangeNotifier {
 
     _currentUser = null;
     _isLoggedIn = false;
+    _isOfflineSession = false;
+    _offlineCredentialSaved = false;
     notifyListeners();
     return true;
   }

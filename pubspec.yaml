@@ -30,6 +30,11 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   video_player: ^2.9.2
   sensors_plus: ^7.1.1
+  connectivity_plus: ^7.3.2
+  cryptography: ^2.9.0
+  sqflite: ^2.4.5
+  sqflite_common_ffi: ^2.4.5
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
