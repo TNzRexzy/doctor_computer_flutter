@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
+import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
+import 'package:doctor_computer/services/pc_part_sync_service.dart';
 import 'package:doctor_computer/widgets/common/product_image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/widgets/common/app_toast.dart';
@@ -20,6 +22,8 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
   late final TextEditingController _price;
   late final TextEditingController _stock;
   late final TextEditingController _description;
+  late final TextEditingController _socket;
+  late final TextEditingController _memoryType;
   late final String _productId;
   String? _category;
   List<Map<String, String>> _categories = [];
@@ -44,6 +48,20 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     );
     _stock = TextEditingController(text: product?.stock.toString() ?? '0');
     _description = TextEditingController(text: product?.description ?? '');
+    _socket = TextEditingController(
+      text:
+          PcPartCompatibility.socketFromSpecifications(
+            product?.specs ?? const {},
+          ) ??
+          '',
+    );
+    _memoryType = TextEditingController(
+      text:
+          PcPartCompatibility.memoryTypeFromSpecifications(
+            product?.specs ?? const {},
+          ) ??
+          '',
+    );
     _category = product?.categoryId;
     _imageUrl = product?.images.isNotEmpty == true
         ? product!.images.first
@@ -97,7 +115,34 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     _price.dispose();
     _stock.dispose();
     _description.dispose();
+    _socket.dispose();
+    _memoryType.dispose();
     super.dispose();
+  }
+
+  PcPartKind? get _selectedPartKind {
+    final id = _category;
+    if (id == null) return null;
+    final category = _categories.cast<Map<String, String>?>().firstWhere(
+      (item) => item?['id'] == id,
+      orElse: () => null,
+    );
+    return PcPartSyncService.resolveKind(
+      categoryId: id,
+      categoryName: category?['name'],
+    );
+  }
+
+  Map<String, String> _updatedSpecs(ProductModel? product) {
+    final kind = _selectedPartKind;
+    return PcPartCompatibility.updateSpecifications(
+      current: product?.specs ?? const {},
+      includeSocket: kind == PcPartKind.cpu || kind == PcPartKind.motherboard,
+      includeMemoryType:
+          kind == PcPartKind.ram || kind == PcPartKind.motherboard,
+      socket: _socket.text,
+      memoryType: _memoryType.text,
+    );
   }
 
   void _save() {
@@ -105,6 +150,30 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     final brand = _brand.text.trim();
     final price = double.tryParse(_price.text.trim());
     final stock = int.tryParse(_stock.text.trim());
+    final kind = _selectedPartKind;
+    final needsSocket =
+        kind == PcPartKind.cpu || kind == PcPartKind.motherboard;
+    final needsMemoryType =
+        kind == PcPartKind.ram || kind == PcPartKind.motherboard;
+    if ((needsSocket &&
+            PcPartCompatibility.socketFromSpecifications({
+                  'Socket': _socket.text,
+                }) ==
+                null) ||
+        (needsMemoryType &&
+            PcPartCompatibility.memoryTypeFromSpecifications({
+                  'Memory Type': _memoryType.text,
+                }) ==
+                null)) {
+      AppToast.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Isi socket CPU dan/atau tipe RAM yang valid untuk komponen rakit PC.',
+          ),
+        ),
+      );
+      return;
+    }
     if (name.isEmpty ||
         brand.isEmpty ||
         price == null ||
@@ -142,7 +211,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
         categoryId: _category!,
         brand: brand,
         images: images,
-        specs: product?.specs ?? const {},
+        specs: _updatedSpecs(product),
         rating: product?.rating ?? 0,
         reviewCount: product?.reviewCount ?? 0,
         stock: stock,
@@ -238,6 +307,32 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
                 ),
               ),
               const SizedBox(height: 16),
+              if (_selectedPartKind == PcPartKind.cpu ||
+                  _selectedPartKind == PcPartKind.motherboard) ...[
+                TextField(
+                  controller: _socket,
+                  decoration: const InputDecoration(
+                    labelText: 'Socket CPU',
+                    hintText: 'Contoh: LGA 1700, AM4, AM5',
+                    helperText: 'Dipakai untuk memeriksa kecocokan CPU dan motherboard.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (_selectedPartKind == PcPartKind.ram ||
+                  _selectedPartKind == PcPartKind.motherboard) ...[
+                TextField(
+                  controller: _memoryType,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipe RAM',
+                    hintText: 'Contoh: DDR4 atau DDR5',
+                    helperText: 'Dipakai untuk memeriksa kecocokan RAM dan motherboard.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               ProductImagePicker(
                 productId: _productId,
                 initialImageUrl: _imageUrl,

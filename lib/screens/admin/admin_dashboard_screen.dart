@@ -8,6 +8,7 @@ import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/providers/product_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
+import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/widgets/review/review_management_tab.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
@@ -19,6 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
 import 'package:doctor_computer/services/pos_local_database_helper.dart';
 import 'package:doctor_computer/services/pos_sync_service.dart';
+import 'package:doctor_computer/services/pc_part_sync_service.dart';
 import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -3083,11 +3085,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final origPriceC = TextEditingController();
     final stockC = TextEditingController(text: '10');
     final descC = TextEditingController();
+    final socketC = TextEditingController();
+    final memoryTypeC = TextEditingController();
     final productId = 'admin-${DateTime.now().microsecondsSinceEpoch}';
     String? imageUrl;
     String selectedCategory = categoryOptions.first['id']!;
     bool isFlashSale = false;
     bool isImageUploading = false;
+
+    PcPartKind? selectedPartKind() {
+      final category = categoryOptions.firstWhere(
+        (option) => option['id'] == selectedCategory,
+      );
+      return PcPartSyncService.resolveKind(
+        categoryId: selectedCategory,
+        categoryName: category['name'],
+      );
+    }
 
     showDialog(
       context: context,
@@ -3139,6 +3153,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     },
                   ),
                   const SizedBox(height: 12),
+                  if (selectedPartKind() == PcPartKind.cpu ||
+                      selectedPartKind() == PcPartKind.motherboard) ...[
+                    TextField(
+                      controller: socketC,
+                      decoration: const InputDecoration(
+                        labelText: 'Socket CPU',
+                        hintText: 'Contoh: LGA 1700, AM4, AM5',
+                        helperText: 'Dipakai untuk memeriksa kecocokan CPU dan motherboard.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (selectedPartKind() == PcPartKind.ram ||
+                      selectedPartKind() == PcPartKind.motherboard) ...[
+                    TextField(
+                      controller: memoryTypeC,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipe RAM',
+                        hintText: 'Contoh: DDR4 atau DDR5',
+                        helperText: 'Dipakai untuk memeriksa kecocokan RAM dan motherboard.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextField(
                     controller: priceC,
                     keyboardType: TextInputType.number,
@@ -3214,11 +3254,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       final brand = brandC.text.trim();
                       final price = _parseDouble(priceC.text.trim());
                       final stock = _parseInt(stockC.text.trim());
+                      final kind = selectedPartKind();
+                      final needsSocket =
+                          kind == PcPartKind.cpu ||
+                          kind == PcPartKind.motherboard;
+                      final needsMemoryType =
+                          kind == PcPartKind.ram ||
+                          kind == PcPartKind.motherboard;
 
                       if (name.isEmpty || brand.isEmpty || price <= 0) {
                         AppToast.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Nama, Brand, dan Harga wajib diisi'),
+                          ),
+                        );
+                        return;
+                      }
+                      if ((needsSocket &&
+                              PcPartCompatibility.socketFromSpecifications({
+                                    'Socket': socketC.text,
+                                  }) ==
+                                  null) ||
+                          (needsMemoryType &&
+                              PcPartCompatibility.memoryTypeFromSpecifications({
+                                    'Memory Type': memoryTypeC.text,
+                                  }) ==
+                                  null)) {
+                        AppToast.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Isi socket CPU dan/atau tipe RAM yang valid untuk komponen rakit PC.',
+                            ),
                           ),
                         );
                         return;
@@ -3246,7 +3312,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         categoryId: selectedCategory,
                         brand: brand,
                         images: imageUrl == null ? [] : [imageUrl!],
-                        specs: {},
+                        specs: PcPartCompatibility.updateSpecifications(
+                          current: const {},
+                          includeSocket:
+                              selectedPartKind() == PcPartKind.cpu ||
+                              selectedPartKind() == PcPartKind.motherboard,
+                          includeMemoryType:
+                              selectedPartKind() == PcPartKind.ram ||
+                              selectedPartKind() == PcPartKind.motherboard,
+                          socket: socketC.text,
+                          memoryType: memoryTypeC.text,
+                        ),
                         rating: 0,
                         reviewCount: 0,
                         stock: stock,
@@ -3306,6 +3382,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final descController = TextEditingController(
       text: product['description']?.toString() ?? '',
     );
+    final socketController = TextEditingController(
+      text:
+          PcPartCompatibility.socketFromSpecifications(existingProduct.specs) ??
+          '',
+    );
+    final memoryTypeController = TextEditingController(
+      text:
+          PcPartCompatibility.memoryTypeFromSpecifications(
+            existingProduct.specs,
+          ) ??
+          '',
+    );
+    final partKind = PcPartSyncService.resolveKind(
+      categoryId: existingProduct.categoryId,
+      categoryName: product['category_name']?.toString(),
+    );
     var isImageUploading = false;
 
     showDialog(
@@ -3362,6 +3454,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (partKind == PcPartKind.cpu ||
+                      partKind == PcPartKind.motherboard) ...[
+                    TextField(
+                      controller: socketController,
+                      decoration: const InputDecoration(
+                        labelText: 'Socket CPU',
+                        hintText: 'Contoh: LGA 1700, AM4, AM5',
+                        helperText: 'Dipakai untuk memeriksa kecocokan CPU dan motherboard.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (partKind == PcPartKind.ram ||
+                      partKind == PcPartKind.motherboard) ...[
+                    TextField(
+                      controller: memoryTypeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipe RAM',
+                        hintText: 'Contoh: DDR4 atau DDR5',
+                        helperText: 'Dipakai untuk memeriksa kecocokan RAM dan motherboard.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   ProductImagePicker(
                     productId: existingProduct.id,
                     initialImageUrl: imageUrl,
@@ -3394,6 +3512,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       final productProvider = context.read<ProductProvider>();
 
                       try {
+                        final needsSocket =
+                            partKind == PcPartKind.cpu ||
+                            partKind == PcPartKind.motherboard;
+                        final needsMemoryType =
+                            partKind == PcPartKind.ram ||
+                            partKind == PcPartKind.motherboard;
+                        if ((needsSocket &&
+                                PcPartCompatibility.socketFromSpecifications({
+                                      'Socket': socketController.text,
+                                    }) ==
+                                    null) ||
+                            (needsMemoryType &&
+                                PcPartCompatibility.memoryTypeFromSpecifications(
+                                      {
+                                        'Memory Type':
+                                            memoryTypeController.text,
+                                      },
+                                    ) ==
+                                    null)) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Isi socket CPU dan/atau tipe RAM yang valid untuk komponen rakit PC.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
                         final oldImageUrl = existingProduct.images.isNotEmpty
                             ? existingProduct.images.first
                             : null;
@@ -3404,6 +3551,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           stock: _parseInt(stockController.text.trim()),
                           description: descController.text.trim(),
                           descriptionId: descController.text.trim(),
+                          specs: PcPartCompatibility.updateSpecifications(
+                            current: existingProduct.specs,
+                            includeSocket:
+                                partKind == PcPartKind.cpu ||
+                                partKind == PcPartKind.motherboard,
+                            includeMemoryType:
+                                partKind == PcPartKind.ram ||
+                                partKind == PcPartKind.motherboard,
+                            socket: socketController.text,
+                            memoryType: memoryTypeController.text,
+                          ),
                           images: imageWasChanged
                               ? (imageUrl == null ? [] : [imageUrl!])
                               : existingProduct.images,

@@ -42,35 +42,28 @@ class PcBuilderProvider extends ChangeNotifier {
   }
 
   List<String> get compatibilityIssues {
-    List<String> issues = [];
-    final cpu = _selectedParts[PcPartCategory.cpu];
-    final mobo = _selectedParts[PcPartCategory.motherboard];
-    final ram = _selectedParts[PcPartCategory.ram];
+    return PcPartCompatibility.issues(
+      cpu: _selectedParts[PcPartCategory.cpu],
+      motherboard: _selectedParts[PcPartCategory.motherboard],
+      ram: _selectedParts[PcPartCategory.ram],
+    );
+  }
 
-    if (cpu != null && mobo != null) {
-      if (cpu.compatibilityTags.contains('intel_lga1700') &&
-          mobo.compatibilityTags.contains('amd_am5')) {
-        issues.add('CPU dan Motherboard tidak kompatibel (LGA 1700 vs AM5)');
-      } else if (cpu.compatibilityTags.contains('amd_am5') &&
-          mobo.compatibilityTags.contains('intel_lga1700')) {
-        issues.add('CPU dan Motherboard tidak kompatibel (AM5 vs LGA 1700)');
-      }
-    }
+  List<String> get compatibilityWarnings => PcPartCompatibility.warnings(
+    cpu: _selectedParts[PcPartCategory.cpu],
+    motherboard: _selectedParts[PcPartCategory.motherboard],
+    ram: _selectedParts[PcPartCategory.ram],
+  );
 
-    if (ram != null && mobo != null) {
-      bool ramIsDdr5 = ram.compatibilityTags.contains('ddr5');
-      bool moboNeedsDdr5 = mobo.compatibilityTags.contains('ddr5');
-      bool ramIsDdr4 = ram.compatibilityTags.contains('ddr4');
-      bool moboNeedsDdr4 = mobo.compatibilityTags.contains('ddr4');
-
-      if (ramIsDdr5 && moboNeedsDdr4 && !moboNeedsDdr5) {
-        issues.add('Tipe RAM (DDR5) tidak sesuai dengan Motherboard (DDR4)');
-      } else if (ramIsDdr4 && moboNeedsDdr5 && !moboNeedsDdr4) {
-        issues.add('Tipe RAM (DDR4) tidak sesuai dengan Motherboard (DDR5)');
-      }
-    }
-
-    return issues;
+  bool wouldPartBeIncompatible(PcPartCategory category, PcPartModel part) {
+    final candidateParts = Map<PcPartCategory, PcPartModel?>.from(
+      _selectedParts,
+    )..[category] = part;
+    return PcPartCompatibility.issues(
+      cpu: candidateParts[PcPartCategory.cpu],
+      motherboard: candidateParts[PcPartCategory.motherboard],
+      ram: candidateParts[PcPartCategory.ram],
+    ).isNotEmpty;
   }
 
   PcBuilderProvider() {
@@ -216,6 +209,11 @@ class PcBuilderProvider extends ChangeNotifier {
     if (rawTags is List) {
       tags = rawTags.map((e) => e.toString()).toList();
     }
+    tags = PcPartCompatibility.tagsFor(
+      specs: specsMap,
+      existingTags: tags,
+      name: p['name']?.toString() ?? '',
+    );
 
     // Gambar hanya dari kolom image_url di database (path bucket atau URL penuh).
     // Tidak ada tebak-tebakan gambar berdasarkan nama agar tidak salah gambar.

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 
 /// Jenis komponen PC yang otomatis dicatat ke tabel `pc_parts` saat admin /
@@ -69,7 +70,8 @@ class PcPartSyncService {
         has(['power supply', 'power_supply', 'powersupply'])) {
       return PcPartKind.psu;
     }
-    if (exact(['cat-007', 'cooler']) || has(['cooler', 'cooling', 'pendingin'])) {
+    if (exact(['cat-007', 'cooler']) ||
+        has(['cooler', 'cooling', 'pendingin'])) {
       return PcPartKind.cooler;
     }
     if (exact(['cat-008', 'case', 'pc_case']) ||
@@ -113,7 +115,11 @@ class PcPartSyncService {
           'price': product.price,
           'specs': product.specs,
           'image_url': imageUrl,
-          'compatibility_tags': <String>[],
+          'compatibility_tags': PcPartCompatibility.tagsFor(
+            specs: product.specs,
+            existingTags: const [],
+            name: product.name,
+          ),
         });
         return id;
       } on PostgrestException catch (e) {

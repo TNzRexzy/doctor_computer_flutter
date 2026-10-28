@@ -352,8 +352,12 @@ class ProductProvider extends ChangeNotifier {
       return true;
     }
 
-    // Komponen PC (CPU, GPU, SSD/NVMe, cooler, case, dll) otomatis dibuatkan
-    // baris di `pc_parts` dengan ID sesuai jenisnya (cpu-001, gpu-001, ...).
+    final savedProduct = await supabase
+        .from('products')
+        .insert(product.toMap())
+        .select('id, image_url')
+        .single();
+
     String? categoryName;
     for (final category in _categories) {
       if (category.id == product.categoryId) {
@@ -361,25 +365,40 @@ class ProductProvider extends ChangeNotifier {
         break;
       }
     }
-    final pcPartId = await PcPartSyncService.insertForProduct(
-      supabase,
-      product,
-      categoryName: categoryName,
-    );
-
-    final Map<String, dynamic> savedProduct;
     try {
-      savedProduct = await supabase
-          .from('products')
-          .insert(product.toMap())
-          .select('id, image_url')
-          .single();
-    } catch (_) {
-      // Produk gagal tersimpan -> batalkan baris pc_parts yang baru dibuat.
-      await PcPartSyncService.rollback(supabase, pcPartId);
-      rethrow;
+      _verifySavedImages(savedProduct, product);
+      // pc_parts.product_id references products.id, so save its parent first.
+      await PcPartSyncService.insertForProduct(
+        supabase,
+        product,
+        categoryName: categoryName,
+      );
+    } catch (error, stackTrace) {
+      try {
+        await supabase.from('pc_parts').delete().eq('product_id', product.id);
+        final deletedProducts = await supabase
+            .from('products')
+            .delete()
+            .eq('id', product.id)
+            .select('id');
+        if (deletedProducts.isEmpty) {
+          throw StateError('Produk sementara tidak berhasil dibatalkan.');
+        }
+      } catch (rollbackError) {
+        debugPrint(
+          'Failed to roll back product ${product.id} after add error: '
+          '$rollbackError',
+        );
+        Error.throwWithStackTrace(
+          StateError(
+            'Produk gagal ditambahkan: $error. Pembersihan data sementara '
+            'juga gagal: $rollbackError',
+          ),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
-    _verifySavedImages(savedProduct, product);
     if (product.isOnSale) {
       await _syncFlashSaleRow(product, true);
     }

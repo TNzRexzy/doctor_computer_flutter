@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_ASIS"
+                  targetNamespace="https://doctorcomputer.example/skpl/bpmn">
+  <bpmn:process id="Process_ASIS" name="Proses Bisnis AS-IS Doctor Computer" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_ASIS">
+      <bpmn:lane id="Lane_Customer" name="Pelanggan">
+        <bpmn:flowNodeRef>StartEvent_Request</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AskProduct</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DecidePurchase</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Purchase</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CompletePayment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_NoStock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_NoPurchase</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_DeliveryChoice</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_PickupOrder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Pickup</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Delivered</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Seller" name="Penjual / Teknisi / Admin">
+        <bpmn:flowNodeRef>Task_CheckStock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Stock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_InformUnavailable</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ExplainProduct</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SendTracking</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Cashier" name="Kasir">
+        <bpmn:flowNodeRef>Task_RecordSale</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_VerifyPayment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Payment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_IssueReceipt</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_HandoverCourier</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Courier" name="Kurir">
+        <bpmn:flowNodeRef>Task_Deliver</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CompleteDelivery</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="StartEvent_Request" name="Kebutuhan produk muncul"/>
+    <bpmn:task id="Task_AskProduct" name="Tanyakan stok dan harga melalui toko / pesan"/>
+    <bpmn:task id="Task_CheckStock" name="Cek stok secara manual"/>
+    <bpmn:exclusiveGateway id="Gateway_Stock" name="Stok tersedia?"/>
+    <bpmn:task id="Task_InformUnavailable" name="Informasikan stok tidak tersedia"/>
+    <bpmn:endEvent id="EndEvent_NoStock" name="Pencarian produk selesai"/>
+    <bpmn:task id="Task_ExplainProduct" name="Periksa kecocokan komponen bila perlu dan jelaskan harga"/>
+    <bpmn:task id="Task_DecidePurchase" name="Pelanggan memutuskan pembelian"/>
+    <bpmn:exclusiveGateway id="Gateway_Purchase" name="Pelanggan jadi membeli?"/>
+    <bpmn:endEvent id="EndEvent_NoPurchase" name="Pelanggan tidak melanjutkan pembelian"/>
+    <bpmn:task id="Task_RecordSale" name="Catat transaksi secara manual / aplikasi terpisah"/>
+    <bpmn:task id="Task_VerifyPayment" name="Kasir memeriksa pembayaran dan menghitung kembalian"/>
+    <bpmn:exclusiveGateway id="Gateway_Payment" name="Pembayaran sesuai?"/>
+    <bpmn:task id="Task_CompletePayment" name="Pelanggan melengkapi atau mengoreksi pembayaran"/>
+    <bpmn:task id="Task_IssueReceipt" name="Terbitkan nota kertas"/>
+    <bpmn:exclusiveGateway id="Gateway_DeliveryChoice" name="Pengambilan atau pengiriman?"/>
+    <bpmn:task id="Task_PickupOrder" name="Pelanggan mengambil barang di toko"/>
+    <bpmn:endEvent id="EndEvent_Pickup" name="Transaksi selesai di toko"/>
+    <bpmn:task id="Task_HandoverCourier" name="Serahkan barang untuk pengiriman"/>
+    <bpmn:task id="Task_Deliver" name="Kurir mengambil paket dan membuat nomor resi"/>
+    <bpmn:task id="Task_SendTracking" name="Kirim nomor resi melalui pesan"/>
+    <bpmn:task id="Task_CompleteDelivery" name="Antarkan paket kepada pelanggan"/>
+    <bpmn:endEvent id="EndEvent_Delivered" name="Pelanggan menerima pesanan"/>
+
+    <bpmn:sequenceFlow id="Flow_ASIS_01" sourceRef="StartEvent_Request" targetRef="Task_AskProduct"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_02" sourceRef="Task_AskProduct" targetRef="Task_CheckStock"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_03" sourceRef="Task_CheckStock" targetRef="Gateway_Stock"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_04" name="Tidak" sourceRef="Gateway_Stock" targetRef="Task_InformUnavailable">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Stok tidak tersedia</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_05" sourceRef="Task_InformUnavailable" targetRef="EndEvent_NoStock"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_06" name="Ya" sourceRef="Gateway_Stock" targetRef="Task_ExplainProduct">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Stok tersedia</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_07" sourceRef="Task_ExplainProduct" targetRef="Task_DecidePurchase"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_08" sourceRef="Task_DecidePurchase" targetRef="Gateway_Purchase"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_09" name="Tidak" sourceRef="Gateway_Purchase" targetRef="EndEvent_NoPurchase">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Pelanggan tidak jadi membeli</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_10" name="Ya" sourceRef="Gateway_Purchase" targetRef="Task_RecordSale">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Pelanggan jadi membeli</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_11" sourceRef="Task_RecordSale" targetRef="Task_VerifyPayment"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_12" sourceRef="Task_VerifyPayment" targetRef="Gateway_Payment"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_13" name="Belum sesuai" sourceRef="Gateway_Payment" targetRef="Task_CompletePayment">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Jumlah pembayaran belum sesuai</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_14" sourceRef="Task_CompletePayment" targetRef="Task_VerifyPayment"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_15" name="Sesuai" sourceRef="Gateway_Payment" targetRef="Task_IssueReceipt">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Pembayaran sesuai</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_16" sourceRef="Task_IssueReceipt" targetRef="Gateway_DeliveryChoice"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_17" name="Ambil di toko" sourceRef="Gateway_DeliveryChoice" targetRef="Task_PickupOrder">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Pelanggan mengambil barang di toko</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_18" sourceRef="Task_PickupOrder" targetRef="EndEvent_Pickup"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_19" name="Kirim dengan kurir" sourceRef="Gateway_DeliveryChoice" targetRef="Task_HandoverCourier">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Pesanan dikirim dengan kurir</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ASIS_20" sourceRef="Task_HandoverCourier" targetRef="Task_Deliver"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_21" sourceRef="Task_Deliver" targetRef="Task_SendTracking"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_22" sourceRef="Task_SendTracking" targetRef="Task_CompleteDelivery"/>
+    <bpmn:sequenceFlow id="Flow_ASIS_23" sourceRef="Task_CompleteDelivery" targetRef="EndEvent_Delivered"/>
+  </bpmn:process>
+
+  <bpmn:process id="Process_Owner_ASIS" name="Proses Manual Admin / Pemilik (AS-IS)" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_Owner_ASIS" name="Kegiatan administrasi toko"/>
+    <bpmn:task id="Task_UpdateManualCatalog" name="Perbarui harga, stok dan promosi secara manual"/>
+    <bpmn:task id="Task_SendManualVoucher" name="Bagikan kode voucher melalui pesan"/>
+    <bpmn:task id="Task_RecordCashManual" name="Rekap kas dan nota transaksi harian"/>
+    <bpmn:task id="Task_CompileManualReport" name="Rekap penjualan dari nota"/>
+    <bpmn:exclusiveGateway id="Gateway_ReportDiscrepancy" name="Ada selisih atau nota tidak cocok?"/>
+    <bpmn:task id="Task_RecountManual" name="Periksa ulang nota, stok dan kas"/>
+    <bpmn:task id="Task_CorrectManualReport" name="Koreksi rekap berdasarkan pemeriksaan"/>
+    <bpmn:endEvent id="EndEvent_Owner_ASIS" name="Laporan manual tersedia"/>
+
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_01" sourceRef="StartEvent_Owner_ASIS" targetRef="Task_UpdateManualCatalog"/>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_02" sourceRef="Task_UpdateManualCatalog" targetRef="Task_SendManualVoucher"/>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_03" sourceRef="Task_SendManualVoucher" targetRef="Task_RecordCashManual"/>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_04" sourceRef="Task_RecordCashManual" targetRef="Task_CompileManualReport"/>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_05" sourceRef="Task_CompileManualReport" targetRef="Gateway_ReportDiscrepancy"/>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_06" name="Tidak" sourceRef="Gateway_ReportDiscrepancy" targetRef="EndEvent_Owner_ASIS">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Rekap sesuai</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_07" name="Ya" sourceRef="Gateway_ReportDiscrepancy" targetRef="Task_RecountManual">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Ditemukan selisih</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_08" sourceRef="Task_RecountManual" targetRef="Task_CorrectManualReport"/>
+    <bpmn:sequenceFlow id="Flow_Owner_ASIS_09" sourceRef="Task_CorrectManualReport" targetRef="Task_CompileManualReport"/>
+  </bpmn:process>
+
+  <bpmn:collaboration id="Collaboration_ASIS" name="Proses Bisnis AS-IS">
+    <bpmn:participant id="Participant_Store_ASIS" name="Pelanggan dan Operasional Toko" processRef="Process_ASIS"/>
+    <bpmn:participant id="Participant_Owner_ASIS" name="Admin / Pemilik Toko" processRef="Process_Owner_ASIS"/>
+  </bpmn:collaboration>
+
+  <bpmndi:BPMNDiagram id="Diagram_ASIS">
+    <bpmndi:BPMNPlane id="Plane_ASIS" bpmnElement="Collaboration_ASIS">
+      <bpmndi:BPMNShape id="Shape_Participant_Store_ASIS" bpmnElement="Participant_Store_ASIS" isHorizontal="true">
+        <dc:Bounds x="100" y="100" width="2740" height="520"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Participant_Owner_ASIS" bpmnElement="Participant_Owner_ASIS" isHorizontal="true">
+        <dc:Bounds x="100" y="680" width="3800" height="130"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Customer" bpmnElement="Lane_Customer" isHorizontal="true">
+        <dc:Bounds x="100" y="100" width="3800" height="130"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Seller" bpmnElement="Lane_Seller" isHorizontal="true">
+        <dc:Bounds x="100" y="230" width="3800" height="130"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Cashier" bpmnElement="Lane_Cashier" isHorizontal="true">
+        <dc:Bounds x="100" y="360" width="3800" height="130"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Courier" bpmnElement="Lane_Courier" isHorizontal="true">
+        <dc:Bounds x="100" y="490" width="3800" height="130"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Start_Request" bpmnElement="StartEvent_Request">
+        <dc:Bounds x="160" y="147" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_AskProduct" bpmnElement="Task_AskProduct">
+        <dc:Bounds x="230" y="130" width="150" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CheckStock" bpmnElement="Task_CheckStock">
+        <dc:Bounds x="430" y="260" width="160" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Stock" bpmnElement="Gateway_Stock" isMarkerVisible="true">
+        <dc:Bounds x="650" y="270" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_InformUnavailable" bpmnElement="Task_InformUnavailable">
+        <dc:Bounds x="780" y="240" width="165" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_NoStock" bpmnElement="EndEvent_NoStock">
+        <dc:Bounds x="970" y="147" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ExplainProduct" bpmnElement="Task_ExplainProduct">
+        <dc:Bounds x="780" y="310" width="175" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DecidePurchase" bpmnElement="Task_DecidePurchase">
+        <dc:Bounds x="1010" y="130" width="170" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Purchase" bpmnElement="Gateway_Purchase" isMarkerVisible="true">
+        <dc:Bounds x="1240" y="140" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_NoPurchase" bpmnElement="EndEvent_NoPurchase">
+        <dc:Bounds x="1450" y="147" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_RecordSale" bpmnElement="Task_RecordSale">
+        <dc:Bounds x="1510" y="390" width="175" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_VerifyPayment" bpmnElement="Task_VerifyPayment">
+        <dc:Bounds x="1740" y="390" width="175" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Payment" bpmnElement="Gateway_Payment" isMarkerVisible="true">
+        <dc:Bounds x="1980" y="400" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CompletePayment" bpmnElement="Task_CompletePayment">
+        <dc:Bounds x="2080" y="130" width="175" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_IssueReceipt" bpmnElement="Task_IssueReceipt">
+        <dc:Bounds x="2200" y="390" width="155" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_DeliveryChoice" bpmnElement="Gateway_DeliveryChoice" isMarkerVisible="true">
+        <dc:Bounds x="2430" y="140" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_PickupOrder" bpmnElement="Task_PickupOrder">
+        <dc:Bounds x="2580" y="130" width="165" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_Pickup" bpmnElement="EndEvent_Pickup">
+        <dc:Bounds x="2830" y="147" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_HandoverCourier" bpmnElement="Task_HandoverCourier">
+        <dc:Bounds x="2580" y="390" width="165" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Deliver" bpmnElement="Task_Deliver">
+        <dc:Bounds x="2810" y="520" width="180" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_SendTracking" bpmnElement="Task_SendTracking">
+        <dc:Bounds x="3040" y="260" width="175" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CompleteDelivery" bpmnElement="Task_CompleteDelivery">
+        <dc:Bounds x="3270" y="520" width="175" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_Delivered" bpmnElement="EndEvent_Delivered">
+        <dc:Bounds x="3560" y="147" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Start_Owner_ASIS" bpmnElement="StartEvent_Owner_ASIS">
+        <dc:Bounds x="160" y="727" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_UpdateManualCatalog" bpmnElement="Task_UpdateManualCatalog">
+        <dc:Bounds x="250" y="710" width="240" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_SendManualVoucher" bpmnElement="Task_SendManualVoucher">
+        <dc:Bounds x="570" y="710" width="220" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CompileManualReport" bpmnElement="Task_CompileManualReport">
+        <dc:Bounds x="1160" y="710" width="220" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_RecordCashManual" bpmnElement="Task_RecordCashManual">
+        <dc:Bounds x="870" y="710" width="220" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_ReportDiscrepancy" bpmnElement="Gateway_ReportDiscrepancy" isMarkerVisible="true">
+        <dc:Bounds x="1460" y="720" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_RecountManual" bpmnElement="Task_RecountManual">
+        <dc:Bounds x="1610" y="710" width="220" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CorrectManualReport" bpmnElement="Task_CorrectManualReport">
+        <dc:Bounds x="1910" y="710" width="220" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_Owner_ASIS" bpmnElement="EndEvent_Owner_ASIS">
+        <dc:Bounds x="1550" y="727" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_ASIS_01" bpmnElement="Flow_ASIS_01">
+        <di:waypoint x="196" y="165"/><di:waypoint x="230" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_02" bpmnElement="Flow_ASIS_02">
+        <di:waypoint x="380" y="165"/><di:waypoint x="405" y="165"/><di:waypoint x="405" y="295"/><di:waypoint x="430" y="295"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_03" bpmnElement="Flow_ASIS_03">
+        <di:waypoint x="590" y="295"/><di:waypoint x="650" y="295"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_04" bpmnElement="Flow_ASIS_04">
+        <di:waypoint x="700" y="295"/><di:waypoint x="780" y="295"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_05" bpmnElement="Flow_ASIS_05">
+        <di:waypoint x="945" y="275"/><di:waypoint x="960" y="275"/><di:waypoint x="960" y="165"/><di:waypoint x="970" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_06" bpmnElement="Flow_ASIS_06">
+        <di:waypoint x="700" y="295"/><di:waypoint x="750" y="295"/><di:waypoint x="750" y="335"/><di:waypoint x="780" y="335"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_07" bpmnElement="Flow_ASIS_07">
+        <di:waypoint x="955" y="335"/><di:waypoint x="980" y="335"/><di:waypoint x="980" y="165"/><di:waypoint x="1010" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_08" bpmnElement="Flow_ASIS_08">
+        <di:waypoint x="1180" y="165"/><di:waypoint x="1240" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_09" bpmnElement="Flow_ASIS_09">
+        <di:waypoint x="1290" y="165"/><di:waypoint x="1450" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_10" bpmnElement="Flow_ASIS_10">
+        <di:waypoint x="1290" y="165"/><di:waypoint x="1400" y="165"/><di:waypoint x="1400" y="425"/><di:waypoint x="1510" y="425"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_11" bpmnElement="Flow_ASIS_11">
+        <di:waypoint x="1685" y="425"/><di:waypoint x="1740" y="425"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_12" bpmnElement="Flow_ASIS_12">
+        <di:waypoint x="1915" y="425"/><di:waypoint x="1980" y="425"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_13" bpmnElement="Flow_ASIS_13">
+        <di:waypoint x="2030" y="425"/><di:waypoint x="2055" y="425"/><di:waypoint x="2055" y="165"/><di:waypoint x="2080" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_14" bpmnElement="Flow_ASIS_14">
+        <di:waypoint x="2167" y="200"/><di:waypoint x="2167" y="350"/><di:waypoint x="1825" y="350"/><di:waypoint x="1825" y="390"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_15" bpmnElement="Flow_ASIS_15">
+        <di:waypoint x="2030" y="425"/><di:waypoint x="2120" y="425"/><di:waypoint x="2120" y="425"/><di:waypoint x="2200" y="425"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_16" bpmnElement="Flow_ASIS_16">
+        <di:waypoint x="2355" y="425"/><di:waypoint x="2390" y="425"/><di:waypoint x="2390" y="165"/><di:waypoint x="2430" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_17" bpmnElement="Flow_ASIS_17">
+        <di:waypoint x="2480" y="165"/><di:waypoint x="2580" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_18" bpmnElement="Flow_ASIS_18">
+        <di:waypoint x="2745" y="165"/><di:waypoint x="2830" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_19" bpmnElement="Flow_ASIS_19">
+        <di:waypoint x="2455" y="190"/><di:waypoint x="2455" y="425"/><di:waypoint x="2580" y="425"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_20" bpmnElement="Flow_ASIS_20">
+        <di:waypoint x="2745" y="425"/><di:waypoint x="2780" y="425"/><di:waypoint x="2780" y="555"/><di:waypoint x="2810" y="555"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_21" bpmnElement="Flow_ASIS_21">
+        <di:waypoint x="2990" y="555"/><di:waypoint x="3015" y="555"/><di:waypoint x="3015" y="295"/><di:waypoint x="3040" y="295"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_22" bpmnElement="Flow_ASIS_22">
+        <di:waypoint x="3215" y="295"/><di:waypoint x="3240" y="295"/><di:waypoint x="3240" y="555"/><di:waypoint x="3270" y="555"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ASIS_23" bpmnElement="Flow_ASIS_23">
+        <di:waypoint x="3445" y="555"/><di:waypoint x="3500" y="555"/><di:waypoint x="3500" y="165"/><di:waypoint x="3560" y="165"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_01" bpmnElement="Flow_Owner_ASIS_01">
+        <di:waypoint x="196" y="745"/><di:waypoint x="250" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_02" bpmnElement="Flow_Owner_ASIS_02">
+        <di:waypoint x="490" y="745"/><di:waypoint x="570" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_03" bpmnElement="Flow_Owner_ASIS_03">
+        <di:waypoint x="790" y="745"/><di:waypoint x="870" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_04" bpmnElement="Flow_Owner_ASIS_04">
+        <di:waypoint x="1090" y="745"/><di:waypoint x="1160" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_05" bpmnElement="Flow_Owner_ASIS_05">
+        <di:waypoint x="1380" y="745"/><di:waypoint x="1460" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_06" bpmnElement="Flow_Owner_ASIS_06">
+        <di:waypoint x="1510" y="745"/><di:waypoint x="1550" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_07" bpmnElement="Flow_Owner_ASIS_07">
+        <di:waypoint x="1510" y="745"/><di:waypoint x="1560" y="745"/><di:waypoint x="1560" y="745"/><di:waypoint x="1610" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_08" bpmnElement="Flow_Owner_ASIS_08">
+        <di:waypoint x="1830" y="745"/><di:waypoint x="1910" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Owner_ASIS_09" bpmnElement="Flow_Owner_ASIS_09">
+        <di:waypoint x="2020" y="710"/><di:waypoint x="2020" y="680"/><di:waypoint x="1270" y="680"/><di:waypoint x="1270" y="710"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

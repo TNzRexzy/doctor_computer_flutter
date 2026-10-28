@@ -40,27 +40,10 @@ class PcBuildModel {
   }
 
   List<String> get compatibilityIssues {
-    List<String> issues = [];
-    final cpu = selectedParts[PcPartCategory.cpu];
-    final mobo = selectedParts[PcPartCategory.motherboard];
-    final ram = selectedParts[PcPartCategory.ram];
-
-    if (cpu != null && mobo != null) {
-      if (cpu.compatibilityTags.contains('intel_lga1700') && mobo.compatibilityTags.contains('amd_am5')) {
-        issues.add('CPU (Intel) dan Motherboard (AMD) tidak kompatibel');
-      } else if (cpu.compatibilityTags.contains('amd_am5') && mobo.compatibilityTags.contains('intel_lga1700')) {
-        issues.add('CPU (AMD) dan Motherboard (Intel) tidak kompatibel');
-      }
-    }
-
-    if (ram != null && mobo != null) {
-      bool ramIsDdr5 = ram.compatibilityTags.contains('ddr5');
-      bool moboNeedsDdr5 = mobo.compatibilityTags.contains('ddr5');
-      if (ramIsDdr5 != moboNeedsDdr5) {
-        issues.add('Tipe RAM tidak sesuai dengan Motherboard');
-      }
-    }
-
-    return issues;
+    return PcPartCompatibility.issues(
+      cpu: selectedParts[PcPartCategory.cpu],
+      motherboard: selectedParts[PcPartCategory.motherboard],
+      ram: selectedParts[PcPartCategory.ram],
+    );
   }
 }

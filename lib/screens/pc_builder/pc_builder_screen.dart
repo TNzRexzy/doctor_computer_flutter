@@ -233,6 +233,43 @@ class _PcBuilderScreenState extends State<PcBuilderScreen> {
                           ),
                         ),
                       ],
+                      if (provider.compatibilityWarnings.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            children: provider.compatibilityWarnings.map((
+                              warning,
+                            ) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4.0),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      color: AppColors.warning,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        warning,
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: AppColors.warning,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -313,6 +350,7 @@ class _PcBuilderScreenState extends State<PcBuilderScreen> {
                                                   .selectedParts[category] !=
                                               null,
                                         ) &&
+                                        provider.compatibilityIssues.isEmpty &&
                                         provider.selectedParts.values
                                             .whereType<PcPartModel>()
                                             .every(

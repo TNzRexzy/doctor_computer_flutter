@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_POS_TOBE" targetNamespace="https://doctorcomputer.example/skpl/bpmn" exporter="Camunda Modeler" exporterVersion="5.52.0">
+  <bpmn:process id="Process_POS_Sale" name="Transaksi POS Kasir (TO-BE)" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_POS_Sale">
+      <bpmn:lane id="Lane_POS_Server" name="Supabase">
+        <bpmn:flowNodeRef>Task_POS_CheckServerStock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_CreateRemoteOrder</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_POS_App" name="Aplikasi POS dan Penyimpanan Lokal SQLite">
+        <bpmn:flowNodeRef>Gateway_POS_Connectivity</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_ReadCachedStock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_POS_StockAvailable</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_POS_SaveRoute</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_SaveSQLite</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_IssueReceiptOffline</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_POS_OfflineQueued</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_POS_Cashier" name="Kasir">
+        <bpmn:flowNodeRef>StartEvent_POS_Sale</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_EnterItems</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_CorrectItems</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_SelectPayment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_IssueReceiptOnline</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_POS_OnlineComplete</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="StartEvent_POS_Sale" name="Kasir memulai transaksi pada shift aktif" />
+    <bpmn:task id="Task_POS_EnterItems" name="Pilih produk dan masukkan jumlah" />
+    <bpmn:exclusiveGateway id="Gateway_POS_Connectivity" name="Perangkat online?" />
+    <bpmn:serviceTask id="Task_POS_CheckServerStock" name="Periksa stok terbaru di server" />
+    <bpmn:task id="Task_POS_ReadCachedStock" name="Periksa stok lokal yang tersimpan di perangkat" />
+    <bpmn:exclusiveGateway id="Gateway_POS_StockAvailable" name="Stok mencukupi?" />
+    <bpmn:task id="Task_POS_CorrectItems" name="Ubah jumlah atau pilih produk lain" />
+    <bpmn:task id="Task_POS_SelectPayment" name="Pilih tunai, QRIS atau debit BCA" />
+    <bpmn:exclusiveGateway id="Gateway_POS_SaveRoute" name="Koneksi tersedia saat menyimpan?" />
+    <bpmn:serviceTask id="Task_POS_CreateRemoteOrder" name="Buat order POS melalui RPC dan perbarui stok" />
+    <bpmn:task id="Task_POS_SaveSQLite" name="Simpan transaksi lokal dengan ID idempotensi" />
+    <bpmn:task id="Task_POS_IssueReceiptOnline" name="Terbitkan struk digital dan tampilkan transaksi berhasil" />
+    <bpmn:task id="Task_POS_IssueReceiptOffline" name="Terbitkan struk lokal dan tandai menunggu sinkronisasi" />
+    <bpmn:endEvent id="EndEvent_POS_OnlineComplete" name="Transaksi POS tersimpan di server" />
+    <bpmn:endEvent id="EndEvent_POS_OfflineQueued" name="Transaksi tersimpan lokal, sinkronisasi tertunda" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_01" sourceRef="StartEvent_POS_Sale" targetRef="Task_POS_EnterItems" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_08" sourceRef="Task_POS_CorrectItems" targetRef="Task_POS_EnterItems" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_02" sourceRef="Task_POS_EnterItems" targetRef="Gateway_POS_Connectivity" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_03" name="Ya" sourceRef="Gateway_POS_Connectivity" targetRef="Task_POS_CheckServerStock">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Koneksi tersedia</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_POS_Sale_04" name="Tidak" sourceRef="Gateway_POS_Connectivity" targetRef="Task_POS_ReadCachedStock">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Perangkat offline</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_POS_Sale_05" sourceRef="Task_POS_CheckServerStock" targetRef="Gateway_POS_StockAvailable" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_06" sourceRef="Task_POS_ReadCachedStock" targetRef="Gateway_POS_StockAvailable" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_07" name="Tidak" sourceRef="Gateway_POS_StockAvailable" targetRef="Task_POS_CorrectItems">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Stok tidak mencukupi</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_POS_Sale_09" name="Ya" sourceRef="Gateway_POS_StockAvailable" targetRef="Task_POS_SelectPayment">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Stok mencukupi</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_POS_Sale_10" sourceRef="Task_POS_SelectPayment" targetRef="Gateway_POS_SaveRoute" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_11" name="Ya" sourceRef="Gateway_POS_SaveRoute" targetRef="Task_POS_CreateRemoteOrder">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Koneksi tersedia saat transaksi disimpan</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_POS_Sale_12" name="Tidak" sourceRef="Gateway_POS_SaveRoute" targetRef="Task_POS_SaveSQLite">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Koneksi terputus atau offline</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_POS_Sale_13" sourceRef="Task_POS_CreateRemoteOrder" targetRef="Task_POS_IssueReceiptOnline" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_15" sourceRef="Task_POS_SaveSQLite" targetRef="Task_POS_IssueReceiptOffline" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_14" sourceRef="Task_POS_IssueReceiptOnline" targetRef="EndEvent_POS_OnlineComplete" />
+    <bpmn:sequenceFlow id="Flow_POS_Sale_16" sourceRef="Task_POS_IssueReceiptOffline" targetRef="EndEvent_POS_OfflineQueued" />
+  </bpmn:process>
+  <bpmn:process id="Process_POS_Sync" name="Sinkronisasi Transaksi POS Offline (TO-BE)" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_POS_Sync">
+      <bpmn:lane id="Lane_Sync_Server" name="Supabase">
+        <bpmn:flowNodeRef>Task_POS_IdempotentSync</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_SaveMapping</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Sync_App" name="Aplikasi dan SQLite lokal">
+        <bpmn:flowNodeRef>StartEvent_POS_ConnectionRestored</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_LoadPending</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_POS_MarkSynced</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_POS_Synced</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="StartEvent_POS_ConnectionRestored" name="Koneksi internet kembali tersedia" />
+    <bpmn:task id="Task_POS_LoadPending" name="Ambil antrean transaksi offline dari SQLite" />
+    <bpmn:serviceTask id="Task_POS_IdempotentSync" name="Kirim transaksi melalui RPC sinkronisasi idempoten" />
+    <bpmn:serviceTask id="Task_POS_SaveMapping" name="Simpan pemetaan ID lokal ke order server" />
+    <bpmn:task id="Task_POS_MarkSynced" name="Tandai transaksi lokal sudah tersinkron" />
+    <bpmn:endEvent id="EndEvent_POS_Synced" name="Antrean POS offline tersinkron" />
+    <bpmn:sequenceFlow id="Flow_POS_Sync_01" sourceRef="StartEvent_POS_ConnectionRestored" targetRef="Task_POS_LoadPending" />
+    <bpmn:sequenceFlow id="Flow_POS_Sync_02" sourceRef="Task_POS_LoadPending" targetRef="Task_POS_IdempotentSync" />
+    <bpmn:sequenceFlow id="Flow_POS_Sync_03" sourceRef="Task_POS_IdempotentSync" targetRef="Task_POS_SaveMapping" />
+    <bpmn:sequenceFlow id="Flow_POS_Sync_04" sourceRef="Task_POS_SaveMapping" targetRef="Task_POS_MarkSynced" />
+    <bpmn:sequenceFlow id="Flow_POS_Sync_05" sourceRef="Task_POS_MarkSynced" targetRef="EndEvent_POS_Synced" />
+  </bpmn:process>
+  <bpmn:collaboration id="Collaboration_POS_TOBE" name="Transaksi POS dan sinkronisasi offline">
+    <bpmn:participant id="Participant_POS_Sale" name="Transaksi POS Kasir" processRef="Process_POS_Sale" />
+    <bpmn:participant id="Participant_POS_Sync" name="Sinkronisasi POS Offline" processRef="Process_POS_Sync" />
+  </bpmn:collaboration>
+  <bpmndi:BPMNDiagram id="Diagram_POS_TOBE">
+    <bpmndi:BPMNPlane id="Plane_POS_TOBE" bpmnElement="Collaboration_POS_TOBE">
+      <bpmndi:BPMNShape id="Shape_Participant_POS_Sale" bpmnElement="Participant_POS_Sale" isHorizontal="true">
+        <dc:Bounds x="160" y="100" width="3020" height="390" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_POS_Server" bpmnElement="Lane_POS_Server" isHorizontal="true">
+        <dc:Bounds x="160" y="360" width="3020" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_POS_App" bpmnElement="Lane_POS_App" isHorizontal="true">
+        <dc:Bounds x="160" y="230" width="3020" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_POS_Cashier" bpmnElement="Lane_POS_Cashier" isHorizontal="true">
+        <dc:Bounds x="160" y="100" width="3020" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_StartEvent_POS_Sale" bpmnElement="StartEvent_POS_Sale">
+        <dc:Bounds x="200" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="182" y="183" width="72" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_EnterItems" bpmnElement="Task_POS_EnterItems">
+        <dc:Bounds x="280" y="130" width="175" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_POS_Connectivity" bpmnElement="Gateway_POS_Connectivity" isMarkerVisible="true">
+        <dc:Bounds x="530" y="270" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="511" y="320" width="89" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_CheckServerStock" bpmnElement="Task_POS_CheckServerStock">
+        <dc:Bounds x="660" y="390" width="185" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_ReadCachedStock" bpmnElement="Task_POS_ReadCachedStock">
+        <dc:Bounds x="660" y="250" width="185" height="90" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_POS_StockAvailable" bpmnElement="Gateway_POS_StockAvailable" isMarkerVisible="true">
+        <dc:Bounds x="910" y="270" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="893" y="320" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_CorrectItems" bpmnElement="Task_POS_CorrectItems">
+        <dc:Bounds x="1030" y="130" width="175" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_SelectPayment" bpmnElement="Task_POS_SelectPayment">
+        <dc:Bounds x="1250" y="130" width="175" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_POS_SaveRoute" bpmnElement="Gateway_POS_SaveRoute" isMarkerVisible="true">
+        <dc:Bounds x="1490" y="270" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1472" y="320" width="87" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_CreateRemoteOrder" bpmnElement="Task_POS_CreateRemoteOrder">
+        <dc:Bounds x="1630" y="390" width="205" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_SaveSQLite" bpmnElement="Task_POS_SaveSQLite">
+        <dc:Bounds x="1630" y="250" width="205" height="90" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_IssueReceiptOnline" bpmnElement="Task_POS_IssueReceiptOnline">
+        <dc:Bounds x="1900" y="120" width="210" height="90" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_IssueReceiptOffline" bpmnElement="Task_POS_IssueReceiptOffline">
+        <dc:Bounds x="1900" y="250" width="210" height="90" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_POS_OnlineComplete" bpmnElement="EndEvent_POS_OnlineComplete">
+        <dc:Bounds x="2190" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2171" y="183" width="74" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_POS_OfflineQueued" bpmnElement="EndEvent_POS_OfflineQueued">
+        <dc:Bounds x="2190" y="277" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2169" y="313" width="78" height="53" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_01" bpmnElement="Flow_POS_Sale_01">
+        <di:waypoint x="236" y="165" />
+        <di:waypoint x="280" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_02" bpmnElement="Flow_POS_Sale_02">
+        <di:waypoint x="455" y="165" />
+        <di:waypoint x="490" y="165" />
+        <di:waypoint x="490" y="295" />
+        <di:waypoint x="530" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_03" bpmnElement="Flow_POS_Sale_03">
+        <di:waypoint x="580" y="295" />
+        <di:waypoint x="610" y="295" />
+        <di:waypoint x="610" y="425" />
+        <di:waypoint x="660" y="425" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="613" y="313" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_04" bpmnElement="Flow_POS_Sale_04">
+        <di:waypoint x="580" y="295" />
+        <di:waypoint x="660" y="295" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="607" y="270" width="27" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_05" bpmnElement="Flow_POS_Sale_05">
+        <di:waypoint x="845" y="425" />
+        <di:waypoint x="885" y="425" />
+        <di:waypoint x="885" y="295" />
+        <di:waypoint x="910" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_06" bpmnElement="Flow_POS_Sale_06">
+        <di:waypoint x="845" y="295" />
+        <di:waypoint x="910" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_07" bpmnElement="Flow_POS_Sale_07">
+        <di:waypoint x="960" y="295" />
+        <di:waypoint x="995" y="295" />
+        <di:waypoint x="995" y="165" />
+        <di:waypoint x="1030" y="165" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="966" y="273" width="27" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_08" bpmnElement="Flow_POS_Sale_08">
+        <di:waypoint x="1030" y="165" />
+        <di:waypoint x="1000" y="165" />
+        <di:waypoint x="1000" y="110" />
+        <di:waypoint x="260" y="110" />
+        <di:waypoint x="260" y="150" />
+        <di:waypoint x="280" y="153" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_09" bpmnElement="Flow_POS_Sale_09">
+        <di:waypoint x="960" y="295" />
+        <di:waypoint x="1338" y="295" />
+        <di:waypoint x="1338" y="200" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1347" y="238" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_10" bpmnElement="Flow_POS_Sale_10">
+        <di:waypoint x="1425" y="165" />
+        <di:waypoint x="1450" y="165" />
+        <di:waypoint x="1450" y="295" />
+        <di:waypoint x="1490" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_11" bpmnElement="Flow_POS_Sale_11">
+        <di:waypoint x="1540" y="295" />
+        <di:waypoint x="1580" y="295" />
+        <di:waypoint x="1580" y="425" />
+        <di:waypoint x="1630" y="425" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1589" y="350" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_12" bpmnElement="Flow_POS_Sale_12">
+        <di:waypoint x="1540" y="295" />
+        <di:waypoint x="1630" y="295" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1572" y="270" width="27" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_13" bpmnElement="Flow_POS_Sale_13">
+        <di:waypoint x="1835" y="425" />
+        <di:waypoint x="1860" y="425" />
+        <di:waypoint x="1860" y="165" />
+        <di:waypoint x="1900" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_14" bpmnElement="Flow_POS_Sale_14">
+        <di:waypoint x="2110" y="165" />
+        <di:waypoint x="2190" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_15" bpmnElement="Flow_POS_Sale_15">
+        <di:waypoint x="1835" y="295" />
+        <di:waypoint x="1900" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sale_16" bpmnElement="Flow_POS_Sale_16">
+        <di:waypoint x="2110" y="295" />
+        <di:waypoint x="2190" y="295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Shape_Participant_POS_Sync" bpmnElement="Participant_POS_Sync" isHorizontal="true">
+        <dc:Bounds x="160" y="560" width="3020" height="260" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Sync_Server" bpmnElement="Lane_Sync_Server" isHorizontal="true">
+        <dc:Bounds x="160" y="690" width="3020" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Sync_App" bpmnElement="Lane_Sync_App" isHorizontal="true">
+        <dc:Bounds x="160" y="560" width="3020" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_StartEvent_POS_ConnectionRestored" bpmnElement="StartEvent_POS_ConnectionRestored">
+        <dc:Bounds x="200" y="607" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="178" y="643" width="81" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_LoadPending" bpmnElement="Task_POS_LoadPending">
+        <dc:Bounds x="300" y="590" width="220" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_IdempotentSync" bpmnElement="Task_POS_IdempotentSync">
+        <dc:Bounds x="620" y="720" width="240" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_SaveMapping" bpmnElement="Task_POS_SaveMapping">
+        <dc:Bounds x="960" y="720" width="240" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_POS_MarkSynced" bpmnElement="Task_POS_MarkSynced">
+        <dc:Bounds x="1300" y="590" width="220" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_POS_Synced" bpmnElement="EndEvent_POS_Synced">
+        <dc:Bounds x="1600" y="607" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1578" y="643" width="81" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_POS_Sync_01" bpmnElement="Flow_POS_Sync_01">
+        <di:waypoint x="236" y="625" />
+        <di:waypoint x="300" y="625" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sync_02" bpmnElement="Flow_POS_Sync_02">
+        <di:waypoint x="520" y="625" />
+        <di:waypoint x="570" y="625" />
+        <di:waypoint x="570" y="755" />
+        <di:waypoint x="620" y="755" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sync_03" bpmnElement="Flow_POS_Sync_03">
+        <di:waypoint x="860" y="755" />
+        <di:waypoint x="960" y="755" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sync_04" bpmnElement="Flow_POS_Sync_04">
+        <di:waypoint x="1200" y="755" />
+        <di:waypoint x="1250" y="755" />
+        <di:waypoint x="1250" y="625" />
+        <di:waypoint x="1300" y="625" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_POS_Sync_05" bpmnElement="Flow_POS_Sync_05">
+        <di:waypoint x="1520" y="625" />
+        <di:waypoint x="1600" y="625" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

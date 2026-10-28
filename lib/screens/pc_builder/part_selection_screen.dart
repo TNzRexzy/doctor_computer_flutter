@@ -34,7 +34,10 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.pop(context),
                 ),
-                Text('Pilih ${widget.category.displayNameId}', style: AppTextStyles.titleMedium),
+                Text(
+                  'Pilih ${widget.category.displayNameId}',
+                  style: AppTextStyles.titleMedium,
+                ),
                 const Spacer(),
               ],
             ),
@@ -59,7 +62,10 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
               child: Row(
                 children: [
                   _buildChoiceChip('Semua'),
@@ -75,14 +81,18 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                 builder: (context, provider, child) {
                   var parts = provider.getPartsForCategory(widget.category);
                   if (_searchQuery.isNotEmpty) {
-                    parts = parts.where((p) => p.name.toLowerCase().contains(_searchQuery)).toList();
+                    parts = parts
+                        .where(
+                          (p) => p.name.toLowerCase().contains(_searchQuery),
+                        )
+                        .toList();
                   }
                   if (_sortBy == 'Price Low') {
                     parts.sort((a, b) => a.price.compareTo(b.price));
                   } else if (_sortBy == 'Price High') {
                     parts.sort((a, b) => b.price.compareTo(a.price));
                   }
-                  
+
                   final selectedPart = provider.selectedParts[widget.category];
 
                   if (provider.isLoading && parts.isEmpty) {
@@ -95,14 +105,20 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(widget.category.icon, size: 40, color: AppColors.textTertiary),
+                            Icon(
+                              widget.category.icon,
+                              size: 40,
+                              color: AppColors.textTertiary,
+                            ),
                             const SizedBox(height: 12),
                             Text(
                               provider.errorMessage ??
                                   (_searchQuery.isNotEmpty
                                       ? 'Komponen tidak ditemukan'
                                       : 'Belum ada ${widget.category.displayNameId} di database'),
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                             if (provider.errorMessage != null) ...[
@@ -125,6 +141,10 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                     itemBuilder: (context, index) {
                       final part = parts[index];
                       final isSelected = selectedPart?.id == part.id;
+                      final isIncompatible = provider.wouldPartBeIncompatible(
+                        widget.category,
+                        part,
+                      );
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: GlassCard(
@@ -134,7 +154,10 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                             child: Container(
                               decoration: isSelected
                                   ? BoxDecoration(
-                                      border: Border.all(color: AppColors.primary, width: 2),
+                                      border: Border.all(
+                                        color: AppColors.primary,
+                                        width: 2,
+                                      ),
                                       borderRadius: BorderRadius.circular(16),
                                     )
                                   : null,
@@ -151,31 +174,68 @@ class _PartSelectionScreenState extends State<PartSelectionScreen> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(part.name, style: AppTextStyles.titleSmall),
-                                        Text(part.brand, style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary)),
+                                        Text(
+                                          part.name,
+                                          style: AppTextStyles.titleSmall,
+                                        ),
+                                        Text(
+                                          part.brand,
+                                          style: AppTextStyles.caption.copyWith(
+                                            color: AppColors.textTertiary,
+                                          ),
+                                        ),
                                         const SizedBox(height: 4),
                                         Row(
-                                          children: part.specs.entries.take(2).map((e) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(right: 4.0),
-                                              child: Chip(
-                                                label: Text(e.value, style: AppTextStyles.caption),
-                                                padding: EdgeInsets.zero,
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                            );
-                                          }).toList(),
+                                          children: part.specs.entries
+                                              .take(2)
+                                              .map((e) {
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        right: 4.0,
+                                                      ),
+                                                  child: Chip(
+                                                    label: Text(
+                                                      e.value,
+                                                      style:
+                                                          AppTextStyles.caption,
+                                                    ),
+                                                    padding: EdgeInsets.zero,
+                                                    visualDensity:
+                                                        VisualDensity.compact,
+                                                  ),
+                                                );
+                                              })
+                                              .toList(),
                                         ),
+                                        if (isIncompatible) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Tidak kompatibel dengan pilihan saat ini',
+                                            style: AppTextStyles.caption
+                                                .copyWith(
+                                                  color: AppColors.error,
+                                                ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(formatRupiah(part.price), style: AppTextStyles.priceSmall),
-                                      if (isSelected) Icon(Icons.check_circle, color: AppColors.primary),
+                                      Text(
+                                        formatRupiah(part.price),
+                                        style: AppTextStyles.priceSmall,
+                                      ),
+                                      if (isSelected)
+                                        Icon(
+                                          Icons.check_circle,
+                                          color: AppColors.primary,
+                                        ),
                                     ],
                                   ),
                                 ],

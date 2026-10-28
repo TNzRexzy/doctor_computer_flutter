@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Current Version:** 1.2.1+25
+* **Current Version:** 1.2.2+26
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -152,9 +152,20 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-050 | The Flash Sale product picker appeared centered and cramped | The picker used a centered container, a short fixed product list, and dense rows | Resolved (the picker is now a taller, bottom-anchored responsive sheet with searchable, readable product cards) |
 | BUG-051 | Profile information and account actions lacked visual grouping | Profile details and menu actions shared a flat, tightly packed layout | Resolved (added a profile summary card, grouped menu sections, and clearer touch targets without removing account actions) |
 | BUG-052 | Main navigation tab changes had little selection feedback | Tab icons and labels changed state without coordinated motion | Resolved (tab changes fade/slide smoothly while retaining each tab's state; the selected nav item animates and respects reduced-motion settings) |
+| BUG-053 | PC Builder allowed CPU, motherboard, and RAM combinations without checking the actual socket or memory type | Newly added PC parts had empty compatibility tags, and the check only recognized a limited set of hard-coded tags | Resolved (read socket and DDR type from component specifications/tags, show warnings for mismatches or missing data, mark incompatible choices, and disable adding incompatible builds to the cart) |
+| BUG-054 | Adding a PC component could fail with foreign-key error `23503` on `pc_parts_product_id_fkey` | The `pc_parts` child row was inserted before its referenced `products` row | Resolved (save the product first, then its PC-part row; compensate by removing temporary rows if component creation fails) |
 
 ---
 
+## Version 1.2.2 Release Changelog
+
+1. **PC Builder compatibility (BUG-053):** Compare CPU and motherboard sockets (including LGA and AM-series sockets) and RAM / motherboard memory types (DDR3, DDR4, DDR5) using component specifications or existing compatibility tags. Incompatible selections are identified in the component picker, the build summary explains the mismatch, and incompatible builds cannot be added to the cart. Missing compatibility data is surfaced as a warning instead of silently treating the parts as compatible.
+2. **Compatibility data in product management:** Admin and cashier product forms now request the relevant CPU socket and/or RAM type for PC components and save them in product specifications; generated `pc_parts` compatibility tags are derived from those values. Existing PC-component products should be edited to fill in their socket or memory type so they can be checked.
+3. **Reliable PC-part creation (BUG-054):** Save the catalog product before creating its linked `pc_parts` record, respecting the `pc_parts.product_id` foreign key. If the second step fails, the app attempts to remove the temporary rows and surfaces cleanup errors.
+4. **Validation:** Added compatibility tests for socket mismatches, DDR mismatches, matching parts, missing-spec warnings, and derived tags.
+5. **Versioning:** Bumped the app to `1.2.2+26` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+## Version 1.2.1 Release Changelog
 ## Version 1.2.1 Release Changelog
 
 1. **Order history and warranty UX:** Tapping an order card opens its tracking details while the warranty action remains separate. Warranty serial numbers can be copied to the clipboard.
@@ -164,7 +175,7 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 5. **Compact admin and cashier product management:** Reduced product and voucher card density in the Admin dashboard. The Cashier dashboard's product-management tab now searches by product name or brand, shows the result count, and uses more compact product rows and POS spacing.
 6. **Compact cart voucher selector:** The voucher field remains visible when no voucher qualifies, uses smaller text, and wraps the empty-state message instead of truncating it.
 7. **Database:** Apply `supabase/migrations/20261111_membership_scope_vouchers.sql` after its prerequisite voucher, PC-parts, and order migrations. It installs idempotent weekly/monthly schedules using Supabase `pg_cron` and issues the current periods immediately. If that migration was already applied before immediate issuance was added, run `supabase/migrations/20261112_issue_current_membership_vouchers.sql` once. If issuance fails on `vouchers_code_check`, run `supabase/migrations/20261113_fix_membership_voucher_code_case.sql` to enforce uppercase generated codes and retry the current periods.
-8. **Versioning:** Current stable version remains `1.2.1+25` (`pubspec.yaml`, `AppConstants.appVersion`).
+8. **Versioning:** Released stable version `1.2.1+25` (`pubspec.yaml`, `AppConstants.appVersion`).
 
 ## Version 1.2.0 Release Changelog
 
