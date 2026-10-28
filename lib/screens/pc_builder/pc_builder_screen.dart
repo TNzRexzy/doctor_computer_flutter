@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
+import 'package:doctor_computer/core/utils/currency_formatter.dart';
 import 'package:doctor_computer/data/models/pc_build_model.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
@@ -13,8 +14,15 @@ import 'package:doctor_computer/widgets/pc_builder/price_summary_card.dart';
 import 'package:doctor_computer/widgets/pc_builder/ai_bottleneck_sheet.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 
-class PcBuilderScreen extends StatelessWidget {
+class PcBuilderScreen extends StatefulWidget {
   const PcBuilderScreen({super.key});
+
+  @override
+  State<PcBuilderScreen> createState() => _PcBuilderScreenState();
+}
+
+class _PcBuilderScreenState extends State<PcBuilderScreen> {
+  bool _isSummaryExpanded = true;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +42,12 @@ class PcBuilderScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Rakit PC', style: AppTextStyles.heading3),
-                      Text('Pilih komponen', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        'Pilih komponen',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                   const Spacer(),
@@ -57,7 +70,8 @@ class PcBuilderScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           ...PcPartCategory.values.map((category) {
-                            final selectedPart = provider.selectedParts[category];
+                            final selectedPart =
+                                provider.selectedParts[category];
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 12.0),
                               child: PartSlotCard(
@@ -94,7 +108,10 @@ class PcBuilderScreen extends StatelessWidget {
                 final ram = provider.selectedParts[PcPartCategory.ram];
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 4.0,
+                  ),
                   child: Column(
                     children: [
                       // AI Bottleneck Banner
@@ -104,12 +121,16 @@ class PcBuilderScreen extends StatelessWidget {
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
-                            builder: (_) => AiBottleneckSheet(cpu: cpu, gpu: gpu, ram: ram),
+                            builder: (_) =>
+                                AiBottleneckSheet(cpu: cpu, gpu: gpu, ram: ram),
                           );
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
@@ -118,11 +139,17 @@ class PcBuilderScreen extends StatelessWidget {
                               ],
                             ),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.4),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.speed, color: AppColors.primary, size: 18),
+                              Icon(
+                                Icons.speed,
+                                color: AppColors.primary,
+                                size: 18,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
@@ -130,13 +157,19 @@ class PcBuilderScreen extends StatelessWidget {
                                   children: [
                                     const Text(
                                       'AI Bottleneck Calculator',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                     Text(
                                       (cpu != null && gpu != null)
                                           ? 'Analisis seimbang: ${cpu.name.split(' ').take(2).join(' ')} + ${gpu.name.split(' ').take(2).join(' ')}'
                                           : 'Pilih CPU & GPU untuk menghitung bottleneck',
-                                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 10,
+                                      ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -144,14 +177,21 @@ class PcBuilderScreen extends StatelessWidget {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.primary,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: const Text(
                                   'Cek AI',
-                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ],
@@ -172,9 +212,20 @@ class PcBuilderScreen extends StatelessWidget {
                                 padding: const EdgeInsets.only(bottom: 4.0),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.warning, color: AppColors.error, size: 14),
+                                    Icon(
+                                      Icons.warning,
+                                      color: AppColors.error,
+                                      size: 14,
+                                    ),
                                     const SizedBox(width: 8),
-                                    Expanded(child: Text(issue, style: AppTextStyles.caption.copyWith(color: AppColors.error))),
+                                    Expanded(
+                                      child: Text(
+                                        issue,
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: AppColors.error,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -195,96 +246,168 @@ class PcBuilderScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                  PriceSummaryCard(
-                    compact: true,
-                    selectedParts: provider.selectedParts,
-                    totalPartsPrice: provider.totalPartsPrice,
-                    buildFee: provider.buildFee,
-                    grandTotal: provider.grandTotal,
-                    serviceTier: provider.serviceTier,
-                    onServiceTierChanged: (tier) {
-                      provider.setServiceTier(tier);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  // Tombol tetap di bawah total estimasi (tidak ikut scroll).
-                  GradientButton(
-                            height: 44,
-                            label: 'Tambah ke Keranjang',
-                            icon: Icons.shopping_cart,
-                            isEnabled: provider.selectedParts.containsKey(PcPartCategory.cpu) &&
-                                provider.selectedParts.containsKey(PcPartCategory.gpu) &&
-                                provider.selectedParts.containsKey(PcPartCategory.motherboard) &&
-                                provider.selectedParts.containsKey(PcPartCategory.ram),
-                            onPressed: () {
-                              final parts = provider.selectedParts;
-                              // Add each selected part as a separate cart item
-                              final cart = context.read<CartProvider>();
-                              
-                              int addedCount = 0;
-                              for (final entry in parts.entries) {
-                                if (entry.value != null) {
-                                  final part = entry.value!;
-                                  final product = ProductModel(
-                                    id: 'build-${part.id}',
-                                    name: '${part.name} (Rakit PC)',
-                                    description: 'Komponen rakit PC - ${entry.key.displayNameId}',
-                                    descriptionId: 'Komponen rakit PC - ${entry.key.displayNameId}',
-                                    price: part.price,
-                                    categoryId: 'pc-build',
-                                    brand: part.brand,
-                                    images: part.imageUrl != null ? [part.imageUrl!] : [],
-                                    specs: part.specs,
-                                    rating: 4.5,
-                                    reviewCount: 0,
-                                    stock: 10,
-                                    isNew: false,
-                                    isOnSale: false,
-                                  );
-                                  cart.addToCart(product);
-                                  addedCount++;
-                                }
-                              }
-                              
-                              // Also add build service fee as an item
-                              if (addedCount > 0) {
-                                final serviceName = provider.serviceTier == BuildServiceTier.standard 
-                                    ? 'Jasa Rakit PC Standard' 
-                                    : 'Jasa Rakit PC Premium';
-                                final serviceProduct = ProductModel(
-                                  id: 'build-service-fee',
-                                  name: serviceName,
-                                  description: 'Biaya jasa perakitan PC',
-                                  descriptionId: 'Biaya jasa perakitan PC',
-                                  price: provider.buildFee,
-                                  categoryId: 'service',
-                                  brand: 'Doctor Computer',
-                                  images: [],
-                                  specs: {},
-                                  rating: 5.0,
-                                  reviewCount: 0,
-                                  stock: 999,
-                                  isNew: false,
-                                  isOnSale: false,
-                                );
-                                cart.addToCart(serviceProduct);
-                              }
-                              
-                              showDialog(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Berhasil!'),
-                                  content: Text('$addedCount komponen + jasa rakit berhasil ditambahkan ke keranjang.'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: const Text('OK'),
-                                    )
-                                  ],
-                                ),
-                              );
-                            },
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Ringkasan Rakit PC',
+                              style: AppTextStyles.titleSmall,
+                            ),
                           ),
+                          Text(
+                            formatRupiah(provider.grandTotal),
+                            style: AppTextStyles.titleSmall.copyWith(
+                              color: AppColors.accent,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: _isSummaryExpanded
+                                ? 'Tutup ringkasan'
+                                : 'Buka ringkasan',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(
+                              () => _isSummaryExpanded = !_isSummaryExpanded,
+                            ),
+                            icon: AnimatedRotation(
+                              turns: _isSummaryExpanded ? 0 : 0.5,
+                              duration: const Duration(milliseconds: 220),
+                              child: const Icon(Icons.keyboard_arrow_down),
+                            ),
+                          ),
+                        ],
+                      ),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: _isSummaryExpanded
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  PriceSummaryCard(
+                                    compact: true,
+                                    selectedParts: provider.selectedParts,
+                                    totalPartsPrice: provider.totalPartsPrice,
+                                    buildFee: provider.buildFee,
+                                    grandTotal: provider.grandTotal,
+                                    serviceTier: provider.serviceTier,
+                                    onServiceTierChanged: (tier) {
+                                      provider.setServiceTier(tier);
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Tombol tetap di bawah total estimasi (tidak ikut scroll).
+                                  GradientButton(
+                                    height: 44,
+                                    label: 'Tambah ke Keranjang',
+                                    icon: Icons.shopping_cart,
+                                    isEnabled:
+                                        [
+                                          PcPartCategory.cpu,
+                                          PcPartCategory.gpu,
+                                          PcPartCategory.motherboard,
+                                          PcPartCategory.ram,
+                                        ].every(
+                                          (category) =>
+                                              provider
+                                                  .selectedParts[category] !=
+                                              null,
+                                        ) &&
+                                        provider.selectedParts.values
+                                            .whereType<PcPartModel>()
+                                            .every(
+                                              (part) =>
+                                                  part.productId?.isNotEmpty ==
+                                                  true,
+                                            ),
+                                    onPressed: () {
+                                      final parts = provider.selectedParts;
+                                      // Add each selected part as a separate cart item
+                                      final cart = context.read<CartProvider>();
+
+                                      int addedCount = 0;
+                                      for (final entry in parts.entries) {
+                                        if (entry.value != null) {
+                                          final part = entry.value!;
+                                          final product = ProductModel(
+                                            id: part.productId!,
+                                            name: '${part.name} (Rakit PC)',
+                                            description:
+                                                'Komponen rakit PC - ${entry.key.displayNameId}',
+                                            descriptionId:
+                                                'Komponen rakit PC - ${entry.key.displayNameId}',
+                                            price: part.price,
+                                            categoryId: 'pc-build',
+                                            brand: part.brand,
+                                            images: part.imageUrl != null
+                                                ? [part.imageUrl!]
+                                                : [],
+                                            specs: part.specs,
+                                            rating: 4.5,
+                                            reviewCount: 0,
+                                            stock: 10,
+                                            isNew: false,
+                                            isOnSale: false,
+                                          );
+                                          cart.addToCart(product);
+                                          addedCount++;
+                                        }
+                                      }
+
+                                      // Also add build service fee as an item
+                                      if (addedCount > 0) {
+                                        final serviceName =
+                                            provider.serviceTier ==
+                                                BuildServiceTier.standard
+                                            ? 'Jasa Rakit PC Standard'
+                                            : 'Jasa Rakit PC Premium';
+                                        final serviceProduct = ProductModel(
+                                          id:
+                                              provider.serviceTier ==
+                                                  BuildServiceTier.standard
+                                              ? 'build-service-standard'
+                                              : 'build-service-premium',
+                                          name: serviceName,
+                                          description:
+                                              'Biaya jasa perakitan PC',
+                                          descriptionId:
+                                              'Biaya jasa perakitan PC',
+                                          price: provider.buildFee,
+                                          categoryId: 'service',
+                                          brand: 'Doctor Computer',
+                                          images: [],
+                                          specs: {},
+                                          rating: 5.0,
+                                          reviewCount: 0,
+                                          stock: 999,
+                                          isNew: false,
+                                          isOnSale: false,
+                                        );
+                                        cart.addToCart(serviceProduct);
+                                      }
+
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('Berhasil!'),
+                                          content: Text(
+                                            '$addedCount komponen + jasa rakit berhasil ditambahkan ke keranjang.',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx),
+                                              child: const Text('OK'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              )
+                            : const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 );
@@ -296,5 +419,3 @@ class PcBuilderScreen extends StatelessWidget {
     );
   }
 }
-
-

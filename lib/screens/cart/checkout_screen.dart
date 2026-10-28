@@ -14,6 +14,7 @@ import 'package:doctor_computer/data/models/order_model.dart';
 import 'package:doctor_computer/data/models/cart_item_model.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/screens/map/location_picker_screen.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -77,7 +78,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _longitude = result.longitude;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.of(context).showSnackBar(
           SnackBar(
             content: const Text(
               'Alamat dari peta berhasil dipilih dan tersimpan ke database!',
@@ -245,13 +246,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final fullAddress =
         '${_addressController.text.trim()}, ${_cityController.text.trim()} ${_postalController.text.trim()}';
 
+    final voucherDiscount = cart.voucherDiscountForShipping(
+      shipping['price'] as double,
+    );
     final orderRequest = OrderModel(
       id: '',
       items: List<CartItemModel>.from(cart.items),
       totalPrice:
-          cart.totalPrice +
-          (shipping['price'] as double) -
-          cart.voucherDiscount,
+          cart.totalPrice + (shipping['price'] as double) - voucherDiscount,
       status: OrderStatus.processing,
       orderDate: DateTime.now(),
       shippingAddress: fullAddress.isNotEmpty
@@ -272,7 +274,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final error =
           context.read<OrderProvider>().errorMessage ??
           'Pesanan gagal disimpan.';
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(content: Text(error), backgroundColor: AppColors.error),
       );
       return;
@@ -548,7 +550,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   .shippingMethods[_selectedShipping]['price']
                               as double;
                       final total = cart.totalPrice + shippingPrice;
-                      final voucherDiscount = cart.voucherDiscount;
+                      final voucherDiscount = cart.voucherDiscountForShipping(
+                        shippingPrice,
+                      );
 
                       return Column(
                         children: [

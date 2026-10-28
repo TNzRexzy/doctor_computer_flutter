@@ -7,6 +7,7 @@ import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 /// Register Screen
 class RegisterScreen extends StatefulWidget {
@@ -48,14 +49,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       final errorMessage = context.read<AuthProvider>().errorMessage;
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registrasi berhasil.')),
-        );
+        AppToast.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Registrasi berhasil.')));
         // Redirect to Welcome Page
         Navigator.pushReplacementNamed(context, AppRouter.welcome);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage ?? 'Registrasi gagal. Silakan coba lagi.')),
+        AppToast.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessage ?? 'Registrasi gagal. Silakan coba lagi.',
+            ),
+          ),
         );
       }
     }
@@ -92,7 +97,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       TextFormField(
                         controller: _nameController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.person, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.person,
+                            color: AppColors.textSecondary,
+                          ),
                           hintText: 'Nama Lengkap',
                           filled: true,
                           fillColor: AppColors.surface,
@@ -101,14 +109,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: (value) => Validators.validateRequired(value, 'Nama Lengkap'),
+                        validator: (value) =>
+                            Validators.validateRequired(value, 'Nama Lengkap'),
                         style: AppTextStyles.bodyMedium,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.mail, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.mail,
+                            color: AppColors.textSecondary,
+                          ),
                           hintText: 'Email',
                           filled: true,
                           fillColor: AppColors.surface,
@@ -125,7 +137,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       TextFormField(
                         controller: _phoneController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.phone, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.phone,
+                            color: AppColors.textSecondary,
+                          ),
                           hintText: '+62',
                           filled: true,
                           fillColor: AppColors.surface,
@@ -143,10 +158,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _passwordController,
                         obscureText: _obscurePassword,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.lock,
+                            color: AppColors.textSecondary,
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              _obscurePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                               color: AppColors.textSecondary,
                             ),
                             onPressed: () {
@@ -171,10 +191,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _confirmPasswordController,
                         obscureText: _obscureConfirm,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.lock,
+                            color: AppColors.textSecondary,
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscureConfirm ? Icons.visibility : Icons.visibility_off,
+                              _obscureConfirm
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                               color: AppColors.textSecondary,
                             ),
                             onPressed: () {
@@ -191,7 +216,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: (val) => Validators.validateConfirmPassword(val, _passwordController.text),
+                        validator: (val) => Validators.validateConfirmPassword(
+                          val,
+                          _passwordController.text,
+                        ),
                         style: AppTextStyles.bodyMedium,
                       ),
                       const SizedBox(height: 24),
@@ -213,7 +241,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: () {
                       Navigator.pop(context);
                     },
-                    child: Text('Masuk', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary)),
+                    child: Text(
+                      'Masuk',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
                 ],
               ),

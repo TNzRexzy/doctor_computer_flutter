@@ -61,24 +61,47 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 children: [
                   if (widget.categoryId != null)
                     IconButton(
-                      icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: AppColors.textPrimary,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   Expanded(
-                    child: Text(
-                      widget.categoryId ?? 'Semua Produk',
-                      style: AppTextStyles.heading3,
-                      overflow: TextOverflow.ellipsis,
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, _) {
+                        final selectedCategory = provider.categories
+                            .where(
+                              (category) =>
+                                  category.id == provider.selectedCategoryId,
+                            )
+                            .firstOrNull;
+                        return Text(
+                          selectedCategory?.nameId ?? 'Semua Produk',
+                          style: AppTextStyles.heading3,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
                     ),
                   ),
                   Row(
                     children: [
                       IconButton(
-                        icon: Icon(Icons.grid_view, color: _isGridView ? AppColors.primary : AppColors.textTertiary),
+                        icon: Icon(
+                          Icons.grid_view,
+                          color: _isGridView
+                              ? AppColors.primary
+                              : AppColors.textTertiary,
+                        ),
                         onPressed: () => setState(() => _isGridView = true),
                       ),
                       IconButton(
-                        icon: Icon(Icons.view_list, color: !_isGridView ? AppColors.primary : AppColors.textTertiary),
+                        icon: Icon(
+                          Icons.view_list,
+                          color: !_isGridView
+                              ? AppColors.primary
+                              : AppColors.textTertiary,
+                        ),
                         onPressed: () => setState(() => _isGridView = false),
                       ),
                     ],
@@ -107,9 +130,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 builder: (context, provider, child) {
                   return CategoryGrid(
                     categories: provider.categories,
-                    onCategoryTap: (category) {
-                                          provider.setCategory(category);
-                                        },
+                    selectedCategoryId: provider.selectedCategoryId,
+                    showAllOption: true,
+                    onCategoryTap: provider.setCategory,
                   );
                 },
               ),
@@ -122,47 +145,82 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     return Center(
                       child: Text(
                         'Produk tidak ditemukan',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     );
                   }
 
-                  final bottomPadding = 95.0 + MediaQuery.of(context).padding.bottom;
+                  final bottomPadding =
+                      95.0 + MediaQuery.of(context).padding.bottom;
                   final screenWidth = MediaQuery.of(context).size.width;
 
-                  if (_isGridView) {
-                    return GridView.builder(
-                      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: screenWidth > 600 ? 3 : 2,
-                        childAspectRatio: screenWidth < 360 ? 0.52 : 0.56,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final product = products[index];
-                        return ProductCard(
-                          product: product,
-                          onTap: () => Navigator.pushNamed(context, AppRouter.productDetail, arguments: product),
-                          onWishlistTap: () => wishlistProvider.toggleWishlist(product),
-                          isWishlisted: wishlistProvider.isInWishlist(product.id),
+                  final catalogView = _isGridView
+                      ? GridView.builder(
+                          key: const ValueKey('catalog-grid'),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            bottomPadding,
+                          ),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: screenWidth > 600 ? 3 : 2,
+                                childAspectRatio: screenWidth < 360
+                                    ? 0.52
+                                    : 0.56,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                              ),
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final product = products[index];
+                            return ProductCard(
+                              product: product,
+                              onTap: () => Navigator.pushNamed(
+                                context,
+                                AppRouter.productDetail,
+                                arguments: product,
+                              ),
+                              onWishlistTap: () =>
+                                  wishlistProvider.toggleWishlist(product),
+                              isWishlisted: wishlistProvider.isInWishlist(
+                                product.id,
+                              ),
+                            );
+                          },
+                        )
+                      : ListView.builder(
+                          key: const ValueKey('catalog-list'),
+                          padding: EdgeInsets.fromLTRB(0, 8, 0, bottomPadding),
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final product = products[index];
+                            return _buildListItem(
+                              product,
+                              wishlistProvider.isInWishlist(product.id),
+                              () => wishlistProvider.toggleWishlist(product),
+                            );
+                          },
                         );
-                      },
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: EdgeInsets.fromLTRB(0, 8, 0, bottomPadding),
-                    itemCount: products.length,
-                    itemBuilder: (context, index) {
-                      final product = products[index];
-                      return _buildListItem(
-                        product,
-                        wishlistProvider.isInWishlist(product.id),
-                        () => wishlistProvider.toggleWishlist(product),
-                      );
-                    },
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    reverseDuration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.025),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: catalogView,
                   );
                 },
               ),
@@ -173,10 +231,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  Widget _buildListItem(ProductModel product, bool isWishlisted, VoidCallback onWishlistTap) {
+  Widget _buildListItem(
+    ProductModel product,
+    bool isWishlisted,
+    VoidCallback onWishlistTap,
+  ) {
     return GlassCard(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      onTap: () => Navigator.pushNamed(context, AppRouter.productDetail, arguments: product),
+      onTap: () => Navigator.pushNamed(
+        context,
+        AppRouter.productDetail,
+        arguments: product,
+      ),
       child: Row(
         children: [
           Stack(
@@ -189,7 +255,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: AppImageView(
-                  imageUrl: product.images.isNotEmpty ? product.images.first : product.id,
+                  imageUrl: product.images.isNotEmpty
+                      ? product.images.first
+                      : product.id,
                   fit: BoxFit.cover,
                   width: 100,
                   height: 100,
@@ -201,7 +269,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   top: 6,
                   left: 6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.error,
                       borderRadius: BorderRadius.circular(4),
@@ -229,7 +300,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product.name, style: AppTextStyles.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(
+                  product.name,
+                  style: AppTextStyles.titleSmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(product.brand, style: AppTextStyles.caption),
                 const SizedBox(height: 4),
                 Row(
@@ -242,13 +318,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       style: AppTextStyles.caption,
                     ),
                     if (product.reviewCount > 0)
-                      Text(' (${product.reviewCount})', style: AppTextStyles.caption),
+                      Text(
+                        ' (${product.reviewCount})',
+                        style: AppTextStyles.caption,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(formatRupiah(product.price), style: AppTextStyles.priceSmall),
+                Text(
+                  formatRupiah(product.price),
+                  style: AppTextStyles.priceSmall,
+                ),
                 if (product.originalPrice != null)
-                  Text(formatRupiah(product.originalPrice!), style: AppTextStyles.priceOriginal),
+                  Text(
+                    formatRupiah(product.originalPrice!),
+                    style: AppTextStyles.priceOriginal,
+                  ),
               ],
             ),
           ),
@@ -264,4 +349,3 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 }
-

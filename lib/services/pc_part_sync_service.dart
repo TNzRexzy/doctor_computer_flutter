@@ -107,6 +107,7 @@ class PcPartSyncService {
         await client.from('pc_parts').insert({
           'id': id,
           'name': name,
+          'product_id': product.id,
           'category': kind.dbCategory,
           'brand': product.brand,
           'price': product.price,

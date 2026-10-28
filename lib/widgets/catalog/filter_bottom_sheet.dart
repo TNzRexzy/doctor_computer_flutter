@@ -20,7 +20,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
-    final provider = context.read<ProductProvider>();
+    final provider = context.watch<ProductProvider>();
     final brands = provider.availableBrands;
 
     return Container(
@@ -70,15 +70,25 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             spacing: 8,
             runSpacing: 8,
             children: brands.map((brand) {
+              final isSelected = provider.selectedBrands.contains(brand);
               return FilterChip(
                 label: Text(brand),
-                selectedColor: AppColors.primary,
+                selected: isSelected,
+                selectedColor: AppColors.primary.withValues(alpha: 0.18),
                 backgroundColor: AppColors.surface,
+                checkmarkColor: AppColors.primary,
+                labelStyle: AppTextStyles.caption.copyWith(
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                ),
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : AppColors.cardBorder,
+                ),
                 onSelected: (selected) {
                   provider.toggleBrand(brand);
                 },
-                // Assume the UI updates when toggling
-                selected: false, // In a real app we would read this from provider's active filters
               );
             }).toList(),
           ),
@@ -90,7 +100,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               return IconButton(
                 icon: Icon(
                   Icons.star,
-                  color: index < _selectedRating ? Colors.amber : AppColors.surfaceLight,
+                  color: index < _selectedRating
+                      ? Colors.amber
+                      : AppColors.surfaceLight,
                 ),
                 onPressed: () {
                   setState(() {
@@ -113,7 +125,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     foregroundColor: AppColors.textPrimary,
                     side: BorderSide(color: AppColors.cardBorder),
                     padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   child: Text('Reset'),
                 ),
@@ -129,11 +143,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 }
-
-

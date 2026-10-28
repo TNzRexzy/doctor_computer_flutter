@@ -75,7 +75,9 @@ class DoctorAiController extends ChangeNotifier {
     if (_isLoading) return;
     messages
       ..clear()
-      ..add(DoctorAiMessage(text: greeting, isUser: false, time: DateTime.now()));
+      ..add(
+        DoctorAiMessage(text: greeting, isUser: false, time: DateTime.now()),
+      );
     notifyListeners();
   }
 
@@ -83,7 +85,9 @@ class DoctorAiController extends ChangeNotifier {
     final text = raw.trim();
     if (text.isEmpty || _isLoading) return;
 
-    messages.add(DoctorAiMessage(text: text, isUser: true, time: DateTime.now()));
+    messages.add(
+      DoctorAiMessage(text: text, isUser: true, time: DateTime.now()),
+    );
     _isLoading = true;
     notifyListeners();
 
@@ -97,11 +101,12 @@ class DoctorAiController extends ChangeNotifier {
       reply = await GeminiService().getCustomerServiceResponse(text, history);
     } catch (e) {
       debugPrint('Doctor AI error: $e');
-      reply =
-          'Maaf, Dokter AI sedang mengalami gangguan. Silakan coba lagi sebentar lagi.';
+      reply = 'Maaf, Dokter AI sedang mengalami gangguan. Silakan coba lagi sebentar lagi.';
     }
 
-    messages.add(DoctorAiMessage(text: reply, isUser: false, time: DateTime.now()));
+    messages.add(
+      DoctorAiMessage(text: reply, isUser: false, time: DateTime.now()),
+    );
     _isLoading = false;
     notifyListeners();
   }
@@ -204,7 +209,11 @@ class _DoctorAiLayer extends StatelessWidget {
 
             final panelWidth = math.min(400.0, screen.width - 24);
             final available =
-                screen.height - keyboard - safe.top - 24 - 12 -
+                screen.height -
+                keyboard -
+                safe.top -
+                24 -
+                12 -
                 (keyboard > 0 ? 0 : safe.bottom);
             final panelHeight = math.max(
               0.0,
@@ -212,24 +221,49 @@ class _DoctorAiLayer extends StatelessWidget {
             );
 
             return SizedBox.expand(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  if (controller.isOpen)
-                    Positioned(
-                      left: (screen.width - panelWidth) / 2,
-                      bottom: keyboard + 12 + (keyboard > 0 ? 0 : safe.bottom),
-                      width: panelWidth,
-                      height: panelHeight,
-                      child: const _DoctorAiPanel(),
-                    )
-                  else
-                    _DoctorAiBubble(
-                      screen: screen,
-                      safe: safe,
-                      onTap: controller.open,
-                    ),
-                ],
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                reverseDuration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.035),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: controller.isOpen
+                    ? Stack(
+                        key: const ValueKey('doctor-ai-panel'),
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            left: (screen.width - panelWidth) / 2,
+                            bottom:
+                                keyboard +
+                                12 +
+                                (keyboard > 0 ? 0 : safe.bottom),
+                            width: panelWidth,
+                            height: panelHeight,
+                            child: const _DoctorAiPanel(),
+                          ),
+                        ],
+                      )
+                    : Stack(
+                        key: const ValueKey('doctor-ai-bubble'),
+                        clipBehavior: Clip.none,
+                        children: [
+                          _DoctorAiBubble(
+                            screen: screen,
+                            safe: safe,
+                            onTap: controller.open,
+                          ),
+                        ],
+                      ),
               ),
             );
           },
@@ -277,9 +311,9 @@ class _DoctorAiBubbleState extends State<_DoctorAiBubble> {
   }
 
   Offset get _defaultPosition => Offset(
-        widget.screen.width - _size - 12,
-        widget.screen.height - _size - widget.safe.bottom - 96,
-      );
+    widget.screen.width - _size - 12,
+    widget.screen.height - _size - widget.safe.bottom - 96,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -310,10 +344,7 @@ class _DoctorAiBubbleState extends State<_DoctorAiBubble> {
               final p = _position ?? position;
               final toLeft = p.dx + _size / 2 < widget.screen.width / 2;
               _position = _clamp(
-                Offset(
-                  toLeft ? 12 : widget.screen.width - _size - 12,
-                  p.dy,
-                ),
+                Offset(toLeft ? 12 : widget.screen.width - _size - 12, p.dy),
               );
               _savedPosition = _position;
             });

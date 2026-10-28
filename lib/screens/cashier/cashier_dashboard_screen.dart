@@ -19,6 +19,7 @@ import 'package:doctor_computer/services/pos_local_database_helper.dart';
 import 'package:doctor_computer/services/pos_sync_service.dart';
 import 'package:doctor_computer/core/constants/app_images.dart';
 import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class CashierDashboardScreen extends StatefulWidget {
   const CashierDashboardScreen({super.key});
@@ -44,6 +45,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   final Map<String, int> _cart = {};
 
   String _productSearchQuery = '';
+  String _managedProductSearchQuery = '';
   String _selectedCategory = 'all';
   String _orderSearchQuery = '';
   String _manageOrderSearchQuery = '';
@@ -263,7 +265,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
               onPressed: isSubmitting
                   ? null
                   : () async {
-                      final messenger = ScaffoldMessenger.of(context);
+                      final messenger = AppToast.of(context);
                       final auth = context.read<AuthProvider>();
                       final syncService = context.read<PosSyncService>();
                       final cashierId = _getCashierId();
@@ -450,7 +452,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                 onPressed: isSubmitting
                     ? null
                     : () async {
-                        final messenger = ScaffoldMessenger.of(context);
+                        final messenger = AppToast.of(context);
                         final auth = context.read<AuthProvider>();
                         final syncService = context.read<PosSyncService>();
                         final shiftId = _currentShift!['id']?.toString() ?? '';
@@ -533,7 +535,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   // ============================================================
   void _addToCart(Map<String, dynamic> product) {
     if (_currentShift == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(
           content: const Text(
             'Buka shift kasir terlebih dahulu untuk transaksi!',
@@ -554,7 +556,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     final currentQty = _cart[id] ?? 0;
 
     if (currentQty >= stock) {
-      ScaffoldMessenger.of(context)
+      AppToast.of(context)
           .showSnackBar(const SnackBar(content: Text('Stok tidak mencukupi!')));
       return;
     }
@@ -937,7 +939,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
     } catch (e) {
       debugPrint('Local POS transaction failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.of(context).showSnackBar(
           SnackBar(
             content: Text('Transaksi gagal disimpan: $e'),
             backgroundColor: AppColors.error,
@@ -1083,7 +1085,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
             icon: const Icon(Icons.print, size: 16),
             label: const Text('Cetak Struk'),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppToast.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Perintah cetak dikirim ke printer POS!'),
                 ),
@@ -1289,7 +1291,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
         // Product search & category chips
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
           child: TextField(
             decoration: InputDecoration(
               hintText: 'Cari produk POS (nama / brand)...',
@@ -1315,7 +1317,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         // Categories
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
           child: Row(
             children: [
               _buildCategoryChip('all', 'Semua'),
@@ -1331,12 +1333,12 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
           child: filteredProducts.isEmpty
               ? const Center(child: Text('Tidak ada produk yang cocok.'))
               : GridView.builder(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 220,
-                    childAspectRatio: 0.82,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                    childAspectRatio: 0.9,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                   ),
                   itemCount: filteredProducts.length,
                   itemBuilder: (context, index) {
@@ -1480,7 +1482,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
 
         // Cart Drawer / Bottom Bar
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
             boxShadow: [
@@ -2044,7 +2046,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
       _allOrders[idx] = Map<String, dynamic>.from(_allOrders[idx])
         ..addAll(result);
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.of(context).showSnackBar(
       SnackBar(
         content: const Text('Pesanan berhasil diperbarui'),
         backgroundColor: AppColors.success,
@@ -2392,7 +2394,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         }
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(
           content: Text(
             product == null
@@ -2405,7 +2407,7 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
       await _loadCashierData();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(
           content: Text('Produk gagal disimpan: $error'),
           backgroundColor: AppColors.error,
@@ -2447,13 +2449,13 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
         }
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      AppToast.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Produk berhasil dihapus.')));
       await _loadCashierData();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(
           content: Text('Produk gagal dihapus: $error'),
           backgroundColor: AppColors.error,
@@ -2463,10 +2465,18 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
   }
 
   Widget _buildProductManagementTab() {
+    final normalizedQuery = _managedProductSearchQuery.trim().toLowerCase();
+    final filteredProducts = _managedProducts.where((product) {
+      if (normalizedQuery.isEmpty) return true;
+      final name = product['name']?.toString().toLowerCase() ?? '';
+      final brand = product['brand']?.toString().toLowerCase() ?? '';
+      return name.contains(normalizedQuery) || brand.contains(normalizedQuery);
+    }).toList();
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -2475,54 +2485,121 @@ class _CashierDashboardScreenState extends State<CashierDashboardScreen>
                   : () => _editProduct(),
               icon: const Icon(Icons.add),
               label: const Text('Tambah Produk + Foto'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Cari produk berdasarkan nama atau brand...',
+              hintStyle: const TextStyle(fontSize: 12),
+              prefixIcon: const Icon(Icons.search, size: 19),
+              suffixIcon: _managedProductSearchQuery.isNotEmpty
+                  ? IconButton(
+                      tooltip: 'Hapus pencarian',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () =>
+                          setState(() => _managedProductSearchQuery = ''),
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            style: const TextStyle(fontSize: 13),
+            onChanged: (value) =>
+                setState(() => _managedProductSearchQuery = value),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${filteredProducts.length} dari ${_managedProducts.length} produk',
+              style: AppTextStyles.caption.copyWith(fontSize: 11),
             ),
           ),
         ),
         Expanded(
-          child: _managedProducts.isEmpty
-              ? const Center(child: Text('Belum ada produk dari database.'))
+          child: filteredProducts.isEmpty
+              ? Center(
+                  child: Text(
+                    _managedProducts.isEmpty
+                        ? 'Belum ada produk dari database.'
+                        : 'Tidak ada produk yang cocok.',
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                )
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  itemCount: _managedProducts.length,
+                  itemCount: filteredProducts.length,
                   itemBuilder: (context, index) {
                     final product = ProductModel.fromMap(
-                      _managedProducts[index],
+                      filteredProducts[index],
                     );
                     return Card(
+                      margin: const EdgeInsets.only(bottom: 6),
                       child: ListTile(
+                        dense: true,
+                        minVerticalPadding: 6,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                        ),
                         leading: SizedBox(
                           width: 48,
                           height: 48,
-                          child: product.images.isEmpty
-                              ? const Icon(Icons.image_outlined)
-                              : Image.network(
-                                  product.images.first,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
-                                      const Icon(Icons.broken_image_outlined),
-                                ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: _buildPosProductImage(product.toMap()),
+                          ),
                         ),
-                        title: Text(product.name),
+                        title: Text(
+                          product.name,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         subtitle: Text(
                           '${product.brand} • Rp ${_formatNumber(product.price)} • Stok ${product.stock}',
+                          style: AppTextStyles.caption.copyWith(fontSize: 10),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Wrap(
-                          spacing: 4,
+                          spacing: 0,
                           children: [
                             IconButton(
                               tooltip: 'Edit produk/foto',
+                              visualDensity: VisualDensity.compact,
                               onPressed:
                                   context.read<AuthProvider>().isOfflineSession
                                   ? null
                                   : () => _editProduct(product: product),
+                              iconSize: 20,
                               icon: const Icon(Icons.edit_outlined),
                             ),
                             IconButton(
                               tooltip: 'Hapus produk',
+                              visualDensity: VisualDensity.compact,
                               onPressed:
                                   context.read<AuthProvider>().isOfflineSession
                                   ? null
                                   : () => _deleteProduct(product),
+                              iconSize: 20,
                               icon: Icon(
                                 Icons.delete_outline,
                                 color: AppColors.error,
@@ -2578,13 +2655,13 @@ class _PosImageChain extends StatelessWidget {
     if (url.startsWith('assets/')) {
       return Image.asset(
         url,
-        fit: BoxFit.contain,
+        fit: BoxFit.cover,
         errorBuilder: (_, _, _) => next,
       );
     }
     return CachedNetworkImage(
       imageUrl: url,
-      fit: BoxFit.contain,
+      fit: BoxFit.cover,
       placeholder: (_, _) => _placeholder(),
       errorWidget: (_, _, _) => next,
     );

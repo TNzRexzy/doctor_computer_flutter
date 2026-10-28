@@ -46,11 +46,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => ProductReviewScreen(
-          order: order,
-          item: item,
-          existing: existing,
-        ),
+        builder: (_) =>
+            ProductReviewScreen(order: order, item: item, existing: existing),
       ),
     );
   }
@@ -331,6 +328,15 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           padding: const EdgeInsets.only(bottom: 12.0),
                           child: GlassCard(
                             padding: const EdgeInsets.all(16),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      OrderTrackingScreen(order: order),
+                                ),
+                              );
+                            },
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

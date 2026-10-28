@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/providers/auth_provider.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class LocationPickerResult {
   final String address;
@@ -50,11 +52,26 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   // Preset quick locations
   final List<Map<String, dynamic>> _quickLocations = [
-    {'name': 'Jakarta Pusat', 'lat': -6.1805, 'lng': 106.8284, 'city': 'Jakarta'},
-    {'name': 'Jakarta Selatan', 'lat': -6.2615, 'lng': 106.8106, 'city': 'Jakarta Selatan'},
+    {
+      'name': 'Jakarta Pusat',
+      'lat': -6.1805,
+      'lng': 106.8284,
+      'city': 'Jakarta',
+    },
+    {
+      'name': 'Jakarta Selatan',
+      'lat': -6.2615,
+      'lng': 106.8106,
+      'city': 'Jakarta Selatan',
+    },
     {'name': 'Bandung', 'lat': -6.9175, 'lng': 107.6191, 'city': 'Bandung'},
     {'name': 'Surabaya', 'lat': -7.2575, 'lng': 112.7521, 'city': 'Surabaya'},
-    {'name': 'Yogyakarta', 'lat': -7.7956, 'lng': 110.3695, 'city': 'Yogyakarta'},
+    {
+      'name': 'Yogyakarta',
+      'lat': -7.7956,
+      'lng': 110.3695,
+      'city': 'Yogyakarta',
+    },
     {'name': 'Medan', 'lat': 3.5952, 'lng': 98.6722, 'city': 'Medan'},
   ];
 
@@ -62,7 +79,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    
+
     // Default to provided coordinates, or Jakarta if none
     final lat = widget.initialLat ?? -6.2088;
     final lng = widget.initialLng ?? 106.8456;
@@ -90,16 +107,32 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${point.latitude}&lon=${point.longitude}&zoom=18&addressdetails=1',
       );
-      final response = await http.get(url, headers: {
-        'User-Agent': 'DoctorComputerFlutterApp/1.0 (contact@doctorcomputer.id)',
-      }).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'User-Agent':
+                  'DoctorComputerFlutterApp/1.0 (contact@doctorcomputer.id)',
+            },
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final address = data['address'] as Map<String, dynamic>?;
 
-        final road = address?['road'] ?? address?['suburb'] ?? address?['neighbourhood'] ?? address?['quarter'] ?? '';
-        final city = address?['city'] ?? address?['town'] ?? address?['county'] ?? address?['state'] ?? 'Jakarta';
+        final road =
+            address?['road'] ??
+            address?['suburb'] ??
+            address?['neighbourhood'] ??
+            address?['quarter'] ??
+            '';
+        final city =
+            address?['city'] ??
+            address?['town'] ??
+            address?['county'] ??
+            address?['state'] ??
+            'Jakarta';
         final state = address?['state'] ?? '';
         final country = address?['country'] ?? 'Indonesia';
 
@@ -107,7 +140,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         if (road.isNotEmpty) {
           resolvedAddress = 'Jl. $road, $city, $state, $country';
         } else {
-          resolvedAddress = data['display_name'] ?? 'Koordinat: ${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}';
+          resolvedAddress =
+              data['display_name'] ??
+              'Koordinat: ${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}';
         }
 
         if (mounted) {
@@ -125,7 +160,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
     if (mounted) {
       setState(() {
-        _addressText = 'Lokasi Pin: ${_currentLocation.latitude.toStringAsFixed(5)}, ${_currentLocation.longitude.toStringAsFixed(5)}';
+        _addressText =
+            'Lokasi Pin: ${_currentLocation.latitude.toStringAsFixed(5)}, ${_currentLocation.longitude.toStringAsFixed(5)}';
         _isLoadingAddress = false;
       });
     }
@@ -139,16 +175,26 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent(query)}&countrycodes=id&limit=1',
       );
-      final response = await http.get(url, headers: {
-        'User-Agent': 'DoctorComputerFlutterApp/1.0 (contact@doctorcomputer.id)',
-      }).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'User-Agent':
+                  'DoctorComputerFlutterApp/1.0 (contact@doctorcomputer.id)',
+            },
+          )
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final List list = jsonDecode(response.body);
         if (list.isNotEmpty) {
           final first = list.first;
-          final lat = double.tryParse(first['lat'].toString()) ?? _currentLocation.latitude;
-          final lon = double.tryParse(first['lon'].toString()) ?? _currentLocation.longitude;
+          final lat =
+              double.tryParse(first['lat'].toString()) ??
+              _currentLocation.latitude;
+          final lon =
+              double.tryParse(first['lon'].toString()) ??
+              _currentLocation.longitude;
           final target = LatLng(lat, lon);
 
           setState(() {
@@ -166,8 +212,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
     if (mounted) {
       setState(() => _isLoadingAddress = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lokasi tidak ditemukan, coba nama kota atau jalan lain.')),
+      AppToast.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Lokasi tidak ditemukan, coba nama kota atau jalan lain.',
+          ),
+        ),
       );
     }
   }
@@ -227,9 +277,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   void _showLocationMessage(String message, {SnackBarAction? action}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), action: action),
-    );
+    AppToast.of(context)
+        .showSnackBar(SnackBar(content: Text(message), action: action));
   }
 
   void _onMapTapped(LatLng point) {
@@ -358,7 +407,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         onPressed: () => _searchAddress(_searchController.text),
                       ),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                     ),
                     onSubmitted: _searchAddress,
                   ),
@@ -378,9 +430,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         backgroundColor: AppColors.surface,
                         label: Text(
                           loc['name'] as String,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        avatar: Icon(Icons.near_me, size: 14, color: AppColors.primary),
+                        avatar: Icon(
+                          Icons.near_me,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
                         onPressed: () => _selectQuickLocation(loc),
                       );
                     },
@@ -399,7 +458,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.25),
@@ -417,7 +478,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.location_on, color: AppColors.primary, size: 28),
+                        Icon(
+                          Icons.location_on,
+                          color: AppColors.primary,
+                          size: 28,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -425,7 +490,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             children: [
                               Text(
                                 'Alamat Terpilih:',
-                                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               if (_isLoadingAddress)
@@ -434,23 +501,32 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                     SizedBox(
                                       width: 14,
                                       height: 14,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                     SizedBox(width: 8),
-                                    Text('Mengambil rincian alamat...', style: TextStyle(fontSize: 12)),
+                                    Text(
+                                      'Mengambil rincian alamat...',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
                                   ],
                                 )
                               else
                                 Text(
                                   _addressText,
-                                  style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               const SizedBox(height: 4),
                               Text(
                                 'Koordinat: ${_currentLocation.latitude.toStringAsFixed(5)}, ${_currentLocation.longitude.toStringAsFixed(5)}',
-                                style: AppTextStyles.caption.copyWith(color: AppColors.primary),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.primary,
+                                ),
                               ),
                             ],
                           ),
@@ -470,7 +546,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       icon: const Icon(Icons.check, color: Colors.white),
                       label: const Text(
                         'Gunakan Alamat Ini & Simpan ke DB',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],

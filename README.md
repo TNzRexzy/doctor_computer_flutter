@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Current Version:** 1.1.10-beta+22
+* **Current Version:** 1.2.1+25
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -146,6 +146,34 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-044 | Long generated order IDs overlapped order headings and filled device notifications | Full `DC-` UUIDs were rendered without a display-length limit | Resolved (order screens and new push notifications use a compact display ID; the complete ID remains unchanged in storage) |
 | BUG-045 | Screen changes felt abrupt and visually static | Routes used default platform transitions with no consistent app-wide motion style | Resolved (lightweight fade-and-rise transitions are applied consistently across platforms and respect the system reduced-motion setting) |
 | BUG-046 | Checkout address fields and delivery/payment options felt crowded | Checkout used tightly stacked form fields and default radio tiles with limited separation | Resolved (added clearer section hierarchy, roomier address fields, and animated selectable cards without changing checkout behavior or pricing) |
+| BUG-047 | Completing one sensor minigame could make other games appear to share its cooldown | Cooldown availability depended on the deployed shared ledger lookup | Resolved (store and check cooldowns independently for each user and game; prior active cooldowns are backfilled from the ledger) |
+| BUG-048 | Home category shortcuts opened a separate catalog route instead of selecting the matching category tab | The shortcut navigated with route arguments rather than updating the main catalog filter | Resolved (shortcuts now switch to the catalog tab and apply the selected category; an animated All option clears the filter and the active category is highlighted) |
+| BUG-049 | Frequent status messages appeared as bottom snackbars over content | Feedback used the default bottom-positioned snackbar presentation across screens | Resolved (in-app snackbar feedback now appears as a compact top toast with fade/slide motion and optional actions; device push notifications are unchanged) |
+| BUG-050 | The Flash Sale product picker appeared centered and cramped | The picker used a centered container, a short fixed product list, and dense rows | Resolved (the picker is now a taller, bottom-anchored responsive sheet with searchable, readable product cards) |
+| BUG-051 | Profile information and account actions lacked visual grouping | Profile details and menu actions shared a flat, tightly packed layout | Resolved (added a profile summary card, grouped menu sections, and clearer touch targets without removing account actions) |
+| BUG-052 | Main navigation tab changes had little selection feedback | Tab icons and labels changed state without coordinated motion | Resolved (tab changes fade/slide smoothly while retaining each tab's state; the selected nav item animates and respects reduced-motion settings) |
+
+---
+
+## Version 1.2.1 Release Changelog
+
+1. **Order history and warranty UX:** Tapping an order card opens its tracking details while the warranty action remains separate. Warranty serial numbers can be copied to the clipboard.
+2. **Smoother interactions:** Added animated transitions when changing catalog layouts and opening or closing Doctor AI. Cart and PC Builder price summaries can be collapsed and expanded without changing their layout.
+3. **Tier-based membership vouchers:** Members receive weekly PC assembly and shipping vouchers plus a monthly product voucher. Discount rates follow the member tier (Bronze 5%, Silver 10%, Gold 15%, Platinum 20%); each voucher is account-bound and redeemable once.
+4. **Trusted PC Builder checkout:** PC parts are linked to catalog product IDs, and assembly service fees are priced by the server. Voucher scope, ownership, usage limits, and the final eligible discount are revalidated during checkout.
+5. **Compact admin and cashier product management:** Reduced product and voucher card density in the Admin dashboard. The Cashier dashboard's product-management tab now searches by product name or brand, shows the result count, and uses more compact product rows and POS spacing.
+6. **Compact cart voucher selector:** The voucher field remains visible when no voucher qualifies, uses smaller text, and wraps the empty-state message instead of truncating it.
+7. **Database:** Apply `supabase/migrations/20261111_membership_scope_vouchers.sql` after its prerequisite voucher, PC-parts, and order migrations. It installs idempotent weekly/monthly schedules using Supabase `pg_cron` and issues the current periods immediately. If that migration was already applied before immediate issuance was added, run `supabase/migrations/20261112_issue_current_membership_vouchers.sql` once. If issuance fails on `vouchers_code_check`, run `supabase/migrations/20261113_fix_membership_voucher_code_case.sql` to enforce uppercase generated codes and retry the current periods.
+8. **Versioning:** Current stable version remains `1.2.1+25` (`pubspec.yaml`, `AppConstants.appVersion`).
+
+## Version 1.2.0 Release Changelog
+
+1. **Category navigation (BUG-048):** Home category shortcuts now open the matching category in the catalog tab instead of pushing a separate catalog route. The category list includes an **All** option to show every product, with animated selection highlighting.
+2. **Navigation motion (BUG-052):** Added smooth fade-and-rise tab transitions and animated selected navigation indicators while preserving tab state and honoring reduced-motion preferences.
+3. **Non-obstructive feedback (BUG-049):** In-app status snackbars across customer, admin, cashier, profile, and product flows now appear as compact top-positioned toasts that fade away. Existing snackbar actions remain available; operating-system push notifications are unchanged.
+4. **Flash Sale product picker (BUG-050):** Reworked the admin product picker into a taller bottom-anchored sheet with clearer search, product details, and selection targets.
+5. **Profile refresh (BUG-051):** Added a profile summary header, grouped account actions, and clearer menu-item touch targets while keeping existing profile functions.
+6. **Versioning:** Promoted the app to stable release `1.2.0+24` (`pubspec.yaml`, `AppConstants.appVersion`).
 
 ---
 
@@ -157,7 +185,9 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 4. **Current address location:** The map's location button can request foreground device location and reverse-geocode it through OpenStreetMap Nominatim. Location access is requested only when the user taps the button; no background tracking is performed.
 5. **Dependency:** Added `geolocator` for foreground device location.
 6. **Checkout presentation (BUG-046):** Improved spacing and visual hierarchy on the checkout screen, including the recipient form, map selection, shipping and payment choices, and order summary. Order creation, shipping fees, and payment options are unchanged.
-7. **Versioning:** Updated the current beta build to `1.1.10-beta+22` (`pubspec.yaml`).
+7. **Independent sensor minigame cooldowns (BUG-047):** Each minigame now has a separate three-day cooldown per user. Completing one game does not prevent playing the other two. Existing active cooldowns are backfilled from the blockchain ledger.
+8. **Database:** Run `supabase/migrations/20261110_independent_minigame_cooldowns.sql` in the Supabase SQL Editor to enable independent cooldowns.
+9. **Versioning:** Updated the current beta build to `1.1.10-beta+23` (`pubspec.yaml`).
 
 ---
 
@@ -443,6 +473,11 @@ To synchronize a remote Supabase database, run the scripts in this order in the 
 15. `supabase/migrations/20261104_sensor_member_minigame_titles.sql` (updates membership game names recorded in the EXP ledger).
 16. `supabase/migrations/20261105_member_minigame_three_day_cooldown.sql` (enforces a per-user, per-game three-day cooldown and adds the `get_minigame_cooldown` RPC).
 17. `supabase/migrations/20261106_offline_pos_sync.sql` (adds idempotent shift/order sync RPCs and local-to-remote transaction mappings).
+18. `supabase/migrations/20261104_vouchers.sql` and `supabase/migrations/20261105_available_vouchers.sql` (voucher storage, redemption, validation, and available-voucher listing).
+19. `supabase/migrations/20261106_pc_parts_staff_insert.sql` and `supabase/migrations/20261107_pc_parts_backfill_images.sql` (staff PC-parts management and existing component image backfill).
+20. `supabase/migrations/20261111_membership_scope_vouchers.sql` (run after the voucher, PC-parts, and order migrations; issues tier-based weekly assembly/shipping vouchers and monthly product vouchers; adds scoped, account-bound voucher validation and trusted PC-build checkout. Requires Supabase `pg_cron` for automatic issuance, scheduled Monday and the first day of each month at 00:05 UTC).
+21. `supabase/migrations/20261112_issue_current_membership_vouchers.sql` (run only if migration 20261111 was already applied before immediate issuance was added; issues the current weekly and monthly vouchers).
+22. `supabase/migrations/20261113_fix_membership_voucher_code_case.sql` (hotfix for uppercase-only voucher code constraints; updates the issuance function and retries current-period voucher issuance).
 
 The older `fix_cashier_shifts_rls.sql` is retained only for compatibility; do not use it instead of the hardening migration. Do not expose or recreate the removed demo administrator credentials. Reset any staff credentials previously published in project documentation.
 

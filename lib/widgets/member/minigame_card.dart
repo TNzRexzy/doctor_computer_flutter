@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class MinigameCard extends StatefulWidget {
   final Map<String, dynamic> game;
@@ -29,11 +30,11 @@ class _MinigameCardState extends State<MinigameCard> {
   }
 
   void _showCompletion() {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.of(context).showSnackBar(
       SnackBar(
         content: Text(
           'Minigame selesai. EXP tidak diberikan sebelum hasil diverifikasi server.',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.surface),
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.buttonText),
         ),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),

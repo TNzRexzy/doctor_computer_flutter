@@ -11,6 +11,7 @@ import 'package:doctor_computer/widgets/review/product_reviews_section.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 /// Product Detail Screen
 class ProductDetailScreen extends StatelessWidget {
@@ -25,8 +26,10 @@ class ProductDetailScreen extends StatelessWidget {
     // Pakai data produk terbaru dari provider (harga kembali normal saat
     // flash sale berakhir) dan sembunyikan label promo jika timer sudah habis.
     final productProvider = context.watch<ProductProvider>();
-    final product = productProvider.getProductById(this.product.id) ?? this.product;
-    final flashSaleRunning = product.isOnSale && !productProvider.isFlashSaleExpired;
+    final product =
+        productProvider.getProductById(this.product.id) ?? this.product;
+    final flashSaleRunning =
+        product.isOnSale && !productProvider.isFlashSaleExpired;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -68,41 +71,66 @@ class ProductDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.2),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(product.brand, style: AppTextStyles.label.copyWith(color: AppColors.primary)),
+                                child: Text(
+                                  product.brand,
+                                  style: AppTextStyles.label.copyWith(
+                                    color: AppColors.primary,
+                                  ),
+                                ),
                               ),
                               SizedBox(height: 8),
                               Text(product.name, style: AppTextStyles.heading3),
                               SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Icon(Icons.star, color: Colors.amber, size: 16),
+                                  Icon(
+                                    Icons.star,
+                                    color: Colors.amber,
+                                    size: 16,
+                                  ),
                                   SizedBox(width: 4),
                                   Text(
                                     product.reviewCount > 0
                                         ? '${product.rating.toStringAsFixed(1)} (${product.reviewCount} ulasan)'
                                         : 'Belum ada ulasan',
-                                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
                               SizedBox(height: 16),
                               if (flashSaleRunning) ...[
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.error.withValues(alpha: 0.15),
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.15,
+                                    ),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: AppColors.error),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.bolt, color: AppColors.error, size: 16),
+                                      Icon(
+                                        Icons.bolt,
+                                        color: AppColors.error,
+                                        size: 16,
+                                      ),
                                       const SizedBox(width: 4),
                                       Text(
                                         'PROMO FLASH SALE SEDANG BERLANGSUNG',
@@ -119,26 +147,41 @@ class ProductDetailScreen extends StatelessWidget {
                               Row(
                                 children: [
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(formatRupiah(product.price), style: AppTextStyles.price),
+                                      Text(
+                                        formatRupiah(product.price),
+                                        style: AppTextStyles.price,
+                                      ),
                                       if (product.hasDiscount)
                                         Row(
                                           children: [
                                             Text(
-                                              formatRupiah(product.originalPrice ?? 0),
-                                              style: AppTextStyles.priceOriginal,
+                                              formatRupiah(
+                                                product.originalPrice ?? 0,
+                                              ),
+                                              style:
+                                                  AppTextStyles.priceOriginal,
                                             ),
                                             SizedBox(width: 8),
                                             Container(
-                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
                                               decoration: BoxDecoration(
-                                                color: AppColors.error.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(4),
+                                                color: AppColors.error
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
                                               ),
                                               child: Text(
                                                 '${product.discountPercentage.toStringAsFixed(0)}% OFF',
-                                                style: AppTextStyles.label.copyWith(color: AppColors.error),
+                                                style: AppTextStyles.label
+                                                    .copyWith(
+                                                      color: AppColors.error,
+                                                    ),
                                               ),
                                             ),
                                           ],
@@ -147,7 +190,12 @@ class ProductDetailScreen extends StatelessWidget {
                                   ),
                                   Spacer(),
                                   if (product.stock < 10)
-                                    Text('Stok tersisa: ${product.stock}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+                                    Text(
+                                      'Stok tersisa: ${product.stock}',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.error,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ],
@@ -162,7 +210,11 @@ class ProductDetailScreen extends StatelessWidget {
                             children: product.specs.entries.map((e) {
                               return Container(
                                 decoration: BoxDecoration(
-                                  border: Border(bottom: BorderSide(color: AppColors.surfaceLight)),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: AppColors.surfaceLight,
+                                    ),
+                                  ),
                                 ),
                                 padding: EdgeInsets.all(12),
                                 child: Row(
@@ -170,11 +222,23 @@ class ProductDetailScreen extends StatelessWidget {
                                   children: [
                                     Expanded(
                                       flex: 2,
-                                      child: Text(e.key, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                                      child: Text(
+                                        e.key,
+                                        style: AppTextStyles.bodyMedium
+                                            .copyWith(
+                                              color: AppColors.textSecondary,
+                                            ),
+                                      ),
                                     ),
                                     Expanded(
                                       flex: 3,
-                                      child: Text(e.value, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary)),
+                                      child: Text(
+                                        e.value,
+                                        style: AppTextStyles.bodyMedium
+                                            .copyWith(
+                                              color: AppColors.textPrimary,
+                                            ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -185,7 +249,12 @@ class ProductDetailScreen extends StatelessWidget {
                         SizedBox(height: 16),
                         Text('Deskripsi', style: AppTextStyles.titleMedium),
                         SizedBox(height: 8),
-                        Text(product.descriptionId, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                        Text(
+                          product.descriptionId,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                         SizedBox(height: 16),
                         ProductReviewsSection(productId: product.id),
                         SizedBox(height: 100),
@@ -229,7 +298,9 @@ class ProductDetailScreen extends StatelessWidget {
                   return IconButton(
                     icon: Icon(
                       isWishlisted ? Icons.favorite : Icons.favorite_border,
-                      color: isWishlisted ? AppColors.error : AppColors.textPrimary,
+                      color: isWishlisted
+                          ? AppColors.error
+                          : AppColors.textPrimary,
                     ),
                     onPressed: () {
                       provider.toggleWishlist(product);
@@ -253,12 +324,14 @@ class ProductDetailScreen extends StatelessWidget {
           children: [
             Expanded(
               child: GradientButton(
-                label: product.stock <= 0 ? 'Stok Habis' : 'Tambah ke Keranjang',
+                label: product.stock <= 0
+                    ? 'Stok Habis'
+                    : 'Tambah ke Keranjang',
                 icon: Icons.shopping_cart,
                 isEnabled: product.stock > 0,
                 onPressed: () async {
                   final cart = context.read<CartProvider>();
-                  final messenger = ScaffoldMessenger.of(context);
+                  final messenger = AppToast.of(context);
                   final added = await cart.addToCart(product);
                   messenger.showSnackBar(
                     SnackBar(

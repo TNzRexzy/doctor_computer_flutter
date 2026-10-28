@@ -35,21 +35,32 @@ class ProfileScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.person_outline, size: 80, color: AppColors.textTertiary),
-                        Text('Masuk untuk melanjutkan', style: AppTextStyles.titleMedium),
+                        Icon(
+                          Icons.person_outline,
+                          size: 80,
+                          color: AppColors.textTertiary,
+                        ),
+                        Text(
+                          'Masuk untuk melanjutkan',
+                          style: AppTextStyles.titleMedium,
+                        ),
                         const SizedBox(height: 16),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 32.0),
                           child: GradientButton(
                             label: 'Masuk',
-                            onPressed: () => Navigator.pushNamed(context, AppRouter.login),
+                            onPressed: () =>
+                                Navigator.pushNamed(context, AppRouter.login),
                           ),
                         ),
                         const SizedBox(height: 12),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 32.0),
                           child: OutlinedButton(
-                            onPressed: () => Navigator.pushNamed(context, AppRouter.register),
+                            onPressed: () => Navigator.pushNamed(
+                              context,
+                              AppRouter.register,
+                            ),
                             child: const Text('Daftar'),
                           ),
                         ),
@@ -60,7 +71,9 @@ class ProfileScreen extends StatelessWidget {
               }
 
               final user = authProvider.currentUser!;
-              final initials = user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?';
+              final initials = user.fullName.isNotEmpty
+                  ? user.fullName[0].toUpperCase()
+                  : '?';
               final blockchain = context.watch<BlockchainProvider>();
               final isAdmin = user.role == UserRole.admin;
 
@@ -69,56 +82,140 @@ class ProfileScreen extends StatelessWidget {
                 blockchain.syncWithUser(user.id, user.fullName, true);
               }
 
-              final currentTier = isAdmin ? MemberTier.platinum : blockchain.currentTier;
+              final currentTier = isAdmin
+                  ? MemberTier.platinum
+                  : blockchain.currentTier;
               final totalExp = isAdmin ? 999999 : blockchain.totalExp;
               final nextTier = isAdmin ? null : currentTier.getNextTier();
 
               final progress = isAdmin
                   ? 1.0
                   : (nextTier != null
-                      ? ((totalExp - currentTier.value) / (nextTier.value - currentTier.value)).clamp(0.0, 1.0)
-                      : 1.0);
+                        ? ((totalExp - currentTier.value) /
+                                  (nextTier.value - currentTier.value))
+                              .clamp(0.0, 1.0)
+                        : 1.0);
 
               return Column(
                 children: [
-                  const SizedBox(height: 24),
-                  Center(
-                    child: CircleAvatar(
-                      radius: 45,
-                      backgroundColor: AppColors.surface,
-                      backgroundImage: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
-                          ? NetworkImage(user.profileImageUrl!)
-                          : null,
-                      child: user.profileImageUrl == null || user.profileImageUrl!.isEmpty
-                          ? Text(initials, style: AppTextStyles.heading2.copyWith(color: AppColors.primary))
-                          : null,
-                    ),
-                  ),
                   const SizedBox(height: 12),
-                  Center(child: Text(user.fullName, style: AppTextStyles.heading3)),
-                  Center(child: Text(user.email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary))),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Chip(
-                      label: Text(
-                        isAdmin ? 'PLATINUM (MAX)' : currentTier.name.toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                      backgroundColor: Color(currentTier.color).withValues(alpha: 0.15),
-                      side: BorderSide(color: Color(currentTier.color)),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.buttonText.withValues(
+                                  alpha: 0.4,
+                                ),
+                                width: 2,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 31,
+                              backgroundColor: AppColors.surface,
+                              backgroundImage:
+                                  user.profileImageUrl != null &&
+                                      user.profileImageUrl!.isNotEmpty
+                                  ? NetworkImage(user.profileImageUrl!)
+                                  : null,
+                              child:
+                                  user.profileImageUrl == null ||
+                                      user.profileImageUrl!.isEmpty
+                                  ? Text(
+                                      initials,
+                                      style: AppTextStyles.heading2.copyWith(
+                                        color: AppColors.primary,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.fullName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    color: AppColors.buttonText,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  user.email,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.buttonText.withValues(
+                                      alpha: 0.78,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: [
+                                    _buildProfileBadge(
+                                      isAdmin
+                                          ? 'PLATINUM • ADMIN'
+                                          : currentTier.name.toUpperCase(),
+                                      Icons.workspace_premium_outlined,
+                                    ),
+                                    _buildProfileBadge(
+                                      isAdmin
+                                          ? '999,999 EXP'
+                                          : '$totalExp EXP • Diskon ${currentTier.discountPercent}%',
+                                      Icons.bolt_rounded,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            tooltip: 'Edit profil',
+                            onPressed: () => Navigator.pushNamed(
+                              context,
+                              AppRouter.editProfile,
+                            ),
+                            icon: Icon(
+                              Icons.edit_outlined,
+                              color: AppColors.buttonText,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Text(
-                      isAdmin ? '999,999 EXP (MAX) • Level Tertinggi' : '$totalExp EXP (Diskon ${currentTier.discountPercent}%)',
-                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.accent, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: GlassCard(
+                      padding: const EdgeInsets.all(18),
+                      borderRadius: 20,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -126,16 +223,22 @@ class ProfileScreen extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
-                                child: Text('Progress Member (Blockchain)', style: AppTextStyles.titleSmall),
+                                child: Text(
+                                  'Progress Member (Blockchain)',
+                                  style: AppTextStyles.titleSmall,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 isAdmin
                                     ? 'Maksimal (Platinum)'
                                     : (nextTier != null
-                                        ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
-                                        : 'Maksimal (${currentTier.name})'),
-                                style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold),
+                                          ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
+                                          : 'Maksimal (${currentTier.name})'),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.warning,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
@@ -144,20 +247,28 @@ class ProfileScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                             child: LinearProgressIndicator(
                               value: progress,
-                              minHeight: 10,
-                              backgroundColor: AppColors.surface,
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(currentTier.color)),
+                              minHeight: 12,
+                              backgroundColor: AppColors.textTertiary
+                                  .withValues(alpha: 0.32),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.primaryDark,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Current: ${isAdmin ? 'Platinum (MAX)' : currentTier.name}', style: AppTextStyles.caption),
+                              Text(
+                                'Current: ${isAdmin ? 'Platinum (MAX)' : currentTier.name}',
+                                style: AppTextStyles.caption,
+                              ),
                               Text(
                                 isAdmin
                                     ? 'Level Tertinggi (Maksimal)'
-                                    : (nextTier != null ? 'Next: ${nextTier.name}' : 'Level Tertinggi'),
+                                    : (nextTier != null
+                                          ? 'Next: ${nextTier.name}'
+                                          : 'Level Tertinggi'),
                                 style: AppTextStyles.caption,
                               ),
                             ],
@@ -166,73 +277,161 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  _buildMenuItem(context, Icons.receipt_long, 'Pesanan Saya', () => Navigator.pushNamed(context, AppRouter.orderHistory)),
+                  const SizedBox(height: 22),
+                  _buildSectionLabel('Akun & aktivitas'),
+                  _buildMenuItem(
+                    context,
+                    Icons.receipt_long,
+                    'Pesanan Saya',
+                    () => Navigator.pushNamed(context, AppRouter.orderHistory),
+                  ),
                   Consumer<WishlistProvider>(
                     builder: (context, wishlist, child) => _buildMenuItem(
-                      context, 
-                      Icons.favorite, 
-                      'Wishlist', 
+                      context,
+                      Icons.favorite,
+                      'Wishlist',
                       () => Navigator.pushNamed(context, AppRouter.wishlist),
-                      trailing: CircleAvatar(radius: 12, backgroundColor: AppColors.primary, child: Text('${wishlist.itemCount}', style: AppTextStyles.caption)),
+                      trailing: CircleAvatar(
+                        radius: 12,
+                        backgroundColor: AppColors.primary,
+                        child: Text(
+                          '${wishlist.itemCount}',
+                          style: AppTextStyles.caption,
+                        ),
+                      ),
                     ),
                   ),
-                  _buildMenuItem(context, Icons.smart_toy, 'Tanya Dokter AI (Customer Service)', () {
-                    DoctorAiController.instance.open();
-                  }),
-                  _buildMenuItem(context, Icons.verified_user, 'Cek Masa Garansi Aktif', () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const WarrantyCheckScreen()));
-                  }),
-                  _buildMenuItem(context, Icons.sports_esports, 'Minigames & Blockchain Member', () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MemberScreen()));
-                  }),
-                  _buildMenuItem(context, Icons.card_membership, 'Membership', () => Navigator.pushNamed(context, AppRouter.membership)),
+                  _buildMenuItem(
+                    context,
+                    Icons.smart_toy,
+                    'Tanya Dokter AI (Customer Service)',
+                    () {
+                      DoctorAiController.instance.open();
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    Icons.verified_user,
+                    'Cek Masa Garansi Aktif',
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const WarrantyCheckScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    Icons.sports_esports,
+                    'Minigames & Blockchain Member',
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MemberScreen()),
+                      );
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    Icons.card_membership,
+                    'Membership',
+                    () => Navigator.pushNamed(context, AppRouter.membership),
+                  ),
+                  _buildSectionLabel('Pengaturan & akses'),
                   if (user.role == UserRole.admin)
                     _buildMenuItem(
-                      context, 
-                      Icons.admin_panel_settings, 
-                      'Dashboard Admin', 
-                      () => Navigator.pushNamed(context, AppRouter.adminDashboard),
+                      context,
+                      Icons.admin_panel_settings,
+                      'Dashboard Admin',
+                      () => Navigator.pushNamed(
+                        context,
+                        AppRouter.adminDashboard,
+                      ),
                       trailing: Chip(
-                        label: const Text('ADMIN', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          'ADMIN',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         backgroundColor: AppColors.error,
                       ),
                     ),
-                  if (user.role == UserRole.admin || user.role == UserRole.cashier)
+                  if (user.role == UserRole.admin ||
+                      user.role == UserRole.cashier)
                     _buildMenuItem(
-                      context, 
-                      Icons.point_of_sale, 
-                      'Dashboard Kasir & POS', 
-                      () => Navigator.pushNamed(context, AppRouter.cashierDashboard),
+                      context,
+                      Icons.point_of_sale,
+                      'Dashboard Kasir & POS',
+                      () => Navigator.pushNamed(
+                        context,
+                        AppRouter.cashierDashboard,
+                      ),
                       trailing: const Chip(
-                        label: Text('KASIR', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                        label: Text(
+                          'KASIR',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         backgroundColor: Color(0xFF6D28D9),
                       ),
                     ),
-                  _buildMenuItem(context, Icons.edit, 'Edit Profil', () => Navigator.pushNamed(context, AppRouter.editProfile)),
-                  _buildMenuItem(context, Icons.fingerprint, 'Keamanan', () => Navigator.pushNamed(context, AppRouter.security)),
                   _buildMenuItem(
-                    context, 
-                    Icons.dark_mode, 
-                    'Tema', 
-                    () { context.read<ThemeProvider>().toggleTheme(); }, 
+                    context,
+                    Icons.edit,
+                    'Edit Profil',
+                    () => Navigator.pushNamed(context, AppRouter.editProfile),
+                  ),
+                  _buildMenuItem(
+                    context,
+                    Icons.fingerprint,
+                    'Keamanan',
+                    () => Navigator.pushNamed(context, AppRouter.security),
+                  ),
+                  _buildMenuItem(
+                    context,
+                    Icons.dark_mode,
+                    'Tema',
+                    () {
+                      context.read<ThemeProvider>().toggleTheme();
+                    },
                     trailing: Switch(
-                      value: context.watch<ThemeProvider>().themeMode == ThemeMode.dark, 
-                      onChanged: (v) { context.read<ThemeProvider>().toggleTheme(); },
+                      value:
+                          context.watch<ThemeProvider>().themeMode ==
+                          ThemeMode.dark,
+                      onChanged: (v) {
+                        context.read<ThemeProvider>().toggleTheme();
+                      },
                       activeColor: AppColors.primary,
                     ),
                   ),
                   _buildMenuItem(context, Icons.info_outline, 'Tentang', () {
                     showAboutDialog(
-                      context: context, 
+                      context: context,
                       applicationName: 'Doctor Computer',
-                      applicationVersion: 'Beta v${AppConstants.appVersion}',
-                      applicationLegalese: '© 2026 Doctor Computer. All rights reserved.',
+                      applicationVersion: 'v${AppConstants.appVersion}',
+                      applicationLegalese:
+                          '© 2026 Doctor Computer. All rights reserved.',
                       children: [
                         const SizedBox(height: 16),
-                        Text('Aplikasi toko komputer dan perakitan PC terpercaya.', style: AppTextStyles.bodySmall),
+                        Text(
+                          'Aplikasi toko komputer dan perakitan PC terpercaya.',
+                          style: AppTextStyles.bodySmall,
+                        ),
                         const SizedBox(height: 8),
-                        Text('Status: Beta', style: AppTextStyles.caption.copyWith(color: AppColors.warning)),
+                        Text(
+                          'Release version',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.success,
+                          ),
+                        ),
                       ],
                     );
                   }),
@@ -243,14 +442,23 @@ class ProfileScreen extends StatelessWidget {
                         title: const Text('Konfirmasi'),
                         content: const Text('Apakah Anda yakin ingin keluar?'),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Batal'),
+                          ),
                           TextButton(
                             onPressed: () {
                               authProvider.logout();
                               Navigator.pop(ctx);
-                              Navigator.pushReplacementNamed(context, AppRouter.login);
+                              Navigator.pushReplacementNamed(
+                                context,
+                                AppRouter.login,
+                              );
                             },
-                            child: Text('Keluar', style: TextStyle(color: AppColors.error)),
+                            child: Text(
+                              'Keluar',
+                              style: TextStyle(color: AppColors.error),
+                            ),
                           ),
                         ],
                       ),
@@ -266,18 +474,86 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap, {Widget? trailing, Color? color}) {
+  Widget _buildProfileBadge(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.buttonText.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.buttonText),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.buttonText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: AppTextStyles.label.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItem(
+    BuildContext context,
+    IconData icon,
+    String title,
+    VoidCallback onTap, {
+    Widget? trailing,
+    Color? color,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
       child: GlassCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 13.0),
+        borderRadius: 18,
         onTap: onTap,
         child: Row(
           children: [
-            Icon(icon, color: color ?? AppColors.primary),
-            const SizedBox(width: 16),
-            Expanded(child: Text(title, style: AppTextStyles.bodyMedium.copyWith(color: color))),
-            if (trailing != null) trailing else Icon(Icons.chevron_right, color: AppColors.textTertiary),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: (color ?? AppColors.primary).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color ?? AppColors.primary, size: 21),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: color ?? AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            if (trailing != null)
+              trailing
+            else
+              Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
           ],
         ),
       ),

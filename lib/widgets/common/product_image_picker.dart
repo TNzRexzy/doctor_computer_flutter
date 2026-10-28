@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:doctor_computer/services/product_image_file_picker.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class ProductImagePicker extends StatefulWidget {
   final String productId;
@@ -54,7 +55,7 @@ class _ProductImagePickerState extends State<ProductImagePicker> {
       if (!mounted) return;
       setState(() => _isUploading = false);
       widget.onUploadingChanged?.call(false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(content: Text('Gagal memilih atau mengunggah gambar: $error')),
       );
     }

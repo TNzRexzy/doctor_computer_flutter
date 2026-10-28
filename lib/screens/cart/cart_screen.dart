@@ -17,6 +17,8 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  bool _isSummaryExpanded = true;
+
   @override
   void initState() {
     super.initState();
@@ -243,183 +245,364 @@ class _CartScreenState extends State<CartScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (provider.isLoadingAvailableVouchers &&
-                            provider.availableVouchers.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        else if (provider.availableVouchers.isEmpty)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  provider.availableVoucherError ??
-                                      'Belum ada voucher yang memenuhi syarat.',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color:
-                                        provider.availableVoucherError == null
-                                        ? AppColors.textSecondary
-                                        : AppColors.error,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Muat ulang voucher',
-                                onPressed: provider.isLoadingAvailableVouchers
-                                    ? null
-                                    : provider.loadAvailableVouchers,
-                                icon: const Icon(Icons.refresh),
-                              ),
-                            ],
-                          )
-                        else
-                          DropdownButtonFormField<String>(
-                            value: provider.appliedVoucherCode,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Pilih voucher yang tersedia',
-                              prefixIcon: Icon(
-                                Icons.local_offer_outlined,
-                                size: 20,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                            ),
-                            hint: const Text('Pilih voucher'),
-                            items: provider.availableVouchers.map((voucher) {
-                              final type =
-                                  voucher['discount_type']?.toString() ??
-                                  'fixed';
-                              final value =
-                                  (voucher['discount_value'] as num?)
-                                      ?.toDouble() ??
-                                  0;
-                              final discount = type == 'percent'
-                                  ? '${value.toStringAsFixed(0)}%'
-                                  : formatRupiah(value);
-                              final minimum =
-                                  (voucher['min_purchase'] as num?)
-                                      ?.toDouble() ??
-                                  0;
-                              final code = voucher['code'].toString();
-                              return DropdownMenuItem<String>(
-                                value: code,
-                                child: Text(
-                                  '${voucher['title']} • $discount • Min. ${formatRupiah(minimum)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: provider.isApplyingVoucher
-                                ? null
-                                : (code) {
-                                    if (code == null) {
-                                      provider.clearVoucher();
-                                    } else {
-                                      provider.applyVoucher(code);
-                                    }
-                                  },
-                          ),
-                        if (provider.isApplyingVoucher) ...[
-                          const SizedBox(height: 4),
-                          const LinearProgressIndicator(minHeight: 2),
-                        ],
-                        if (provider.voucherMessage != null) ...[
-                          const SizedBox(height: 4),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              provider.voucherMessage!,
-                              style: AppTextStyles.caption.copyWith(
-                                color: provider.voucherDiscount <= 0
-                                    ? AppColors.error
-                                    : AppColors.success,
-                              ),
-                            ),
-                          ),
-                        ],
-                        const Divider(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Subtotal', style: AppTextStyles.caption),
-                            Text(
-                              formatRupiah(provider.totalPrice),
-                              style: AppTextStyles.caption,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Estimasi Ongkir',
-                              style: AppTextStyles.caption,
-                            ),
-                            Text('Rp 15.000', style: AppTextStyles.caption),
-                          ],
-                        ),
-                        if (provider.voucherDiscount > 0) ...[
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Diskon voucher',
-                                style: AppTextStyles.caption,
-                              ),
-                              Text(
-                                '- ${formatRupiah(provider.voucherDiscount)}',
-                                style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.success,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Total', style: AppTextStyles.caption),
-                                  Text(
-                                    formatRupiah(
-                                      provider.totalPrice +
-                                          15000 -
-                                          provider.voucherDiscount,
-                                    ),
-                                    style: AppTextStyles.price.copyWith(
-                                      color: AppColors.accent,
-                                      fontSize: 17,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                              child: Text(
+                                'Ringkasan Belanja',
+                                style: AppTextStyles.titleSmall,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            GradientButton(
-                              label: 'Checkout',
-                              icon: Icons.payment,
-                              height: 44,
-                              width: 150,
-                              onPressed: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  AppRouter.checkout,
-                                );
-                              },
+                            IconButton(
+                              tooltip: _isSummaryExpanded
+                                  ? 'Tutup ringkasan'
+                                  : 'Buka ringkasan',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setState(
+                                () => _isSummaryExpanded = !_isSummaryExpanded,
+                              ),
+                              icon: AnimatedRotation(
+                                turns: _isSummaryExpanded ? 0 : 0.5,
+                                duration: const Duration(milliseconds: 220),
+                                child: const Icon(Icons.keyboard_arrow_down),
+                              ),
                             ),
                           ],
+                        ),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeInOutCubic,
+                          alignment: Alignment.topCenter,
+                          child: _isSummaryExpanded
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: AppColors.cardBorder
+                                              .withValues(alpha: 0.7),
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child:
+                                          provider.isLoadingAvailableVouchers &&
+                                              provider.eligibleVouchers.isEmpty
+                                          ? const Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                vertical: 10,
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  ),
+                                                  SizedBox(width: 10),
+                                                  Text(
+                                                    'Memuat voucher...',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          : provider.eligibleVouchers.isEmpty
+                                          ? Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                Expanded(
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 8,
+                                                        ),
+                                                    child: Text(
+                                                      provider.availableVoucherError ?? 'Belum ada voucher yang memenuhi syarat.',
+                                                      softWrap: true,
+                                                      style: AppTextStyles
+                                                          .caption
+                                                          .copyWith(
+                                                            fontSize: 11,
+                                                            height: 1.35,
+                                                            color:
+                                                                provider.availableVoucherError ==
+                                                                    null
+                                                                ? AppColors
+                                                                      .textSecondary
+                                                                : AppColors
+                                                                      .error,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  tooltip: 'Muat ulang voucher',
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  onPressed:
+                                                      provider
+                                                          .isLoadingAvailableVouchers
+                                                      ? null
+                                                      : provider
+                                                            .loadAvailableVouchers,
+                                                  icon: const Icon(
+                                                    Icons.refresh,
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          : DropdownButtonFormField<String>(
+                                              value:
+                                                  provider.appliedVoucherCode,
+                                              isExpanded: true,
+                                              itemHeight: null,
+                                              style: AppTextStyles.caption
+                                                  .copyWith(fontSize: 12),
+                                              decoration: const InputDecoration(
+                                                labelText: 'Pilih voucher yang tersedia',
+                                                labelStyle: TextStyle(
+                                                  fontSize: 12,
+                                                ),
+                                                prefixIcon: Icon(
+                                                  Icons.local_offer_outlined,
+                                                  size: 18,
+                                                ),
+                                                border: InputBorder.none,
+                                                isDense: true,
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                      vertical: 8,
+                                                    ),
+                                              ),
+                                              hint: const Text(
+                                                'Pilih voucher',
+                                                style: TextStyle(fontSize: 12),
+                                              ),
+                                              items: provider.eligibleVouchers.map((
+                                                voucher,
+                                              ) {
+                                                final type =
+                                                    voucher['discount_type']
+                                                        ?.toString() ??
+                                                    'fixed';
+                                                final value =
+                                                    (voucher['discount_value']
+                                                            as num?)
+                                                        ?.toDouble() ??
+                                                    0;
+                                                final discount =
+                                                    type == 'percent'
+                                                    ? '${value.toStringAsFixed(0)}%'
+                                                    : formatRupiah(value);
+                                                final minimum =
+                                                    (voucher['min_purchase']
+                                                            as num?)
+                                                        ?.toDouble() ??
+                                                    0;
+                                                final scope =
+                                                    switch (voucher['discount_scope']
+                                                        ?.toString()) {
+                                                      'product' => 'Produk',
+                                                      'build_service' =>
+                                                        'Jasa rakit',
+                                                      'shipping' => 'Ongkir',
+                                                      _ => 'Semua',
+                                                    };
+                                                return DropdownMenuItem<String>(
+                                                  value: voucher['code']
+                                                      .toString(),
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 4,
+                                                        ),
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          voucher['title']
+                                                                  ?.toString() ??
+                                                              'Voucher',
+                                                          softWrap: true,
+                                                          style: AppTextStyles
+                                                              .caption
+                                                              .copyWith(
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                        ),
+                                                        Text(
+                                                          '$scope • $discount • Min. ${formatRupiah(minimum)}',
+                                                          softWrap: true,
+                                                          style: AppTextStyles
+                                                              .caption
+                                                              .copyWith(
+                                                                fontSize: 10,
+                                                                color: AppColors
+                                                                    .textSecondary,
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                              onChanged:
+                                                  provider.isApplyingVoucher
+                                                  ? null
+                                                  : (code) {
+                                                      if (code == null) {
+                                                        provider.clearVoucher();
+                                                      } else {
+                                                        provider.applyVoucher(
+                                                          code,
+                                                        );
+                                                      }
+                                                    },
+                                            ),
+                                    ),
+                                    if (provider.isApplyingVoucher) ...[
+                                      const SizedBox(height: 4),
+                                      const LinearProgressIndicator(
+                                        minHeight: 2,
+                                      ),
+                                    ],
+                                    if (provider.voucherMessage != null) ...[
+                                      const SizedBox(height: 4),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          provider.voucherMessage!,
+                                          style: AppTextStyles.caption.copyWith(
+                                            color: provider.voucherDiscount <= 0
+                                                ? AppColors.error
+                                                : AppColors.success,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    const Divider(height: 10),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Subtotal',
+                                          style: AppTextStyles.caption,
+                                        ),
+                                        Text(
+                                          formatRupiah(provider.totalPrice),
+                                          style: AppTextStyles.caption,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Estimasi Ongkir',
+                                          style: AppTextStyles.caption,
+                                        ),
+                                        Text(
+                                          'Rp 15.000',
+                                          style: AppTextStyles.caption,
+                                        ),
+                                      ],
+                                    ),
+                                    if (provider.voucherDiscountForShipping(
+                                          15000,
+                                        ) >
+                                        0) ...[
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Diskon voucher',
+                                            style: AppTextStyles.caption,
+                                          ),
+                                          Text(
+                                            '- ${formatRupiah(provider.voucherDiscountForShipping(15000))}',
+                                            style: AppTextStyles.caption
+                                                .copyWith(
+                                                  color: AppColors.success,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Total',
+                                                style: AppTextStyles.caption,
+                                              ),
+                                              Text(
+                                                formatRupiah(
+                                                  provider.totalPrice +
+                                                      15000 -
+                                                      provider
+                                                          .voucherDiscountForShipping(
+                                                            15000,
+                                                          ),
+                                                ),
+                                                style: AppTextStyles.price
+                                                    .copyWith(
+                                                      color: AppColors.accent,
+                                                      fontSize: 17,
+                                                    ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        GradientButton(
+                                          label: 'Checkout',
+                                          icon: Icons.payment,
+                                          height: 44,
+                                          width: 150,
+                                          onPressed: () {
+                                            Navigator.pushNamed(
+                                              context,
+                                              AppRouter.checkout,
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink(),
                         ),
                       ],
                     ),

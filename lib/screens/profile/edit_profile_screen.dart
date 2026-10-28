@@ -9,6 +9,7 @@ import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/navigation/app_router.dart';
 import 'package:doctor_computer/screens/map/location_picker_screen.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -72,7 +73,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           return AlertDialog(
             backgroundColor: AppColors.surface,
             surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
             titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
             contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
             actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -84,10 +87,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     color: AppColors.primary15,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.photo_camera_rounded, color: AppColors.primary, size: 22),
+                  child: Icon(
+                    Icons.photo_camera_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text('Ubah Foto Profil', style: AppTextStyles.titleLarge)),
+                Expanded(
+                  child: Text(
+                    'Ubah Foto Profil',
+                    style: AppTextStyles.titleLarge,
+                  ),
+                ),
               ],
             ),
             content: SingleChildScrollView(
@@ -105,7 +117,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       backgroundColor: AppColors.surfaceLight,
                       backgroundImage: preview,
                       child: preview == null
-                          ? Icon(Icons.person_rounded, size: 48, color: AppColors.textTertiary)
+                          ? Icon(
+                              Icons.person_rounded,
+                              size: 48,
+                              color: AppColors.textTertiary,
+                            )
                           : null,
                     ),
                   ),
@@ -115,9 +131,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.6)),
+                        side: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.6),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       onPressed: saving
                           ? null
@@ -133,7 +153,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               } on FormatException catch (e) {
                                 setDialogState(() => error = e.message);
                               } catch (e) {
-                                setDialogState(() => error = 'Gagal membuka galeri.');
+                                setDialogState(
+                                  () => error = 'Gagal membuka galeri.',
+                                );
                               }
                             },
                       icon: const Icon(Icons.upload_rounded, size: 20),
@@ -143,13 +165,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: 10),
                   Text(
                     'Format JPG, PNG, atau GIF. Maksimal 5 MB.',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
@@ -157,12 +184,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.error_outline_rounded, size: 16, color: AppColors.error),
+                          Icon(
+                            Icons.error_outline_rounded,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
                               error!,
-                              style: AppTextStyles.caption.copyWith(color: AppColors.error),
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.error,
+                              ),
                             ),
                           ),
                         ],
@@ -176,7 +209,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               TextButton(
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                 ),
                 onPressed: saving ? null : () => Navigator.pop(ctx),
                 child: const Text('Batal'),
@@ -186,20 +222,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.buttonText,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: (picked == null || saving)
                     ? null
                     : () async {
                         final auth = this.context.read<AuthProvider>();
-                        final messenger = ScaffoldMessenger.of(this.context);
+                        final messenger = AppToast.of(context);
                         final nav = Navigator.of(ctx);
                         final userId =
                             Supabase.instance.client.auth.currentUser?.id ??
-                                auth.currentUser?.id;
+                            auth.currentUser?.id;
                         if (userId == null) {
-                          setDialogState(() => error = 'Sesi login tidak ditemukan.');
+                          setDialogState(
+                            () => error = 'Sesi login tidak ditemukan.',
+                          );
                           return;
                         }
                         setDialogState(() {
@@ -208,7 +251,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         });
                         try {
                           final oldUrl = auth.currentUser?.profileImageUrl;
-                          final url = await ProfilePhotoService.upload(picked!, userId);
+                          final url = await ProfilePhotoService.upload(
+                            picked!,
+                            userId,
+                          );
                           final success = await auth.updateProfileImage(url);
                           if (!success) {
                             await ProfilePhotoService.deleteByUrl(url);
@@ -221,7 +267,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           await ProfilePhotoService.deleteByUrl(oldUrl);
                           nav.pop();
                           messenger.showSnackBar(
-                            const SnackBar(content: Text('Foto profil diperbarui')),
+                            const SnackBar(
+                              content: Text('Foto profil diperbarui'),
+                            ),
                           );
                           if (mounted) setState(() {});
                         } catch (e) {
@@ -269,9 +317,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _longitude = result.longitude;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Alamat peta berhasil diterapkan dan disimpan ke database!'),
+            content: const Text(
+              'Alamat peta berhasil diterapkan dan disimpan ke database!',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -281,7 +331,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     final auth = context.read<AuthProvider>();
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToast.of(context);
     final nav = Navigator.of(context);
     setState(() => _saving = true);
     final success = await auth.updateProfile(
@@ -295,7 +345,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (mounted) {
       setState(() => _saving = false);
       messenger.showSnackBar(
-        SnackBar(content: Text(success ? 'Profil & Alamat berhasil disimpan ke Database' : 'Gagal memperbarui profil')),
+        SnackBar(
+          content: Text(
+            success
+                ? 'Profil & Alamat berhasil disimpan ke Database'
+                : 'Gagal memperbarui profil',
+          ),
+        ),
       );
       if (success) nav.pop();
     }
@@ -305,7 +361,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // UI helpers
   // ---------------------------------------------------------------------------
 
-  Widget _buildHeader(String initials, String name, String email, String? imageUrl) {
+  Widget _buildHeader(
+    String initials,
+    String name,
+    String email,
+    String? imageUrl,
+  ) {
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     final onGold = AppColors.buttonText;
 
@@ -313,7 +374,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primaryDark, AppColors.primary, AppColors.primaryLight],
+          colors: [
+            AppColors.primaryDark,
+            AppColors.primary,
+            AppColors.primaryLight,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -335,7 +400,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Row(
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, color: onGold, size: 20),
+                    icon: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: onGold,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   Text(
@@ -369,7 +438,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ? null
                           : Text(
                               initials,
-                              style: AppTextStyles.heading2.copyWith(color: AppColors.primaryDark),
+                              style: AppTextStyles.heading2.copyWith(
+                                color: AppColors.primaryDark,
+                              ),
                             ),
                     ),
                   ),
@@ -385,7 +456,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2.5),
                         ),
-                        child: Icon(Icons.camera_alt_rounded, size: 16, color: AppColors.primary),
+                        child: Icon(
+                          Icons.camera_alt_rounded,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                   ),
@@ -402,7 +477,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 2),
               Text(
                 email,
-                style: AppTextStyles.bodySmall.copyWith(color: onGold.withValues(alpha: 0.75)),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: onGold.withValues(alpha: 0.75),
+                ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -458,13 +535,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         decoration: InputDecoration(
           labelText: label,
           labelStyle: AppTextStyles.bodyMedium,
-          floatingLabelStyle: AppTextStyles.label.copyWith(color: AppColors.primary),
+          floatingLabelStyle: AppTextStyles.label.copyWith(
+            color: AppColors.primary,
+          ),
           prefixIcon: Padding(
             padding: EdgeInsets.only(bottom: maxLines > 1 ? 48 : 0),
-            child: Icon(icon, size: 20, color: readOnly ? AppColors.textTertiary : AppColors.primary),
+            child: Icon(
+              icon,
+              size: 20,
+              color: readOnly ? AppColors.textTertiary : AppColors.primary,
+            ),
           ),
           suffixIcon: readOnly
-              ? Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.textTertiary)
+              ? Icon(
+                  Icons.lock_outline_rounded,
+                  size: 18,
+                  color: AppColors.textTertiary,
+                )
               : null,
         ),
       ),
@@ -494,7 +581,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               color: AppColors.primary,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.pin_drop_rounded, color: AppColors.buttonText, size: 14),
+            child: Icon(
+              Icons.pin_drop_rounded,
+              color: AppColors.buttonText,
+              size: 14,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -503,12 +594,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 Text(
                   'Koordinat Peta (Tersimpan di DB)',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
-                  style: AppTextStyles.titleSmall.copyWith(color: AppColors.primary),
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: AppColors.primary,
+                  ),
                 ),
               ],
             ),
@@ -555,7 +650,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = context.watch<AuthProvider>().currentUser;
     if (user == null) return const Scaffold();
 
-    final initials = user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?';
+    final initials = user.fullName.isNotEmpty
+        ? user.fullName[0].toUpperCase()
+        : '?';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -565,7 +662,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  _buildHeader(initials, user.fullName, user.email, user.profileImageUrl),
+                  _buildHeader(
+                    initials,
+                    user.fullName,
+                    user.email,
+                    user.profileImageUrl,
+                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
                     child: TweenAnimationBuilder<double>(
@@ -588,7 +690,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _buildSectionTitle(Icons.person_rounded, 'Informasi Pribadi'),
+                                _buildSectionTitle(
+                                  Icons.person_rounded,
+                                  'Informasi Pribadi',
+                                ),
                                 _buildField(
                                   controller: _nameController,
                                   label: 'Nama Lengkap',
@@ -621,7 +726,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   'Alamat & Lokasi',
                                   trailing: _buildMapButton(),
                                 ),
-                                if (_latitude != null && _longitude != null) _buildCoordinateChip(),
+                                if (_latitude != null && _longitude != null)
+                                  _buildCoordinateChip(),
                                 _buildField(
                                   controller: _addressController,
                                   label: 'Alamat Lengkap',

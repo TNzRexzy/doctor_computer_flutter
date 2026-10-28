@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:doctor_computer/core/theme/app_colors.dart';
 import 'package:doctor_computer/core/theme/app_text_styles.dart';
@@ -68,14 +69,18 @@ class BottomNavBar extends StatelessWidget {
               final user = auth.currentUser;
               Widget? customAvatar;
               if (user != null) {
-                final hasImage = user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty;
+                final hasImage =
+                    user.profileImageUrl != null &&
+                    user.profileImageUrl!.isNotEmpty;
                 customAvatar = Container(
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: currentIndex == 4 ? AppColors.primary : Colors.transparent,
+                      color: currentIndex == 4
+                          ? AppColors.primary
+                          : Colors.transparent,
                       width: 1.5,
                     ),
                   ),
@@ -91,11 +96,15 @@ class BottomNavBar extends StatelessWidget {
                             color: AppColors.primary.withValues(alpha: 0.2),
                             alignment: Alignment.center,
                             child: Text(
-                              user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'U',
+                              user.fullName.isNotEmpty
+                                  ? user.fullName[0].toUpperCase()
+                                  : 'U',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: currentIndex == 4 ? AppColors.primary : AppColors.textTertiary,
+                                color: currentIndex == 4
+                                    ? AppColors.primary
+                                    : AppColors.textTertiary,
                               ),
                             ),
                           ),
@@ -138,36 +147,59 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
     final color = isActive ? AppColors.primary : AppColors.textTertiary;
+    final animationDuration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (customIcon != null)
-            customIcon!
-          else if (badgeCount > 0)
-            BadgeIcon(icon: icon, count: badgeCount, color: color)
-          else
-            Icon(icon, color: color),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(color: color),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            width: 4,
-            height: 4,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isActive ? AppColors.primary : Colors.transparent,
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: label,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (customIcon != null)
+              AnimatedScale(
+                scale: isActive ? 1.08 : 1,
+                duration: animationDuration,
+                curve: Curves.easeOutBack,
+                child: customIcon!,
+              )
+            else if (badgeCount > 0)
+              AnimatedScale(
+                scale: isActive ? 1.08 : 1,
+                duration: animationDuration,
+                curve: Curves.easeOutBack,
+                child: BadgeIcon(icon: icon, count: badgeCount, color: color),
+              )
+            else
+              AnimatedScale(
+                scale: isActive ? 1.08 : 1,
+                duration: animationDuration,
+                curve: Curves.easeOutBack,
+                child: Icon(icon, color: color),
+              ),
+            const SizedBox(height: 4),
+            Text(label, style: AppTextStyles.caption.copyWith(color: color)),
+            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: animationDuration,
+              width: isActive ? 16 : 4,
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                color: isActive ? AppColors.primary : Colors.transparent,
+              ),
             ),
-          )
-        ],
+          ],
+        ),
       ),
     );
   }
 }
-

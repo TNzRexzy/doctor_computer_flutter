@@ -69,6 +69,8 @@ class ProductProvider extends ChangeNotifier {
       _allProducts.isNotEmpty ? _allProducts : mockProducts;
   String get searchQuery => _searchQuery;
   String get sortBy => _sortBy;
+  String? get selectedCategoryId => _selectedCategoryId;
+  List<String> get selectedBrands => List.unmodifiable(_selectedBrands);
   bool get isLoading => _isLoading;
   DateTime get flashSaleEndTime => _flashSaleEndTime;
   bool get isFlashSaleActive => _isFlashSaleActive;

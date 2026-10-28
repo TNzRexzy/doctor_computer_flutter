@@ -340,24 +340,27 @@ class OrderProvider extends ChangeNotifier {
     _errorMessage = null;
     try {
       final params = {
-          'p_items': newOrder.items
-              .map(
-                (item) => {
-                  'product_id': item.product.id,
-                  'quantity': item.quantity,
-                },
-              )
-              .toList(),
-          'p_shipping_address': newOrder.shippingAddress,
-          'p_payment_method': newOrder.paymentMethod,
-          'p_shipping_method': shippingMethod,
-        };
-      final response = voucherCode != null && voucherCode.trim().isNotEmpty
-          ? await supabase.rpc(
-              'create_customer_order_with_voucher',
-              params: {...params, 'p_voucher_code': voucherCode.trim()},
+        'p_items': newOrder.items
+            .map(
+              (item) => {
+                'product_id': item.product.id,
+                'quantity': item.quantity,
+              },
             )
-          : await supabase.rpc('create_customer_order', params: params);
+            .toList(),
+        'p_shipping_address': newOrder.shippingAddress,
+        'p_payment_method': newOrder.paymentMethod,
+        'p_shipping_method': shippingMethod,
+      };
+      final response = await supabase.rpc(
+        'create_customer_order_with_membership',
+        params: {
+          ...params,
+          'p_voucher_code': voucherCode?.trim().isNotEmpty == true
+              ? voucherCode!.trim()
+              : null,
+        },
+      );
       if (response is! Map) {
         throw const FormatException(
           'Respons create_customer_order tidak valid.',

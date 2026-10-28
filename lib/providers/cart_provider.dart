@@ -32,12 +32,46 @@ class CartProvider extends ChangeNotifier {
   bool get isApplyingVoucher => _isApplyingVoucher;
   List<Map<String, dynamic>> get availableVouchers =>
       List.unmodifiable(_availableVouchers);
+  List<Map<String, dynamic>> get eligibleVouchers => List.unmodifiable(
+    _availableVouchers.where((voucher) {
+      final eligibleAmount = _voucherEligibleAmount(voucher);
+      final minimum = (voucher['min_purchase'] as num?)?.toDouble() ?? 0;
+      return eligibleAmount > 0 && eligibleAmount >= minimum;
+    }).toList(),
+  );
   bool get isLoadingAvailableVouchers => _isLoadingAvailableVouchers;
   String? get availableVoucherError => _availableVoucherError;
   double get voucherDiscount =>
       _appliedVoucherCode != null && _voucherSubtotal == totalPrice
       ? _voucherDiscount
       : 0;
+  String? get appliedVoucherScope {
+    final code = _appliedVoucherCode;
+    if (code == null) return null;
+    for (final voucher in _availableVouchers) {
+      if (voucher['code']?.toString().toUpperCase() == code) {
+        return voucher['discount_scope']?.toString() ?? 'all';
+      }
+    }
+    return null;
+  }
+
+  double voucherDiscountForShipping(double shippingAmount) {
+    if (appliedVoucherScope != 'shipping' || _voucherSubtotal != totalPrice) {
+      return voucherDiscount;
+    }
+    final voucher = _availableVouchers.firstWhere(
+      (item) => item['code']?.toString().toUpperCase() == _appliedVoucherCode,
+    );
+    final type = voucher['discount_type']?.toString() ?? 'fixed';
+    final value = (voucher['discount_value'] as num?)?.toDouble() ?? 0;
+    final maxDiscount = (voucher['max_discount'] as num?)?.toDouble();
+    var discount = type == 'percent' ? shippingAmount * value / 100 : value;
+    if (maxDiscount != null) {
+      discount = discount.clamp(0, maxDiscount).toDouble();
+    }
+    return discount.clamp(0, shippingAmount).toDouble();
+  }
 
   String? get userId => _userId;
   set userId(String? id) {
@@ -169,6 +203,25 @@ class CartProvider extends ChangeNotifier {
     }
 
     final subtotal = totalPrice;
+    final voucher = _availableVouchers.cast<Map<String, dynamic>?>().firstWhere(
+      (item) => item?['code']?.toString().toUpperCase() == normalizedCode,
+      orElse: () => null,
+    );
+    if (voucher == null) {
+      _appliedVoucherCode = null;
+      _voucherDiscount = 0;
+      _voucherMessage = 'Voucher tidak tersedia di keranjang ini.';
+      notifyListeners();
+      return;
+    }
+    final eligibleAmount = _voucherEligibleAmount(voucher);
+    if (eligibleAmount <= 0) {
+      _appliedVoucherCode = null;
+      _voucherDiscount = 0;
+      _voucherMessage = 'Voucher ini tidak sesuai dengan isi keranjang.';
+      notifyListeners();
+      return;
+    }
     _isApplyingVoucher = true;
     _voucherMessage = null;
     notifyListeners();
@@ -176,7 +229,7 @@ class CartProvider extends ChangeNotifier {
     try {
       final response = await supabase.rpc(
         'validate_voucher',
-        params: {'p_code': normalizedCode, 'p_subtotal': subtotal},
+        params: {'p_code': normalizedCode, 'p_subtotal': eligibleAmount},
       );
       if (response is! Map) {
         throw const FormatException('Respons validasi voucher tidak valid.');
@@ -189,8 +242,7 @@ class CartProvider extends ChangeNotifier {
             'Isi keranjang berubah. Silakan gunakan voucher lagi.';
       } else if (result['success'] == true) {
         _appliedVoucherCode = normalizedCode;
-        _voucherDiscount =
-            (result['discount_amount'] as num?)?.toDouble() ?? 0;
+        _voucherDiscount = (result['discount_amount'] as num?)?.toDouble() ?? 0;
         _voucherSubtotal = subtotal;
         _voucherMessage =
             result['message']?.toString() ?? 'Voucher berhasil digunakan.';
@@ -211,6 +263,30 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
+  double _voucherEligibleAmount(Map<String, dynamic> voucher) {
+    final scope = voucher['discount_scope']?.toString() ?? 'all';
+    switch (scope) {
+      case 'product':
+        return _items
+            .where((item) => item.product.categoryId != 'service')
+            .fold(0.0, (sum, item) => sum + item.subtotal);
+      case 'build_service':
+        return _items
+            .where((item) => item.product.categoryId == 'service')
+            .fold(0.0, (sum, item) => sum + item.subtotal);
+      case 'shipping':
+        return 15000;
+      case 'all':
+        return totalPrice;
+      default:
+        return 0;
+    }
+  }
+
+  static bool _isBuildService(String productId) =>
+      productId == 'build-service-standard' ||
+      productId == 'build-service-premium';
+
   void clearVoucher({bool notify = true}) {
     _appliedVoucherCode = null;
     _voucherMessage = null;
@@ -223,8 +299,7 @@ class CartProvider extends ChangeNotifier {
     if (_appliedVoucherCode != null && _voucherSubtotal != totalPrice) {
       _appliedVoucherCode = null;
       _voucherDiscount = 0;
-      _voucherMessage =
-          'Isi keranjang berubah. Silakan gunakan voucher lagi.';
+      _voucherMessage = 'Isi keranjang berubah. Silakan gunakan voucher lagi.';
     }
     if (_availableVoucherSubtotal != totalPrice &&
         !_isLoadingAvailableVouchers) {
@@ -245,7 +320,12 @@ class CartProvider extends ChangeNotifier {
           .select()
           .eq('user_id', _userId!);
 
-      _items.clear();
+      final localBuildServices = _items
+          .where((item) => _isBuildService(item.product.id))
+          .toList();
+      _items
+        ..clear()
+        ..addAll(localBuildServices);
       for (var item in res) {
         final map = item as Map<String, dynamic>;
         final productId = map['product_id']?.toString();
@@ -263,6 +343,26 @@ class CartProvider extends ChangeNotifier {
   }
 
   Future<ProductModel?> _fetchProductAsync(String productId) async {
+    if (productId == 'build-service-standard' ||
+        productId == 'build-service-premium') {
+      final isPremium = productId == 'build-service-premium';
+      return ProductModel(
+        id: productId,
+        name: isPremium ? 'Jasa Rakit PC Premium' : 'Jasa Rakit PC Standard',
+        description: 'Biaya jasa perakitan PC',
+        descriptionId: 'Biaya jasa perakitan PC',
+        price: isPremium ? 500000 : 250000,
+        categoryId: 'service',
+        brand: 'Doctor Computer',
+        images: const [],
+        specs: const {},
+        rating: 5,
+        reviewCount: 0,
+        stock: 999,
+        isNew: false,
+        isOnSale: false,
+      );
+    }
     try {
       final data = await supabase
           .from('products')
@@ -329,7 +429,7 @@ class CartProvider extends ChangeNotifier {
     _notifyCartChanged();
     _saveCartToCache();
 
-    if (_userId != null) {
+    if (_userId != null && !_isBuildService(product.id)) {
       try {
         await supabase.from('cart_items').upsert({
           'user_id': _userId!,
@@ -350,7 +450,7 @@ class CartProvider extends ChangeNotifier {
     _notifyCartChanged();
     _saveCartToCache();
 
-    if (_userId != null) {
+    if (_userId != null && !_isBuildService(productId)) {
       try {
         await supabase
             .from('cart_items')
@@ -381,7 +481,7 @@ class CartProvider extends ChangeNotifier {
       _saveCartToCache();
     }
 
-    if (_userId != null) {
+    if (_userId != null && !_isBuildService(productId)) {
       try {
         await supabase
             .from('cart_items')

@@ -60,249 +60,292 @@ class MemberScreen extends StatelessWidget {
         child: RefreshIndicator(
           onRefresh: () => context.read<BlockchainProvider>().refreshWallet(),
           child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(currentTier.color).withValues(alpha: 0.8),
-                      Color(currentTier.color).withValues(alpha: 0.5),
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(currentTier.color).withValues(alpha: 0.8),
+                        Color(currentTier.color).withValues(alpha: 0.5),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(currentTier.color).withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(currentTier.color).withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    TierBadge(tier: currentTier, size: 90),
-                    const SizedBox(height: 12),
-                    Text(
-                      user?.fullName ?? 'Member Doctor Computer',
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isAdmin
-                          ? 'Tier Aktif: PLATINUM (MAX • Hak Akses Administrator)'
-                          : 'Tier Aktif: ${currentTier.name.toUpperCase()} (Diskon ${currentTier.discountPercent}%)',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        isAdmin
-                            ? 'Total: 999,999 EXP (MAX)'
-                            : 'Total: $totalExp EXP',
-                        style: const TextStyle(
+                  child: Column(
+                    children: [
+                      TierBadge(tier: currentTier, size: 90),
+                      const SizedBox(height: 12),
+                      Text(
+                        user?.fullName ?? 'Member Doctor Computer',
+                        style: AppTextStyles.titleLarge.copyWith(
                           color: Colors.white,
-                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // EXP Progress
-              GlassCard(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Progress Naik Tier',
-                            style: AppTextStyles.titleSmall,
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isAdmin
+                            ? 'Tier Aktif: PLATINUM (MAX • Hak Akses Administrator)'
+                            : 'Tier Aktif: ${currentTier.name.toUpperCase()} (Diskon ${currentTier.discountPercent}%)',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
                           isAdmin
-                              ? 'Level Tertinggi (Maksimal)'
-                              : (nextTier != null
-                                    ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
-                                    : 'Maksimal (Platinum)'),
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.warning,
+                              ? 'Total: 999,999 EXP (MAX)'
+                              : 'Total: $totalExp EXP',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    ExpProgressBar(
-                      progress: progress,
-                      currentLevel: isAdmin
-                          ? 'Platinum (MAX)'
-                          : currentTier.name,
-                      nextLevel: nextTier?.name,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Minigames Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Minigames', style: AppTextStyles.titleMedium),
-                  Text(
-                    'EXP aktif',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                ),
 
-              _buildGameCard(
-                context: context,
-                title: 'Tilt Control: Ambil Komponen',
-                description:
-                    'Miringkan HP untuk mengarahkan teknisi dan mengumpulkan komponen.',
-                difficulty: 'Sensor accelerometer',
-                icon: Icons.screen_rotation_alt,
-                color: Colors.teal,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MemoryMatchGame()),
-                  );
-                },
-              ),
+                const SizedBox(height: 20),
 
-              _buildGameCard(
-                context: context,
-                title: 'Gyro Spin: Kalibrasi Kipas',
-                description: 'Putar HP satu lingkaran untuk menyalakan kipas pendingin.',
-                difficulty: 'Sensor gyroscope',
-                icon: Icons.toys,
-                color: Colors.orange,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PcQuizGame()),
-                  );
-                },
-              ),
-
-              _buildGameCard(
-                context: context,
-                title: 'Shake It: Bersihkan Debu',
-                description:
-                    'Goyangkan HP untuk membersihkan debu dari PC sebelum waktunya habis.',
-                difficulty: 'Sensor gerak • 15 detik',
-                icon: Icons.cleaning_services,
-                color: Colors.blue,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SpeedRepairGame()),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 20),
-
-              // Blockchain Quick Link Card
-              GlassCard(
-                padding: const EdgeInsets.all(16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const BlockchainLedgerScreen(),
-                    ),
-                  );
-                },
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.hub,
-                        color: AppColors.primary,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // EXP Progress
+                GlassCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Buku Besar Blockchain Pribadi',
-                            style: AppTextStyles.titleSmall,
+                          Expanded(
+                            child: Text(
+                              'Progress Naik Tier',
+                              style: AppTextStyles.titleSmall,
+                            ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(width: 8),
                           Text(
-                            '${blockchain.blockchain.length} Blok Tercatat (Genesis A1B2, Game, Belanja)',
+                            isAdmin
+                                ? 'Level Tertinggi (Maksimal)'
+                                : (nextTier != null
+                                      ? '${nextTier.value - totalExp} EXP lagi ke ${nextTier.name}'
+                                      : 'Maksimal (Platinum)'),
                             style: AppTextStyles.caption.copyWith(
-                              color: AppColors.textSecondary,
+                              color: AppColors.warning,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      ExpProgressBar(
+                        progress: progress,
+                        currentLevel: isAdmin
+                            ? 'Platinum (MAX)'
+                            : currentTier.name,
+                        nextLevel: nextTier?.name,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                if (!isAdmin) ...[
+                  GlassCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.local_activity_outlined,
+                          color: AppColors.accent,
+                          size: 26,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Voucher Member Otomatis',
+                                style: AppTextStyles.titleSmall,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Mingguan: voucher jasa rakit PC dan ongkir. '
+                                'Bulanan: voucher produk. Diskon mengikuti '
+                                'tier ${currentTier.name} (${currentTier.discountPercent}%). '
+                                'Pilih voucher di keranjang; setiap voucher '
+                                'berlaku satu kali untuk satu pesanan.',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Minigames Section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Minigames', style: AppTextStyles.titleMedium),
+                    Text(
+                      'EXP aktif',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 12),
 
-              const SizedBox(height: 12),
-
-              Text(
-                'Poin belanja (+500) diberikan server setelah pesanan dikonfirmasi selesai. '
-                'EXP minigame disimpan server dengan batas harian. Tarik layar ke bawah untuk menyegarkan.',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
+                _buildGameCard(
+                  context: context,
+                  title: 'Tilt Control: Ambil Komponen',
+                  description: 'Miringkan HP untuk mengarahkan teknisi dan mengumpulkan komponen.',
+                  difficulty: 'Sensor accelerometer',
+                  icon: Icons.screen_rotation_alt,
+                  color: Colors.teal,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MemoryMatchGame(),
+                      ),
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
+
+                _buildGameCard(
+                  context: context,
+                  title: 'Gyro Spin: Kalibrasi Kipas',
+                  description: 'Putar HP satu lingkaran untuk menyalakan kipas pendingin.',
+                  difficulty: 'Sensor gyroscope',
+                  icon: Icons.toys,
+                  color: Colors.orange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PcQuizGame()),
+                    );
+                  },
+                ),
+
+                _buildGameCard(
+                  context: context,
+                  title: 'Shake It: Bersihkan Debu',
+                  description: 'Goyangkan HP untuk membersihkan debu dari PC sebelum waktunya habis.',
+                  difficulty: 'Sensor gerak • 15 detik',
+                  icon: Icons.cleaning_services,
+                  color: Colors.blue,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SpeedRepairGame(),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 20),
+
+                // Blockchain Quick Link Card
+                GlassCard(
+                  padding: const EdgeInsets.all(16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BlockchainLedgerScreen(),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.hub,
+                          color: AppColors.primary,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Buku Besar Blockchain Pribadi',
+                              style: AppTextStyles.titleSmall,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${blockchain.blockchain.length} Blok Tercatat (Genesis A1B2, Game, Belanja)',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                Text(
+                  'Poin belanja (+500) diberikan server setelah pesanan dikonfirmasi selesai. '
+                  'EXP minigame disimpan server dengan batas harian. Tarik layar ke bawah untuk menyegarkan.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -368,25 +411,50 @@ class MemberScreen extends StatelessWidget {
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
-                      Text(
-                        'Tingkat: $difficulty',
-                        style: AppTextStyles.caption.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.w600,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
                         ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        'Mainkan Sekarang ➔',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.sensors_rounded, size: 14, color: color),
+                            const SizedBox(width: 5),
+                            Text(
+                              difficulty,
+                              style: AppTextStyles.caption.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Mainkan Sekarang  →',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),

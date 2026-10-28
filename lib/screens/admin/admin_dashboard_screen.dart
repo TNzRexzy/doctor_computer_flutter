@@ -13,11 +13,13 @@ import 'package:doctor_computer/widgets/review/review_management_tab.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/order_update_dialog.dart';
 import 'package:doctor_computer/widgets/common/product_image_picker.dart';
+import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/services/product_image_storage_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/widgets/common/global_pull_to_refresh.dart';
 import 'package:doctor_computer/services/pos_local_database_helper.dart';
 import 'package:doctor_computer/services/pos_sync_service.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -311,7 +313,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   bool _denyOfflineWrite() {
     if (!context.read<AuthProvider>().isOfflineSession) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.of(context).showSnackBar(
       const SnackBar(
         content: Text('Perubahan admin memerlukan koneksi dan sesi online.'),
       ),
@@ -412,6 +414,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: context.read<AuthProvider>().isOfflineSession
+                      ? null
+                      : _showAddProductDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Tambah Produk + Foto'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.buttonText,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: TextField(
                 decoration: InputDecoration(
                   hintText: 'Cari produk berdasarkan nama atau brand...',
@@ -488,114 +511,109 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         final product = filtered[index];
                         final isOnSale = product['is_on_sale'] == true;
                         final price = _parseDouble(product['price']);
-                        final origPrice = _parseDouble(
-                          product['original_price'],
-                        );
                         final stock = _parseInt(product['stock']);
+                        final productModel = ProductModel.fromMap(product);
 
                         return GlassCard(
-                          margin: const EdgeInsets.only(bottom: 8),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: EdgeInsets.zero,
                           child: ListTile(
-                            leading: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: isOnSale
-                                    ? AppColors.error.withValues(alpha: 0.12)
-                                    : AppColors.surface,
+                            dense: true,
+                            minVerticalPadding: 6,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                            ),
+                            leading: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                isOnSale
-                                    ? Icons.local_fire_department
-                                    : Icons.inventory_2,
-                                color: isOnSale
-                                    ? AppColors.error
-                                    : AppColors.textSecondary,
+                                child: AppImageView(
+                                  imageUrl: productModel.images.isNotEmpty
+                                      ? productModel.images.first
+                                      : null,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                             title: Text(
                               product['name']?.toString() ?? '-',
-                              style: AppTextStyles.titleSmall,
-                              maxLines: 2,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Brand: ${product['brand'] ?? '-'}',
-                                  style: AppTextStyles.caption,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Stok: $stock',
-                                      style: TextStyle(
-                                        color: stock < 5
-                                            ? AppColors.error
-                                            : AppColors.success,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    product['brand']?.toString() ?? '-',
+                                    style: AppTextStyles.caption.copyWith(
+                                      fontSize: 11,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'Harga: Rp ${_formatNumber(price)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 2,
+                                    children: [
+                                      Text(
+                                        'Rp ${_formatNumber(price)}',
                                         style: AppTextStyles.caption.copyWith(
+                                          fontSize: 11,
                                           fontWeight: FontWeight.bold,
                                         ),
-                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        'Stok: $stock',
+                                        style: AppTextStyles.caption.copyWith(
+                                          fontSize: 11,
+                                          color: stock < 5
+                                              ? AppColors.error
+                                              : AppColors.success,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (isOnSale) ...[
+                                    const SizedBox(height: 3),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.error.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      child: Text(
+                                        'FLASH SALE',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: AppColors.error,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ],
-                                ),
-                                if (isOnSale) ...[
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.error.withValues(
-                                            alpha: 0.12,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'FLASH SALE',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: AppColors.error,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      if (origPrice > price) ...[
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Rp ${_formatNumber(origPrice)}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textTertiary,
-                                            decoration:
-                                                TextDecoration.lineThrough,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
                                 ],
-                              ],
+                              ),
                             ),
                             trailing: PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 40,
+                              ),
                               icon: Icon(
                                 Icons.more_vert,
                                 color: AppColors.primary,
@@ -616,7 +634,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               itemBuilder: (ctx) => [
                                 const PopupMenuItem(
                                   value: 'edit',
-                                  child: Text('Edit Produk'),
+                                  child: Text('Edit Produk + Foto'),
                                 ),
                                 PopupMenuItem(
                                   value: 'flash_sale',
@@ -642,13 +660,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddProductDialog,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Produk'),
       ),
     );
   }
@@ -743,7 +754,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           val,
                         );
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          AppToast.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
                                 ok
@@ -969,7 +980,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       label: Text(label, style: const TextStyle(fontSize: 12)),
       avatar: const Icon(Icons.timer_outlined, size: 14),
       onPressed: () async {
-        final messenger = ScaffoldMessenger.of(context);
+        final messenger = AppToast.of(context);
         final productProvider = context.read<ProductProvider>();
         final newEnd = DateTime.now().add(duration);
         final ok = await productProvider.updateFlashSaleTime(newEnd);
@@ -985,7 +996,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _pickCustomFlashSaleDateTime() async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToast.of(context);
     final productProvider = context.read<ProductProvider>();
     final now = DateTime.now();
     final currentEnd = productProvider.flashSaleEndTime;
@@ -1142,7 +1153,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _removeProductFromFlashSale(ProductModel product) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToast.of(context);
     final productProvider = context.read<ProductProvider>();
     final confirm = await showDialog<bool>(
       context: context,
@@ -1411,7 +1422,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (idx != -1) {
       _orders[idx] = Map<String, dynamic>.from(_orders[idx])..addAll(result);
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.of(context).showSnackBar(
       const SnackBar(content: Text('Pesanan berhasil diperbarui')),
     );
     setState(() {});
@@ -1487,22 +1498,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 : 'Rp ${_formatNumber(value)}';
 
             return GlassCard(
+              padding: const EdgeInsets.all(10),
               margin: const EdgeInsets.only(bottom: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Text(
                           code,
-                          style: AppTextStyles.titleMedium.copyWith(
+                          style: AppTextStyles.bodyMedium.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Chip(
-                        label: Text(
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: expired || exhausted || !active
+                              ? AppColors.error.withValues(alpha: 0.12)
+                              : AppColors.success.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
                           expired
                               ? 'Kedaluwarsa'
                               : exhausted
@@ -1510,53 +1537,70 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               : active
                               ? 'Aktif'
                               : 'Nonaktif',
-                        ),
-                        backgroundColor: expired || exhausted || !active
-                            ? AppColors.error.withValues(alpha: 0.12)
-                            : AppColors.success.withValues(alpha: 0.12),
-                        labelStyle: TextStyle(
-                          color: expired || exhausted || !active
-                              ? AppColors.error
-                              : AppColors.success,
+                          style: AppTextStyles.caption.copyWith(
+                            fontSize: 10,
+                            color: expired || exhausted || !active
+                                ? AppColors.error
+                                : AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 4),
                   Text(
                     '${voucher['title'] ?? ''} • Diskon $discount',
-                    style: AppTextStyles.bodyMedium,
+                    style: AppTextStyles.caption.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     'Terpakai: $used/${limit ?? 'tanpa batas'}'
                     ' • Min. belanja Rp ${_formatNumber(voucher['min_purchase'])}'
                     ' • Maks. per akun: ${_parseInt(voucher['per_user_limit'])}',
-                    style: AppTextStyles.caption,
+                    style: AppTextStyles.caption.copyWith(fontSize: 10),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     'Berlaku sampai ${_voucherDateLabel(lastValidDate?.toString())}',
-                    style: AppTextStyles.caption,
+                    style: AppTextStyles.caption.copyWith(fontSize: 10),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 2),
                   Wrap(
-                    spacing: 8,
+                    spacing: 4,
+                    runSpacing: 0,
                     children: [
                       TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 32),
+                        ),
                         onPressed: () => _showVoucherDialog(voucher),
-                        icon: const Icon(Icons.edit_outlined),
+                        icon: const Icon(Icons.edit_outlined, size: 16),
                         label: const Text('Edit'),
                       ),
                       TextButton.icon(
-                        onPressed: () => _setVoucherActive(voucher, !active),
-                        icon: Icon(
-                          active ? Icons.block : Icons.check_circle_outline,
-                        ),
-                        label: Text(active ? 'Nonaktifkan' : 'Aktifkan'),
                         style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 32),
                           foregroundColor: active
                               ? AppColors.error
                               : AppColors.success,
                         ),
+                        onPressed: () => _setVoucherActive(voucher, !active),
+                        icon: Icon(
+                          active ? Icons.block : Icons.check_circle_outline,
+                          size: 16,
+                        ),
+                        label: Text(active ? 'Nonaktifkan' : 'Aktifkan'),
                       ),
                     ],
                   ),
@@ -1603,7 +1647,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       }
       await _loadData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(
           content: Text(
             active ? 'Voucher berhasil diaktifkan.' : 'Voucher dinonaktifkan.',
@@ -1612,7 +1656,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         SnackBar(
           content: Text('Status voucher gagal diperbarui: $error'),
           backgroundColor: AppColors.error,
@@ -1946,7 +1990,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (saved == true && mounted) {
       await _loadData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         const SnackBar(content: Text('Voucher berhasil disimpan.')),
       );
     }
@@ -2222,7 +2266,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       final pass = passwordCtrl.text;
 
                       if (name.isEmpty || email.isEmpty || pass.length < 12) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        AppToast.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
                               'Lengkapi form (password min 12 karakter)!',
@@ -2254,7 +2298,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          AppToast.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
                                 'Staff $name ($selectedRole) berhasil dibuat! ID: $res',
@@ -2267,7 +2311,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       } catch (e) {
                         setDialogState(() => isSubmitting = false);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          AppToast.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Gagal membuat staff: $e'),
                               backgroundColor: AppColors.error,
@@ -2382,7 +2426,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
               onPressed: () async {
                 final nav = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
+                final messenger = AppToast.of(context);
                 final userId = userData['id']?.toString() ?? '';
                 final fullName = nameController.text.trim();
                 final points = int.tryParse(pointsController.text);
@@ -3001,7 +3045,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           .readCatalogCategories();
       if (categoryRows.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.of(context).showSnackBar(
           SnackBar(
             content: Text(
               'Kategori tidak tersedia online maupun lokal: $error',
@@ -3023,7 +3067,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         .where((category) => category['id']!.isNotEmpty)
         .toList();
     if (categoryOptions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         const SnackBar(
           content: Text(
             'Belum ada kategori. Jalankan migration kategori produk terlebih dahulu.',
@@ -3172,7 +3216,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       final stock = _parseInt(stockC.text.trim());
 
                       if (name.isEmpty || brand.isEmpty || price <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        AppToast.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Nama, Brand, dan Harga wajib diisi'),
                           ),
@@ -3211,7 +3255,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       );
 
                       final nav = Navigator.of(ctx);
-                      final messenger = ScaffoldMessenger.of(context);
+                      final messenger = AppToast.of(context);
                       final productProvider = context.read<ProductProvider>();
 
                       try {
@@ -3346,7 +3390,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   ? null
                   : () async {
                       final nav = Navigator.of(ctx);
-                      final messenger = ScaffoldMessenger.of(context);
+                      final messenger = AppToast.of(context);
                       final productProvider = context.read<ProductProvider>();
 
                       try {
@@ -3415,7 +3459,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () async {
               final nav = Navigator.of(ctx);
-              final messenger = ScaffoldMessenger.of(context);
+              final messenger = AppToast.of(context);
 
               try {
                 final productProvider = context.read<ProductProvider>();
@@ -3482,6 +3526,14 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
   int _discountPct = 20;
   bool _isInit = false;
 
+  @override
+  void dispose() {
+    _searchC.dispose();
+    _salePriceC.dispose();
+    _origPriceC.dispose();
+    super.dispose();
+  }
+
   double _parseDouble(dynamic val) {
     if (val == null) return 0.0;
     if (val is num) return val.toDouble();
@@ -3541,9 +3593,14 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
       return matchesSearch;
     }).toList();
 
-    return Center(
+    return Align(
+      alignment: Alignment.bottomCenter,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 540),
+        width: double.infinity,
+        constraints: BoxConstraints(
+          maxWidth: 560,
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+        ),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -3555,6 +3612,7 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
           top: 12,
         ),
         child: SafeArea(
+          top: false,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3573,18 +3631,40 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Icon(
-                      Icons.local_fire_department,
-                      color: AppColors.error,
-                      size: 24,
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.local_fire_department,
+                        color: AppColors.error,
+                        size: 23,
+                      ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        _selectedProduct != null
-                            ? 'Atur Promo Flash Sale'
-                            : 'Pilih Produk untuk Flash Sale',
-                        style: AppTextStyles.titleMedium,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedProduct != null
+                                ? 'Atur Promo Flash Sale'
+                                : 'Pilih Produk',
+                            style: AppTextStyles.titleMedium,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _selectedProduct != null
+                                ? 'Tentukan diskon dan harga promo.'
+                                : 'Tambahkan produk ke promo yang sedang dikelola.',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -3596,63 +3676,143 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                 const Divider(),
 
                 if (_selectedProduct == null) ...[
-                  Text(
-                    'Cari dan pilih produk dari katalog toko:',
-                    style: AppTextStyles.bodySmall,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Produk yang tersedia',
+                          style: AppTextStyles.titleSmall,
+                        ),
+                      ),
+                      Text(
+                        '${nonFlashProducts.length} produk',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _searchC,
                     decoration: InputDecoration(
                       hintText: 'Cari nama atau brand produk...',
                       prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: AppColors.background,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: AppColors.cardBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: AppColors.cardBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: AppColors.primary),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                        horizontal: 14,
+                        vertical: 12,
                       ),
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
-                    height: 220,
+                    height: (MediaQuery.of(context).size.height * 0.38)
+                        .clamp(220.0, 360.0)
+                        .toDouble(),
                     child: nonFlashProducts.isEmpty
                         ? const Center(
                             child: Text('Tidak ada produk yang cocok'),
                           )
                         : ListView.builder(
+                            padding: EdgeInsets.zero,
                             itemCount: nonFlashProducts.length,
                             itemBuilder: (ctx, i) {
                               final p = nonFlashProducts[i];
-                              return ListTile(
-                                dense: true,
-                                title: Text(
-                                  p.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  'Rp ${_formatNumber(p.price)} • Stok: ${p.stock}',
-                                ),
-                                trailing: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.error,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _selectedProduct = p;
-                                      _recalculatePrices();
-                                    });
-                                  },
-                                  child: const Text(
-                                    'Pilih',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Material(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedProduct = p;
+                                        _recalculatePrices();
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: AppColors.cardBorder,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: SizedBox(
+                                              width: 56,
+                                              height: 56,
+                                              child: AppImageView(
+                                                imageUrl: p.images.isNotEmpty
+                                                    ? p.images.first
+                                                    : null,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  p.name,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style:
+                                                      AppTextStyles.titleSmall,
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  '${p.brand} · Stok ${p.stock}',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: AppTextStyles.caption,
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  'Rp ${_formatNumber(p.price)}',
+                                                  style: AppTextStyles
+                                                      .priceSmall
+                                                      .copyWith(
+                                                        color: AppColors.error,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            Icons.add_circle_rounded,
+                                            color: AppColors.error,
+                                            size: 27,
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -3672,6 +3832,20 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                     ),
                     child: Row(
                       children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: AppImageView(
+                              imageUrl: _selectedProduct!.images.isNotEmpty
+                                  ? _selectedProduct!.images.first
+                                  : null,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3791,7 +3965,7 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                             );
 
                             if (salePrice <= 0 || salePrice >= originalPrice) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              AppToast.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
                                     'Harga promo harus lebih kecil dari harga asli',
@@ -3801,7 +3975,7 @@ class _FlashSaleSheetWidgetState extends State<_FlashSaleSheetWidget> {
                               return;
                             }
 
-                            final messenger = ScaffoldMessenger.of(context);
+                            final messenger = AppToast.of(context);
                             final nav = Navigator.of(context);
 
                             await provider.toggleFlashSale(

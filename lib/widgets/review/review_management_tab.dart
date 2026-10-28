@@ -11,6 +11,7 @@ import 'package:doctor_computer/services/review_media_service.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/review/review_media_viewer.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 /// Tab "Ulasan" untuk admin dan kasir: melihat ulasan pembeli (termasuk
 /// foto/video) dan membalasnya, dengan template balasan cepat.
@@ -74,8 +75,12 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
   ];
 
   List<_ReplyTemplate> _templatesFor(ReviewModel review) {
-    final primary = review.rating >= 4 ? _positiveTemplates : _negativeTemplates;
-    final secondary = review.rating >= 4 ? _negativeTemplates : _positiveTemplates;
+    final primary = review.rating >= 4
+        ? _positiveTemplates
+        : _negativeTemplates;
+    final secondary = review.rating >= 4
+        ? _negativeTemplates
+        : _positiveTemplates;
     return [...primary, ..._generalTemplates, ...secondary];
   }
 
@@ -176,22 +181,24 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                backgroundImage: (review.userImageUrl != null &&
+                backgroundImage:
+                    (review.userImageUrl != null &&
                         review.userImageUrl!.isNotEmpty)
                     ? NetworkImage(review.userImageUrl!)
                     : null,
-                child: (review.userImageUrl != null &&
+                child:
+                    (review.userImageUrl != null &&
                         review.userImageUrl!.isNotEmpty)
                     ? null
                     : Text(
-                  review.userName.isNotEmpty
-                      ? review.userName[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                        review.userName.isNotEmpty
+                            ? review.userName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -235,7 +242,8 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
                 final url = review.mediaUrls[i];
                 final isVideo = ReviewMediaService.isVideoUrl(url);
                 return GestureDetector(
-                  onTap: () => showReviewMediaViewer(context, review.mediaUrls, i),
+                  onTap: () =>
+                      showReviewMediaViewer(context, review.mediaUrls, i),
                   child: Container(
                     width: 64,
                     height: 64,
@@ -269,7 +277,9 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
           const SizedBox(height: 6),
           Text(
             _formatDate(review.date),
-            style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textTertiary,
+            ),
           ),
           if (hasReply) ...[
             const SizedBox(height: 10),
@@ -384,7 +394,10 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
                   return ActionChip(
                     label: Text(t.label, style: const TextStyle(fontSize: 11)),
                     onPressed: () {
-                      replyController.text = t.text.replaceAll('{nama}', firstName);
+                      replyController.text = t.text.replaceAll(
+                        '{nama}',
+                        firstName,
+                      );
                       replyController.selection = TextSelection.collapsed(
                         offset: replyController.text.length,
                       );
@@ -419,7 +432,7 @@ class _ReviewManagementTabState extends State<ReviewManagementTab> {
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
               final replyText = replyController.text.trim();
-              final messenger = ScaffoldMessenger.of(context);
+              final messenger = AppToast.of(context);
               if (replyText.isEmpty) {
                 messenger.showSnackBar(
                   const SnackBar(content: Text('Balasan tidak boleh kosong')),

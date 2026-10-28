@@ -8,6 +8,7 @@ import 'package:doctor_computer/services/biometric_service.dart';
 import 'package:doctor_computer/widgets/common/custom_app_bar.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 /// Menu Keamanan: daftarkan / hapus sidik jari untuk login.
 /// Tersedia untuk semua peran (user, kasir, admin).
@@ -85,7 +86,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    AppToast.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _addFingerprint() async {
@@ -195,19 +196,24 @@ class _SecurityScreenState extends State<SecurityScreen> {
                           Icon(
                             Icons.fingerprint,
                             size: 40,
-                            color: hasLocal ? AppColors.success : AppColors.primary,
+                            color: hasLocal
+                                ? AppColors.success
+                                : AppColors.primary,
                           ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Login dengan Sidik Jari', style: AppTextStyles.titleMedium),
+                                Text(
+                                  'Login dengan Sidik Jari',
+                                  style: AppTextStyles.titleMedium,
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
                                   hasLocal
                                       ? 'Aktif di perangkat ini. Setelah keluar, '
-                                          'Anda bisa masuk dengan sidik jari.'
+                                            'Anda bisa masuk dengan sidik jari.'
                                       : _bio.statusMessage(_status),
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: AppColors.textSecondary,
@@ -230,18 +236,25 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     if (_status == BiometricStatus.ready && hasLocal)
                       Text(
                         'Sidik jari perangkat ini sudah terdaftar untuk akun ini.',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     if (_loadError != null) ...[
                       const SizedBox(height: 12),
                       Text(
                         _loadError!,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.error,
+                        ),
                       ),
                     ],
                     const SizedBox(height: 24),
-                    Text('Perangkat Terdaftar', style: AppTextStyles.titleSmall),
+                    Text(
+                      'Perangkat Terdaftar',
+                      style: AppTextStyles.titleSmall,
+                    ),
                     const SizedBox(height: 8),
                     if (_registrations.isEmpty)
                       Text(
@@ -263,11 +276,15 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.fingerprint, color: AppColors.primary),
+                                Icon(
+                                  Icons.fingerprint,
+                                  color: AppColors.primary,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         isThisDevice
@@ -287,8 +304,13 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                 ),
                                 IconButton(
                                   tooltip: 'Hapus',
-                                  icon: Icon(Icons.delete_outline, color: AppColors.error),
-                                  onPressed: _isBusy ? null : () => _removeFingerprint(row),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: AppColors.error,
+                                  ),
+                                  onPressed: _isBusy
+                                      ? null
+                                      : () => _removeFingerprint(row),
                                 ),
                               ],
                             ),

@@ -10,6 +10,7 @@ import 'package:doctor_computer/providers/auth_provider.dart';
 import 'package:doctor_computer/services/biometric_service.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
 import 'package:doctor_computer/widgets/common/glass_card.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 /// Login Screen
 class LoginScreen extends StatefulWidget {
@@ -51,9 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       final errorMsg = auth.errorMessage;
       if (errorMsg != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMsg)),
-        );
+        AppToast.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
       }
       // Kredensial bisa terhapus (password berubah / sidik jari dicabut).
       _loadBiometricCredential();
@@ -106,14 +105,11 @@ class _LoginScreenState extends State<LoginScreen> {
         email = 'cashier@doctorcomputer.id';
       }
 
-      final success = await auth.login(
-        email,
-        _passwordController.text,
-      );
+      final success = await auth.login(email, _passwordController.text);
       if (!mounted) return;
       if (success) {
         if (auth.isOfflineSession) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.of(context).showSnackBar(
             const SnackBar(
               content: Text(
                 'Mode offline aktif. Perubahan data dinonaktifkan.',
@@ -123,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
         } else if ((auth.currentUser?.role == UserRole.admin ||
                 auth.currentUser?.role == UserRole.cashier) &&
             !auth.offlineCredentialSaved) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.of(context).showSnackBar(
             const SnackBar(
               content: Text(
                 'Login online berhasil, tetapi kredensial offline tidak '
@@ -134,10 +130,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         Navigator.pushReplacementNamed(context, AppRouter.mainNav);
       } else {
-        final errorMsg = auth.errorMessage ?? 'Login gagal. Silakan periksa kredensial Anda.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMsg)),
-        );
+        final errorMsg =
+            auth.errorMessage ??
+            'Login gagal. Silakan periksa kredensial Anda.';
+        AppToast.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }
@@ -169,7 +165,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.person_outline, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.person_outline,
+                            color: AppColors.textSecondary,
+                          ),
                           hintText: 'Email atau Username',
                           filled: true,
                           fillColor: AppColors.surface,
@@ -187,10 +186,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _passwordController,
                         obscureText: _obscurePassword,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, color: AppColors.textSecondary),
+                          prefixIcon: Icon(
+                            Icons.lock,
+                            color: AppColors.textSecondary,
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              _obscurePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                               color: AppColors.textSecondary,
                             ),
                             onPressed: () {
@@ -243,7 +247,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 },
                                 child: Text(
                                   'Ingat email saya',
-                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
                             ],
@@ -252,42 +258,74 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () {},
                             child: Text(
                               'Lupa Password?',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.accent),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.accent,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
-                      GradientButton(
-                        label: 'Masuk',
-                        onPressed: _login,
-                        isLoading: isLoading,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GradientButton(
+                              label: 'Masuk',
+                              onPressed: _login,
+                              isLoading: isLoading,
+                            ),
+                          ),
+                          if (_biometricCredential != null) ...[
+                            const SizedBox(width: 10),
+                            Tooltip(
+                              message:
+                                  'Masuk dengan sidik jari (${_biometricCredential!.email})',
+                              child: Material(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                child: InkWell(
+                                  onTap: isLoading
+                                      ? null
+                                      : _loginWithFingerprint,
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    width: 52,
+                                    height: 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: AppColors.primary,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.fingerprint,
+                                      size: 30,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-              if (_biometricCredential != null) ...[
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: isLoading ? null : _loginWithFingerprint,
-                  icon: Icon(Icons.fingerprint, size: 28, color: AppColors.primary),
-                  label: Text('Masuk dengan Sidik Jari (${_biometricCredential!.email})'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    minimumSize: const Size(double.infinity, 50),
-                    side: BorderSide(color: AppColors.primary),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ],
               const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(child: Divider(color: AppColors.surfaceLight)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('atau', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                    child: Text(
+                      'atau',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ),
                   Expanded(child: Divider(color: AppColors.surfaceLight)),
                 ],
@@ -295,8 +333,10 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
               OutlinedButton.icon(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Login dengan Google akan segera hadir')),
+                  AppToast.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Login dengan Google akan segera hadir'),
+                    ),
                   );
                 },
                 icon: const Icon(Icons.g_mobiledata, size: 28),
@@ -305,14 +345,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   foregroundColor: AppColors.textPrimary,
                   minimumSize: const Size(double.infinity, 50),
                   side: BorderSide(color: AppColors.surfaceLight),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Login dengan Apple akan segera hadir')),
+                  AppToast.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Login dengan Apple akan segera hadir'),
+                    ),
                   );
                 },
                 icon: const Icon(Icons.apple, size: 28),
@@ -321,7 +365,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   foregroundColor: AppColors.textPrimary,
                   minimumSize: const Size(double.infinity, 50),
                   side: BorderSide(color: AppColors.surfaceLight),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -333,7 +379,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () {
                       Navigator.pushNamed(context, AppRouter.register);
                     },
-                    child: Text('Daftar', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary)),
+                    child: Text(
+                      'Daftar',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
                 ],
               ),

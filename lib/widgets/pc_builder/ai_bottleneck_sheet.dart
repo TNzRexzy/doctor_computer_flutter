@@ -5,6 +5,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/data/models/pc_part_model.dart';
 import 'package:doctor_computer/services/gemini_service.dart';
 import 'package:doctor_computer/providers/notification_provider.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class AiBottleneckSheet extends StatefulWidget {
   final PcPartModel? cpu;
@@ -97,8 +98,16 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('AI Bottleneck Calculator', style: AppTextStyles.titleMedium),
-                      Text('Analisis Keseimbangan Prosesor & Grafis', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        'AI Bottleneck Calculator',
+                        style: AppTextStyles.titleMedium,
+                      ),
+                      Text(
+                        'Analisis Keseimbangan Prosesor & Grafis',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -112,7 +121,9 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.5),
+                ),
               ),
               child: Row(
                 children: [
@@ -120,28 +131,61 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('PROSESOR (CPU)', style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary, fontWeight: FontWeight.bold)),
+                        Text(
+                          'PROSESOR (CPU)',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textTertiary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text(cpu?.name ?? 'Belum Dipilih', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold)),
+                        Text(
+                          cpu?.name ?? 'Belum Dipilih',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('VS', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 11)),
+                    child: Text(
+                      'VS',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('KARTU GRAFIS (GPU)', style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary, fontWeight: FontWeight.bold)),
+                        Text(
+                          'KARTU GRAFIS (GPU)',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textTertiary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text(gpu?.name ?? 'Belum Dipilih', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+                        Text(
+                          gpu?.name ?? 'Belum Dipilih',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
                       ],
                     ),
                   ),
@@ -155,11 +199,17 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
             if (_loading)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 32,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.4), width: 2),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.4),
+                    width: 2,
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -172,7 +222,9 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                     Text(
                       'Gemini AI sedang menganalisis kombinasi CPU & GPU...',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -188,20 +240,38 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                 ),
                 child: Column(
                   children: [
-                    Text('$percentage%', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: color)),
-                    Text(status, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+                    Text(
+                      '$percentage%',
+                      style: TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                    Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       advice,
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     if (isLocal) ...[
                       const SizedBox(height: 8),
                       Text(
                         'Estimasi offline (Gemini AI tidak tersedia saat ini).',
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary),
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ],
                   ],
@@ -210,14 +280,24 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
 
             const SizedBox(height: 20),
 
-            Text(_loading ? 'Rekomendasi Resolusi: ...' : 'Rekomendasi Resolusi: $res', style: AppTextStyles.titleSmall),
+            Text(
+              _loading
+                  ? 'Rekomendasi Resolusi: ...'
+                  : 'Rekomendasi Resolusi: $res',
+              style: AppTextStyles.titleSmall,
+            ),
             const SizedBox(height: 12),
 
             // Game FPS Estimates
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Estimasi FPS Pada Game Populer:', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Estimasi FPS Pada Game Populer:',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 Row(
                   children: [
                     _buildLegendDot(AppColors.success, '≥60'),
@@ -235,13 +315,19 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.5),
+                ),
               ),
               child: _loading
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                       ),
                     )
                   : fpsMap.isEmpty
@@ -250,13 +336,19 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Text(
                           'Pilih CPU dan GPU untuk melihat estimasi FPS.',
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     )
                   : Column(
                       children: fpsMap.entries.map((entry) {
-                        final fpsValue = int.tryParse(entry.value.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                        final fpsValue =
+                            int.tryParse(
+                              entry.value.replaceAll(RegExp(r'[^0-9]'), ''),
+                            ) ??
+                            0;
                         final Color fpsColor;
                         if (fpsValue >= 60) {
                           fpsColor = AppColors.success;
@@ -270,7 +362,11 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                           padding: const EdgeInsets.symmetric(vertical: 5.0),
                           child: Row(
                             children: [
-                              Icon(Icons.sports_esports, size: 16, color: AppColors.textSecondary),
+                              Icon(
+                                Icons.sports_esports,
+                                size: 16,
+                                color: AppColors.textSecondary,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -282,11 +378,16 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: fpsColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: fpsColor.withValues(alpha: 0.4)),
+                                  border: Border.all(
+                                    color: fpsColor.withValues(alpha: 0.4),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -328,20 +429,29 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
                   minimumSize: const Size(double.infinity, 46),
                 ),
                 icon: const Icon(Icons.notification_add, color: Colors.white),
-                label: const Text('Simpan Peringatan ke Notifikasi Mobile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Simpan Peringatan ke Notifikasi Mobile',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 onPressed: () {
                   context.read<NotificationProvider>().addNotification(
                     title: '⚠️ Peringatan Bottleneck PC ($percentage%)',
-                    message: 'Konfigurasi ${cpu?.name ?? 'CPU'} dan ${gpu?.name ?? 'GPU'} memiliki bottleneck $percentage%. $advice',
+                    message:
+                        'Konfigurasi ${cpu?.name ?? 'CPU'} dan ${gpu?.name ?? 'GPU'} memiliki bottleneck $percentage%. $advice',
                     type: 'bottleneck',
                     actionRoute: '/pc-builder',
                     actionLabel: 'Lihat PC Builder',
                   );
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  AppToast.of(context).showSnackBar(
                     SnackBar(
                       backgroundColor: AppColors.success,
-                      content: Text('Notifikasi Peringatan Bottleneck berhasil dikirim ke panel notifikasi!'),
+                      content: Text(
+                        'Notifikasi Peringatan Bottleneck berhasil dikirim ke panel notifikasi!',
+                      ),
                     ),
                   );
                 },
@@ -368,10 +478,7 @@ class _AiBottleneckSheetState extends State<AiBottleneckSheet> {
         Container(
           width: 7,
           height: 7,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
         Text(

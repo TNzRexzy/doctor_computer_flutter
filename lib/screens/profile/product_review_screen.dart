@@ -14,6 +14,7 @@ import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/services/review_media_service.dart';
 import 'package:doctor_computer/widgets/common/app_image_view.dart';
 import 'package:doctor_computer/widgets/common/gradient_button.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 /// Form ulasan untuk SATU produk di dalam satu pesanan yang sudah selesai
 /// (bintang, teks, foto, video). Mengembalikan `true` jika berhasil disimpan.
@@ -86,7 +87,7 @@ class _ProductReviewScreenState extends State<ProductReviewScreen> {
 
   void _toast(String message, {bool error = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.of(context).showSnackBar(
       SnackBar(
         backgroundColor: error ? AppColors.error : AppColors.success,
         content: Text(message),
@@ -184,7 +185,9 @@ class _ProductReviewScreenState extends State<ProductReviewScreen> {
 
     if (!mounted) return;
     _toast(
-      _isEditing ? 'Ulasan berhasil diperbarui!' : 'Terima kasih atas ulasan Anda!',
+      _isEditing
+          ? 'Ulasan berhasil diperbarui!'
+          : 'Terima kasih atas ulasan Anda!',
       error: false,
     );
     Navigator.pop(context, true);
@@ -309,8 +312,7 @@ class _ProductReviewScreenState extends State<ProductReviewScreen> {
                 maxLines: 5,
                 maxLength: 2000,
                 decoration: InputDecoration(
-                  hintText:
-                      'Bagikan pengalaman Anda tentang kualitas dan performa produk ini...',
+                  hintText: 'Bagikan pengalaman Anda tentang kualitas dan performa produk ini...',
                   filled: true,
                   fillColor: AppColors.surface,
                   border: OutlineInputBorder(
@@ -319,10 +321,7 @@ class _ProductReviewScreenState extends State<ProductReviewScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                'Foto & Video',
-                style: AppTextStyles.titleSmall,
-              ),
+              Text('Foto & Video', style: AppTextStyles.titleSmall),
               Text(
                 'Maksimal ${ReviewMediaService.maxImages} foto dan '
                 '${ReviewMediaService.maxVideos} video '

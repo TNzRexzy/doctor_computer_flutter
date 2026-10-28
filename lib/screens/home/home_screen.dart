@@ -280,11 +280,14 @@ class HomeScreen extends StatelessWidget {
                       return CategoryGrid(
                         categories: provider.categories,
                         onCategoryTap: (category) {
-                          Navigator.pushNamed(
-                            context,
-                            AppRouter.catalog,
-                            arguments: category,
-                          );
+                          final mainNavState = context
+                              .findAncestorStateOfType<MainNavScreenState>();
+                          if (mainNavState != null) {
+                            mainNavState.openCategory(category);
+                          } else {
+                            provider.setCategory(category);
+                            Navigator.pushNamed(context, AppRouter.catalog);
+                          }
                         },
                       );
                     },

@@ -7,11 +7,12 @@ import 'package:doctor_computer/core/constants/app_images.dart';
 
 class PcBuilderProvider extends ChangeNotifier {
   final Map<PcPartCategory, PcPartModel?> _selectedParts = {
-    for (var category in PcPartCategory.values) category: null
+    for (var category in PcPartCategory.values) category: null,
   };
   BuildServiceTier _serviceTier = BuildServiceTier.standard;
 
-  Map<PcPartCategory, PcPartModel?> get selectedParts => Map.unmodifiable(_selectedParts);
+  Map<PcPartCategory, PcPartModel?> get selectedParts =>
+      Map.unmodifiable(_selectedParts);
   BuildServiceTier get serviceTier => _serviceTier;
 
   List<PcPartModel> _allParts = [];
@@ -47,9 +48,11 @@ class PcBuilderProvider extends ChangeNotifier {
     final ram = _selectedParts[PcPartCategory.ram];
 
     if (cpu != null && mobo != null) {
-      if (cpu.compatibilityTags.contains('intel_lga1700') && mobo.compatibilityTags.contains('amd_am5')) {
+      if (cpu.compatibilityTags.contains('intel_lga1700') &&
+          mobo.compatibilityTags.contains('amd_am5')) {
         issues.add('CPU dan Motherboard tidak kompatibel (LGA 1700 vs AM5)');
-      } else if (cpu.compatibilityTags.contains('amd_am5') && mobo.compatibilityTags.contains('intel_lga1700')) {
+      } else if (cpu.compatibilityTags.contains('amd_am5') &&
+          mobo.compatibilityTags.contains('intel_lga1700')) {
         issues.add('CPU dan Motherboard tidak kompatibel (AM5 vs LGA 1700)');
       }
     }
@@ -96,17 +99,15 @@ class PcBuilderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List res = await Supabase.instance.client
-          .from('pc_parts')
-          .select();
+      final List res = await Supabase.instance.client.from('pc_parts').select();
 
       // Hanya komponen PC asli: baris dengan kategori di luar 8 slot
       // (mis. Laptop 'cat-010', Peripherals 'cat-009') dilewati.
       // Gambar part yang kosong di pc_parts dilengkapi dari tabel products
       // (produk dengan nama yang sama), karena foto diunggah saat input produk.
-      final productImages = await _loadProductImagesByName();
+      final productsByName = await _loadProductsByName();
       _allParts = res
-          .map((p) => _mapPart(p, productImages))
+          .map((p) => _mapPart(p, productsByName))
           .whereType<PcPartModel>()
           .toList();
     } catch (e) {
@@ -122,14 +123,14 @@ class PcBuilderProvider extends ChangeNotifier {
   static String _normalizeName(String? name) =>
       (name ?? '').toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
-  /// Peta nama produk (ternormalisasi) -> gambar pertama di tabel `products`.
+  /// Peta nama produk ternormalisasi ke ID dan foto produk di katalog.
   /// Gagal memuat tidak menghentikan pemuatan part (hasilnya kosong).
-  Future<Map<String, String>> _loadProductImagesByName() async {
-    final Map<String, String> result = {};
+  Future<Map<String, Map<String, String>>> _loadProductsByName() async {
+    final Map<String, Map<String, String>> result = {};
     try {
       final List rows = await Supabase.instance.client
           .from('products')
-          .select('name, image_url');
+          .select('id, name, image_url');
       for (final row in rows) {
         final key = _normalizeName(row['name']?.toString());
         if (key.isEmpty || result.containsKey(key)) continue;
@@ -146,7 +147,10 @@ class PcBuilderProvider extends ChangeNotifier {
         } else if (raw is String) {
           image = raw.trim();
         }
-        if (image != null && image.isNotEmpty) result[key] = image;
+        result[key] = {
+          'id': row['id']?.toString() ?? '',
+          'image_url': image ?? '',
+        };
       }
     } catch (e) {
       debugPrint('Error loading product images for pc parts: $e');
@@ -154,25 +158,47 @@ class PcBuilderProvider extends ChangeNotifier {
     return result;
   }
 
-  PcPartModel? _mapPart(dynamic p, [Map<String, String> productImages = const {}]) {
+  PcPartModel? _mapPart(
+    dynamic p, [
+    Map<String, Map<String, String>> productsByName = const {},
+  ]) {
     final categoryStr = (p['category']?.toString() ?? '').toLowerCase();
     PcPartCategory? category;
 
-    if (categoryStr == 'cat-001' || categoryStr == 'cpu' || categoryStr.contains('processor')) {
+    if (categoryStr == 'cat-001' ||
+        categoryStr == 'cpu' ||
+        categoryStr.contains('processor')) {
       category = PcPartCategory.cpu;
-    } else if (categoryStr == 'cat-002' || categoryStr == 'gpu' || categoryStr.contains('vga') || categoryStr.contains('graphics')) {
+    } else if (categoryStr == 'cat-002' ||
+        categoryStr == 'gpu' ||
+        categoryStr.contains('vga') ||
+        categoryStr.contains('graphics')) {
       category = PcPartCategory.gpu;
-    } else if (categoryStr == 'cat-003' || categoryStr == 'motherboard' || categoryStr.contains('mobo')) {
+    } else if (categoryStr == 'cat-003' ||
+        categoryStr == 'motherboard' ||
+        categoryStr.contains('mobo')) {
       category = PcPartCategory.motherboard;
-    } else if (categoryStr == 'cat-004' || categoryStr == 'ram' || categoryStr.contains('memory')) {
+    } else if (categoryStr == 'cat-004' ||
+        categoryStr == 'ram' ||
+        categoryStr.contains('memory')) {
       category = PcPartCategory.ram;
-    } else if (categoryStr == 'cat-005' || categoryStr == 'storage' || categoryStr.contains('ssd') || categoryStr.contains('hdd')) {
+    } else if (categoryStr == 'cat-005' ||
+        categoryStr == 'storage' ||
+        categoryStr.contains('ssd') ||
+        categoryStr.contains('hdd')) {
       category = PcPartCategory.storage;
-    } else if (categoryStr == 'cat-006' || categoryStr == 'psu' || categoryStr.contains('power')) {
+    } else if (categoryStr == 'cat-006' ||
+        categoryStr == 'psu' ||
+        categoryStr.contains('power')) {
       category = PcPartCategory.psu;
-    } else if (categoryStr == 'cat-007' || categoryStr == 'cooler' || categoryStr.contains('cooling')) {
+    } else if (categoryStr == 'cat-007' ||
+        categoryStr == 'cooler' ||
+        categoryStr.contains('cooling')) {
       category = PcPartCategory.cooler;
-    } else if (categoryStr == 'cat-008' || categoryStr == 'pc_case' || categoryStr == 'case' || categoryStr.contains('casing')) {
+    } else if (categoryStr == 'cat-008' ||
+        categoryStr == 'pc_case' ||
+        categoryStr == 'case' ||
+        categoryStr.contains('casing')) {
       category = PcPartCategory.pcCase;
     }
 
@@ -201,8 +227,10 @@ class PcBuilderProvider extends ChangeNotifier {
       imageUrl = rawImage;
     }
     imageUrl = imageUrl?.trim();
+    final matchedProduct =
+        productsByName[_normalizeName(p['name']?.toString())];
     if (imageUrl == null || imageUrl.isEmpty) {
-      imageUrl = productImages[_normalizeName(p['name']?.toString())];
+      imageUrl = matchedProduct?['image_url'];
     }
     imageUrl = (imageUrl == null || imageUrl.isEmpty)
         ? null
@@ -215,6 +243,9 @@ class PcBuilderProvider extends ChangeNotifier {
       brand: p['brand']?.toString() ?? 'Generic',
       price: (p['price'] as num?)?.toDouble() ?? 0.0,
       specs: specsMap,
+      productId: p['product_id']?.toString().trim().isNotEmpty == true
+          ? p['product_id'].toString().trim()
+          : matchedProduct?['id'],
       imageUrl: imageUrl,
       compatibilityTags: tags,
     );

@@ -3,6 +3,7 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 import 'package:doctor_computer/data/models/product_model.dart';
 import 'package:doctor_computer/widgets/common/product_image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doctor_computer/widgets/common/app_toast.dart';
 
 class ProductEditorDialog extends StatefulWidget {
   final ProductModel? product;
@@ -112,7 +113,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
         stock < 0 ||
         _category == null ||
         !_categories.any((category) => category['id'] == _category)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.of(context).showSnackBar(
         const SnackBar(
           content: Text(
             'Periksa nama, brand, harga, stok, dan pilih kategori yang tersedia.',
