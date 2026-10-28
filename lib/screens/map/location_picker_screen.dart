@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -44,6 +45,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   String _addressText = 'Memuat lokasi...';
   String _cityName = 'Jakarta';
   bool _isLoadingAddress = false;
+  bool _isLocating = false;
   final _searchController = TextEditingController();
 
   // Preset quick locations
@@ -170,6 +172,66 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
   }
 
+  Future<void> _useCurrentLocation() async {
+    if (_isLocating) return;
+    setState(() => _isLocating = true);
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _showLocationMessage(
+          'Aktifkan layanan lokasi perangkat untuk menggunakan lokasi saat ini.',
+        );
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        _showLocationMessage('Izin lokasi belum diberikan.');
+        return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _showLocationMessage(
+          'Izin lokasi ditolak permanen. Aktifkan melalui Pengaturan aplikasi.',
+          action: SnackBarAction(
+            label: 'Pengaturan',
+            onPressed: Geolocator.openAppSettings,
+          ),
+        );
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      final target = LatLng(position.latitude, position.longitude);
+
+      if (!mounted) return;
+      setState(() => _currentLocation = target);
+      _mapController.move(target, 16);
+      await _reverseGeocode(target);
+    } catch (error) {
+      debugPrint('Could not get current device location: $error');
+      _showLocationMessage(
+        'Lokasi saat ini gagal didapatkan. Periksa GPS dan coba lagi.',
+      );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  void _showLocationMessage(String message, {SnackBarAction? action}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), action: action),
+    );
+  }
+
   void _onMapTapped(LatLng point) {
     setState(() {
       _currentLocation = point;
@@ -221,13 +283,15 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.my_location),
-            tooltip: 'Reset ke Jakarta',
-            onPressed: () {
-              final target = LatLng(-6.2088, 106.8456);
-              _mapController.move(target, 15.0);
-              _onMapTapped(target);
-            },
+            icon: _isLocating
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.my_location),
+            tooltip: 'Gunakan lokasi saya saat ini',
+            onPressed: _isLocating ? null : _useCurrentLocation,
           ),
         ],
       ),

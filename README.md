@@ -3,7 +3,7 @@
 Production-ready cross-platform computer retail, omnichannel POS system, interactive PC configurator, and blockchain loyalty rewards application built with Flutter, Provider architecture, Supabase PostgreSQL backend integration, OpenStreetMap geospatial services, and Google Gemini AI.
 
 * **Application Name:** Doctor Computer
-* **Release Version:** 1.1.9-beta
+* **Current Version:** 1.1.10-beta+22
 * **Target Platforms:** Android, iOS, Windows, Web
 * **Engine:** Flutter 3.24+ / Dart 3.5+
 
@@ -143,6 +143,21 @@ Staff accounts must be provisioned by a trusted administrator using the server-s
 | BUG-041 | The Flash Sale section on Home stayed as an empty block when no flash sale was running | Heading, timer and list were always rendered, even with no active sale or no flash products | Resolved (the whole section, including its spacing, is hidden unless a flash sale is active, not expired and has at least one product) |
 | BUG-042 | Selected theme (dark/light) was lost after closing the app and always returned to light mode | `ThemeProvider` always started as light and did not save the choice | Resolved (choice stored in `SharedPreferences` and restored in `main()` before `runApp`) |
 | BUG-043 | The `Lanjut` button on the onboarding screen (after the splash screen) was too small | `GradientButton` was placed in a `Row` without a width, so it shrank to the size of its label | Resolved (`Lanjut` is now 180×56 and `Lewati` has a larger touch area; the shared `GradientButton` is unchanged) |
+| BUG-044 | Long generated order IDs overlapped order headings and filled device notifications | Full `DC-` UUIDs were rendered without a display-length limit | Resolved (order screens and new push notifications use a compact display ID; the complete ID remains unchanged in storage) |
+| BUG-045 | Screen changes felt abrupt and visually static | Routes used default platform transitions with no consistent app-wide motion style | Resolved (lightweight fade-and-rise transitions are applied consistently across platforms and respect the system reduced-motion setting) |
+| BUG-046 | Checkout address fields and delivery/payment options felt crowded | Checkout used tightly stacked form fields and default radio tiles with limited separation | Resolved (added clearer section hierarchy, roomier address fields, and animated selectable cards without changing checkout behavior or pricing) |
+
+---
+
+## Version 1.1.10-beta Changelog
+
+1. **Compact order references (BUG-044):** Order history, order tracking, review context, and newly generated order push notifications display a shortened order reference so long IDs no longer crowd or overlap the UI. The complete order ID remains unchanged in the database and order data.
+2. **Consistent screen transitions (BUG-045):** Added a restrained fade-and-rise transition for route changes across supported platforms. The transition honors the device's reduced-motion preference.
+3. **Database:** Run `supabase/migrations/20261109_compact_order_notifications.sql` in the Supabase SQL Editor to compact existing in-app order notification text and shorten newly generated push notifications. Notifications already delivered to the device notification tray are not changed retroactively.
+4. **Current address location:** The map's location button can request foreground device location and reverse-geocode it through OpenStreetMap Nominatim. Location access is requested only when the user taps the button; no background tracking is performed.
+5. **Dependency:** Added `geolocator` for foreground device location.
+6. **Checkout presentation (BUG-046):** Improved spacing and visual hierarchy on the checkout screen, including the recipient form, map selection, shipping and payment choices, and order summary. Order creation, shipping fees, and payment options are unchanged.
+7. **Versioning:** Updated the current beta build to `1.1.10-beta+22` (`pubspec.yaml`).
 
 ---
 

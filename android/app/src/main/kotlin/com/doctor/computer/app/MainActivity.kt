@@ -1,4 +1,4 @@
-package com.example.doctor_computer
+package com.doctor.computer.app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

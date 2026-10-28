@@ -337,8 +337,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                                 Row(
                                   children: [
                                     Text(
-                                      'Pesanan #${order.id}',
+                                      'Pesanan #${order.displayId}',
                                       style: AppTextStyles.titleSmall,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     const Spacer(),
                                     Chip(

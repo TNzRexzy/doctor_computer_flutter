@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:doctor_computer/data/models/app_notification_model.dart';
+import 'package:doctor_computer/services/push_notification_service.dart';
 
 /// Notifikasi per user. Sumber utama: tabel Supabase `user_notifications`
 /// (sinkron antar perangkat). SharedPreferences dipakai sebagai cache lokal
@@ -13,6 +15,7 @@ class NotificationProvider extends ChangeNotifier {
 
   final List<AppNotificationModel> _notifications = [];
   String? _userId;
+  RealtimeChannel? _realtimeChannel;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -23,10 +26,39 @@ class NotificationProvider extends ChangeNotifier {
   /// Dipanggil saat user login/logout/berganti akun.
   void setUserId(String? id) {
     if (_userId == id) return;
+    if (_realtimeChannel != null) {
+      _supabase.removeChannel(_realtimeChannel!);
+      _realtimeChannel = null;
+    }
     _userId = id;
     _notifications.clear();
     notifyListeners();
-    if (id != null) _loadAll(id);
+    unawaited(PushNotificationService.instance.setUserId(id));
+    if (id != null) {
+      _loadAll(id);
+      _subscribeToRemote(id);
+    }
+  }
+
+  void _subscribeToRemote(String forUserId) {
+    _realtimeChannel = _supabase
+        .channel('user-notifications-$forUserId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: _table,
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: forUserId,
+          ),
+          callback: (payload) {
+            if (_userId != forUserId || payload.newRecord.isEmpty) return;
+            _mergeIn([_fromRemote(payload.newRecord)]);
+            _saveToCache();
+          },
+        )
+        .subscribe();
   }
 
   // ---------------------------------------------------------------
@@ -244,5 +276,13 @@ class NotificationProvider extends ChangeNotifier {
         debugPrint('Notification Supabase sync failed: $e');
       }
     }();
+  }
+
+  @override
+  void dispose() {
+    if (_realtimeChannel != null) {
+      _supabase.removeChannel(_realtimeChannel!);
+    }
+    super.dispose();
   }
 }

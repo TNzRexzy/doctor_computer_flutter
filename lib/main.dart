@@ -12,6 +12,7 @@ import 'package:doctor_computer/providers/notification_provider.dart';
 import 'package:doctor_computer/providers/order_provider.dart';
 import 'package:doctor_computer/providers/review_provider.dart';
 import 'package:doctor_computer/services/pos_sync_service.dart';
+import 'package:doctor_computer/services/push_notification_service.dart';
 import 'package:doctor_computer/core/config/env_config.dart';
 import 'package:doctor_computer/data/models/user_model.dart';
 import 'package:doctor_computer/app.dart';
@@ -28,6 +29,8 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Supabase initialize notice: $e');
   }
+
+  await PushNotificationService.instance.initialize();
 
   // Restore authenticated user session before UI build
   final authProvider = AuthProvider();

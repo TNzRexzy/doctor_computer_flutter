@@ -3,6 +3,9 @@
          (Supabase, gambar produk, Gemini) dan akan stuck di splash screen. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <!-- Login & pendaftaran sidik jari (local_auth / BiometricPrompt). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application

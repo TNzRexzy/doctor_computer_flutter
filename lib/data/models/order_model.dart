@@ -84,6 +84,13 @@ class OrderModel {
 
   bool get hasRating => rating != null;
 
+  String get displayId {
+    if (id.startsWith('DC-') && id.length > 11) {
+      return '${id.substring(0, 11)}…';
+    }
+    return id;
+  }
+
   int get daysSinceRating =>
       ratedAt != null ? DateTime.now().difference(ratedAt!).inDays : 999;
 

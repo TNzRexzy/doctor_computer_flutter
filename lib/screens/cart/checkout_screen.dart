@@ -89,6 +89,152 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Widget _buildSectionHeading(IconData icon, String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 21),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTextStyles.titleMedium),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChoiceCard({
+    required bool selected,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? AppColors.primary.withValues(alpha: 0.12)
+            : AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected ? AppColors.primary : AppColors.cardBorder,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShippingOption(int index) {
+    final method = AppConstants.shippingMethods[index];
+    final selected = _selectedShipping == index;
+    final deliveryEstimate = method['days'] as String;
+
+    return _buildChoiceCard(
+      selected: selected,
+      onTap: () => setState(() => _selectedShipping = index),
+      child: Row(
+        children: [
+          Icon(
+            selected ? Icons.radio_button_checked : Icons.radio_button_off,
+            color: selected ? AppColors.primary : AppColors.textTertiary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(method['name'] as String, style: AppTextStyles.titleSmall),
+                const SizedBox(height: 3),
+                Text(
+                  deliveryEstimate.toLowerCase().contains('hari')
+                      ? deliveryEstimate
+                      : 'Estimasi $deliveryEstimate hari',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatRupiah(method['price'] as double),
+            style: AppTextStyles.titleSmall.copyWith(
+              color: selected ? AppColors.primary : AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption(int index) {
+    final method = AppConstants.paymentMethods[index];
+    final selected = _selectedPayment == index;
+    final usesWallet =
+        method.contains('GoPay') ||
+        method.contains('OVO') ||
+        method.contains('Dana') ||
+        method.contains('ShopeePay');
+    final icon = method == 'COD'
+        ? Icons.local_shipping_outlined
+        : usesWallet
+        ? Icons.account_balance_wallet_outlined
+        : Icons.account_balance_outlined;
+
+    return _buildChoiceCard(
+      selected: selected,
+      onTap: () => setState(() => _selectedPayment = index),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: selected ? AppColors.primary : AppColors.textSecondary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(method, style: AppTextStyles.bodyMedium)),
+          Icon(
+            selected ? Icons.radio_button_checked : Icons.radio_button_off,
+            color: selected ? AppColors.primary : AppColors.textTertiary,
+          ),
+        ],
+      ),
+    );
+  }
+
   void _processPayment() async {
     setState(() {
       _isProcessing = true;
@@ -212,183 +358,189 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back),
+                      icon: const Icon(Icons.arrow_back_rounded),
                       onPressed: () => Navigator.pop(context),
                     ),
-                    Text('Checkout', style: AppTextStyles.heading3),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // Alamat Pengiriman Header & Map Button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Alamat Pengiriman',
-                        style: AppTextStyles.titleMedium,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: _openMapPicker,
-                      icon: const Icon(Icons.map, size: 16),
-                      label: const Text(
-                        'Pilih via Map',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // Map Pin Status Badge
-                if (_latitude != null && _longitude != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primary),
-                    ),
-                    child: Row(
+                    const SizedBox(width: 4),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.pin_drop,
-                          color: AppColors.primary,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Titik Peta: ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)} (Tersimpan di Database)',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Text('Checkout', style: AppTextStyles.heading3),
+                        Text(
+                          'Lengkapi detail pesanan Anda',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
-                  ),
-
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildSectionHeading(
+                  Icons.location_on_outlined,
+                  'Alamat pengiriman',
+                  'Pastikan alamat dan nomor kontak sudah benar.',
+                ),
                 GlassCard(
+                  padding: const EdgeInsets.all(18),
+                  borderRadius: 20,
                   child: Column(
                     children: [
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nama Lengkap',
-                        ),
-                      ),
-                      TextFormField(
-                        controller: _phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nomor Telepon',
-                        ),
-                      ),
-                      TextFormField(
-                        controller: _addressController,
-                        decoration: const InputDecoration(labelText: 'Alamat'),
-                        maxLines: 2,
-                      ),
                       Row(
                         children: [
                           Expanded(
-                            child: TextFormField(
-                              controller: _cityController,
-                              decoration: const InputDecoration(
-                                labelText: 'Kota',
-                              ),
+                            child: Text(
+                              'Detail penerima',
+                              style: AppTextStyles.titleSmall,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 120,
-                            child: TextFormField(
-                              controller: _postalController,
-                              decoration: const InputDecoration(
-                                labelText: 'Kode Pos',
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.6),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
+                            onPressed: _openMapPicker,
+                            icon: const Icon(Icons.map_outlined, size: 18),
+                            label: const Text('Pilih di peta'),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Nama lengkap',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Nomor telepon',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _addressController,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          labelText: 'Alamat lengkap',
+                          hintText: 'Nama jalan, nomor rumah, RT/RW, patokan',
+                          prefixIcon: Icon(Icons.home_outlined),
+                          alignLabelWithHint: true,
+                        ),
+                        minLines: 2,
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _cityController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Kota / Kabupaten',
+                          prefixIcon: Icon(Icons.location_city_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _postalController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Kode pos',
+                          prefixIcon: Icon(Icons.markunread_mailbox_outlined),
+                        ),
+                      ),
+                      if (_latitude != null && _longitude != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.pin_drop_outlined,
+                                color: AppColors.primary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Pin peta terpasang · ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text('Metode Pengiriman', style: AppTextStyles.titleMedium),
-                const SizedBox(height: 12),
+                _buildSectionHeading(
+                  Icons.local_shipping_outlined,
+                  'Metode pengiriman',
+                  'Pilih layanan yang sesuai dengan kebutuhan Anda.',
+                ),
                 Column(
                   children: List.generate(AppConstants.shippingMethods.length, (
                     index,
                   ) {
-                    final method = AppConstants.shippingMethods[index];
-                    return RadioListTile<int>(
-                      value: index,
-                      groupValue: _selectedShipping,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedShipping = val);
-                        }
-                      },
-                      title: Text(method['name'] as String),
-                      subtitle: Text(method['days'] as String),
-                      secondary: Text(formatRupiah(method['price'] as double)),
-                      activeColor: AppColors.primary,
-                    );
+                    return _buildShippingOption(index);
                   }),
                 ),
                 const SizedBox(height: 24),
-                Text('Metode Pembayaran', style: AppTextStyles.titleMedium),
-                const SizedBox(height: 12),
+                _buildSectionHeading(
+                  Icons.account_balance_wallet_outlined,
+                  'Metode pembayaran',
+                  'Pilih cara pembayaran untuk pesanan ini.',
+                ),
                 Column(
                   children: List.generate(AppConstants.paymentMethods.length, (
                     index,
                   ) {
-                    final method = AppConstants.paymentMethods[index];
-                    return RadioListTile<int>(
-                      value: index,
-                      groupValue: _selectedPayment,
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedPayment = val);
-                      },
-                      title: Text(method),
-                      activeColor: AppColors.primary,
-                    );
+                    return _buildPaymentOption(index);
                   }),
                 ),
                 const SizedBox(height: 24),
-                Text('Ringkasan Pesanan', style: AppTextStyles.titleMedium),
-                const SizedBox(height: 12),
+                _buildSectionHeading(
+                  Icons.receipt_long_outlined,
+                  'Ringkasan pesanan',
+                  'Periksa kembali total sebelum membuat pesanan.',
+                ),
                 GlassCard(
+                  padding: const EdgeInsets.all(18),
+                  borderRadius: 20,
                   child: Consumer<CartProvider>(
                     builder: (context, cart, _) {
                       final shippingPrice =

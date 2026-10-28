@@ -6,9 +6,21 @@ import 'package:doctor_computer/core/theme/app_text_styles.dart';
 class AppTheme {
   AppTheme._();
 
+  static const _pageTransitions = PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: _PolishedPageTransitionsBuilder(),
+      TargetPlatform.iOS: _PolishedPageTransitionsBuilder(),
+      TargetPlatform.linux: _PolishedPageTransitionsBuilder(),
+      TargetPlatform.macOS: _PolishedPageTransitionsBuilder(),
+      TargetPlatform.windows: _PolishedPageTransitionsBuilder(),
+      TargetPlatform.fuchsia: _PolishedPageTransitionsBuilder(),
+    },
+  );
+
   static ThemeData get lightTheme {
     return ThemeData(
       brightness: Brightness.light,
+      pageTransitionsTheme: _pageTransitions,
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: ColorScheme.light(
         primary: AppColors.primary,
@@ -117,6 +129,7 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       brightness: Brightness.dark,
+      pageTransitionsTheme: _pageTransitions,
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: ColorScheme.dark(
         primary: AppColors.primary,
@@ -223,3 +236,33 @@ class AppTheme {
   }
 }
 
+class _PolishedPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _PolishedPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.of(context).disableAnimations) return child;
+
+    final transition = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: transition,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.025),
+          end: Offset.zero,
+        ).animate(transition),
+        child: child,
+      ),
+    );
+  }
+}

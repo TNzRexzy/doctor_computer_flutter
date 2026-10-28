@@ -247,7 +247,7 @@ class _ProductReviewScreenState extends State<ProductReviewScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          'Pesanan #${widget.order.id}',
+                          'Pesanan #${widget.order.displayId}',
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.textSecondary,
                           ),

@@ -55,7 +55,7 @@ class OrderTrackingScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Pelacakan Pesanan #${order.id}'),
+        title: Text('Pelacakan Pesanan #${order.displayId}'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
